@@ -1,0 +1,105 @@
+# sub2api API 文档
+
+上级：[[02-架构文档]]、[[01-需求文档]]
+下级：[[modules/05-认证与Token生命周期]]、[[modules/06-API适配器与能力探测]]
+依赖：上游 `Wei-Shaw/sub2api` 源码
+
+## 证据口径
+
+- `上游源码已确认`：2026-07-14 读取上游 `Wei-Shaw/sub2api` 主分支 `7d239d62e8f1c6aea79164f88903f4158cbf2f98` 的路由、前端调用和 handler 后确认。
+- `真实二开站待验证`：尚未通过真实站点或当前响应证据验证的字段/能力。
+- 二开站可能修改前缀、字段或能力，适配器必须进行运行时验证。
+
+默认 API 基址：`<siteBaseUrl>/api/v1`，实际保存前需探测。
+鉴权：`Authorization: Bearer <access_token>`。不得把 Token 写入日志。
+
+## 接口清单
+
+| 能力           | 方法与路径                          | 主要输入                                                                                                      | 标准化输出                                          | 证据                                             |
+| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------ |
+| 登录           | `POST /auth/login`                  | 账号/邮箱、密码；具体字段按公开设置与实际响应适配                                                             | accessToken, refreshToken?, expiresIn, user         | 上游源码已确认；两个真实二开站已验证             |
+| Token 刷新     | `POST /auth/refresh`                | refresh_token                                                                                                 | 新 access/refresh token 与过期时间                  | 上游源码已确认；真实二开站待验证                 |
+| 当前用户       | `GET /auth/me`                      | Bearer                                                                                                        | 当前认证主体                                        | 上游源码已确认；真实二开站待验证                 |
+| 用户资料/余额  | `GET /user/profile`                 | Bearer                                                                                                        | UserProfile，包括 balance                           | 上游源码已确认；两个真实二开站已验证             |
+| Key 列表       | `GET /keys`                         | page, page_size, filters                                                                                      | Paginated<ApiKeySummary>                            | 上游源码已确认；两个真实二开站已验证             |
+| 可用分组       | `GET /groups/available`             | Bearer                                                                                                        | Group[]，含默认倍率                                 | 上游源码已确认；两个真实二开站已验证             |
+| 专属倍率       | `GET /groups/rates`                 | Bearer                                                                                                        | groupId -> customRate                               | 上游源码已确认；两个真实二开站已验证             |
+| 今日统计       | `GET /usage/stats`                  | period=today, timezone, api_key_id? 等                                                                        | UsageToday                                          | 上游源码已确认；两个真实二开站已验证             |
+| 使用记录       | `GET /usage`                        | page, page_size, dates, timezone, api_key_id, model, group_id, request_type, billing_type, billing_mode, sort | Paginated<UsageRecord>                              | 上游源码已确认；两个真实二开站已验证             |
+| 模型筛选       | `GET /usage/dashboard/models`       | Bearer；按站点当前会话                                                                                        | 使用记录可选模型字符串列表                          | 上游源码已确认；真实二开站只读验证纳入本轮       |
+| Dashboard 快照 | `GET /usage/dashboard/stats`        | Bearer                                                                                                        | 用户累计/今日聚合                                   | 上游源码已确认；是否使用待实现评估               |
+| 可用渠道       | `GET /channels/available`           | Bearer                                                                                                        | 渠道、平台、分组、模型与定价                        | 上游源码已确认；真实二开站待验证                 |
+| 渠道监控列表   | `GET /channel-monitors`             | Bearer                                                                                                        | MonitorList                                         | 上游源码已确认；两个真实二开站已验证 supported   |
+| 渠道监控详情   | `GET /channel-monitors/{id}/status` | id                                                                                                            | 站点实际返回基础渠道详情；可用率/延迟字段按能力适配 | 两个真实二开站已验证 supported；本次仅见基础字段 |
+
+## 今日统计字段
+
+`total_requests`、`total_input_tokens`、`total_output_tokens`、`total_cache_tokens`、`total_cache_read_tokens`、`total_cache_creation_tokens`、`total_tokens`、`total_cost`、`total_actual_cost`、`average_duration_ms`。
+
+`period=today` 时后端会结合 `timezone` 计算当天开始时间。应用必须传本机 IANA 时区。
+
+## Key、倍率与使用记录字段
+
+- `GET /keys` 的可信倍率路径为 `data.items[].group.rate_multiplier`，Key 摘要还可读取 `group.name`、Key 状态、当前并发和分组 RPM 等非敏感字段；完整 `key` 必须在适配层立即丢弃。
+- `GET /groups/rates` 只代表当前用户的专属倍率覆盖，不是所有分组默认倍率。有效倍率顺序为：用户专属倍率 > 当前 Key 内嵌 `group.rate_multiplier` > `/groups/available` 对应分组默认倍率 > 不可用。
+- 数值 `0` 是有效倍率，不得用 truthy 判断误判为缺失。
+- `GET /usage` 单条记录的 `reasoning_effort` 映射到 `reasoningEffort`；缺失时 UI 显示 `—`。
+- 使用记录固定请求 `page_size=20`；模型选项来自 `/usage/dashboard/models`，分组和 Key 选项分别来自已确认的分组与 Key 只读接口。
+
+## 渠道监控字段
+
+列表标准化字段：`id`、`name`、`provider`、`groupName`、`primaryModel`、`primaryStatus`、`primaryLatencyMs`、`primaryPingLatencyMs`、`availability7d`、`extraModels`、`timeline`。
+
+详情标准化字段：每模型 `latestStatus`、`latestLatencyMs`、`availability7d/15d/30d`、`avgLatency7dMs`。
+
+2026-07-14 两个真实站点的详情端点均返回 supported，但本次脱敏字段盘点只确认 `id`、`name`、`provider`、`group_name`、`models`。7/15/30 日可用率、Ping、平均延迟和时间线属于上游源码已确认、当前两个真实响应未出现的字段；UI 必须显示“待查询/不可用”，不得用静态样例冒充。
+
+## 错误标准化
+
+适配层至少统一：
+
+- `INVALID_URL`
+- `NETWORK_TIMEOUT`
+- `TLS_ERROR`
+- `AUTH_INVALID_CREDENTIALS`
+- `AUTH_REQUIRED`
+- `ACCOUNT_DISABLED`
+- `RATE_LIMITED`
+- `API_PREFIX_NOT_FOUND`
+- `UNSUPPORTED_CAPABILITY`
+- `INCOMPATIBLE_RESPONSE`
+- `SERVER_ERROR`
+- `CANCELLED`
+
+错误对象只保留安全摘要、HTTP 状态、能力名、可重试性和时间，不保留密码、Token、完整响应头或可能含敏感内容的原始响应。
+
+## API 前缀探测
+
+实现阶段应优先探测公开设置或已知安全端点；候选前缀必须是有限白名单，不允许对任意路径进行扫描。探测成功后持久化，失败时报告 `API_PREFIX_NOT_FOUND`。
+
+## 已完成的真实二开站真机只读验证（2026-07-14）
+
+使用用户在当前会话提供的凭据重新登录，未复用其粘贴的历史 Token、Cookie 或 Cloudflare clearance；输出和文档不保存凭据。
+
+| 站点                              | 登录 | profile/余额                                   | keys         | usage/stats                         | channel-monitors | 证据                                                                        |
+| --------------------------------- | ---- | ---------------------------------------------- | ------------ | ----------------------------------- | ---------------- | --------------------------------------------------------------------------- |
+| `https://ai.maok.shop`            | 成功 | 成功；覆盖动态标题的高余额分支，不记录固定快照 | 成功，仅摘要 | 成功，今日请求/Token/费用字段可映射 | 返回 supported   | 最终打包应用、`real-test-evidence/macos-2026-07-14/README.md`；敏感值未落盘 |
+| `https://panel.hanhegufei.online` | 成功 | 成功；覆盖动态标题的低余额分支，不记录固定快照 | 成功，仅摘要 | 成功，今日请求/Token/费用字段可映射 | 返回 supported   | 同上；运行时验证结果不作为固定数值断言                                      |
+
+真实验证仅覆盖只读接口；Key 完整值、密码、Token、Cookie、请求头和原始响应未记录。渠道返回 supported 只表示列表请求未被拒绝，7/15/30 日详情字段仍需后续字段级验证。
+
+## 待真实验证
+
+- 二开站登录请求字段是否统一为 email/password。
+- 是否所有目标站启用 refresh token。
+- 二开站对 `timezone`、排序字段和筛选枚举的兼容性。
+- 渠道监控是否开放给普通用户。
+- 各站错误响应结构和速率限制口径。
+
+## 本轮实现与真机证据（2026-07-14）
+
+- `GET /api/v1/channel-monitors/{id}/status` 已加入适配器和受控 IPC；真实站点详情能力仍需按运行时响应区分 supported、unsupported 或 error。
+- 使用记录 CSV 由主进程按当前查询生成，前端只接收导出结果；完整 API Key、Token、密码不进入导出。
+- 登录 refresh 失败后会尝试使用安全凭据重新登录，只有新登录及核心读取成功后才替换旧会话。
+- 两个真实站点的登录、profile、Key、倍率、今日统计、usage 和渠道列表/详情只读验证已在最终打包应用中成功；具体实时数值不作为固定 API 断言。
+- refresh 失败后的密码重登由本地 HTTP 集成测试覆盖；不得主动破坏真实站点 Token 来制造失败。

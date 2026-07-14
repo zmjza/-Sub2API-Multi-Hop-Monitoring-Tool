@@ -1,0 +1,54 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+interface PackageManifest {
+  scripts?: Record<string, string>;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  build?: {
+    productName?: string;
+    artifactName?: string;
+    executableName?: string;
+    mac?: { icon?: string; target?: string | string[] };
+    win?: { icon?: string; target?: string | string[]; executableName?: string };
+  };
+}
+
+describe('electron-builder manifest', () => {
+  it('keeps Electron as a build-time dependency', () => {
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
+
+    expect(manifest.dependencies).not.toHaveProperty('electron');
+    expect(manifest.devDependencies).toHaveProperty('electron');
+  });
+
+  it('disables automatic signing identity discovery for the local directory pack', () => {
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
+
+    expect(manifest.scripts?.pack).toContain('CSC_IDENTITY_AUTO_DISCOVERY=false');
+  });
+
+  it('uses the branded icons and distributable targets for both desktop platforms', () => {
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
+
+    expect(manifest.build?.mac).toEqual(
+      expect.objectContaining({ icon: 'build/icon.icns', target: ['dmg'] }),
+    );
+    expect(manifest.build?.win).toEqual(
+      expect.objectContaining({ icon: 'build/icon.ico', target: ['nsis'] }),
+    );
+    expect(manifest.build?.artifactName).toBe(
+      'Sub2API-Multi-Hub-Monitor-${version}-${os}-${arch}.${ext}',
+    );
+    expect(existsSync('build/icon.icns')).toBe(true);
+    expect(existsSync('build/icon.ico')).toBe(true);
+  });
+
+  it('uses the user-facing product name with a Windows-safe executable name', () => {
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
+
+    expect(manifest.build?.productName).toBe('看看你还有💰吗？');
+    expect(manifest.build?.executableName).toBeUndefined();
+    expect(manifest.build?.win?.executableName).toBe('Sub2API-Monitor');
+  });
+});

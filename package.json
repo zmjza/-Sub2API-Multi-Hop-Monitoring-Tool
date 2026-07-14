@@ -1,0 +1,79 @@
+{
+  "name": "sub2api-multi-hub-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local desktop monitor for multiple sub2api-compatible sites",
+  "main": "dist-electron/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"npm:dev:electron\"",
+    "dev:electron": "wait-on tcp:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "build": "npm run typecheck && npm run build:renderer && npm run build:electron",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc -b tsconfig.app.json tsconfig.electron.json --pretty false",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "verify:real": "npm run build:electron && node scripts/verify-real-sites.mjs",
+    "verify:real-service": "npm run build:electron && node scripts/verify-real-service.mjs",
+    "preview": "vite preview",
+    "pack": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir",
+    "dist:mac": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --arm64 --publish never",
+    "dist:win": "npm run build && electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.101.2",
+    "lucide-react": "0.468.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "concurrently": "10.0.3",
+    "cross-env": "10.1.0",
+    "electron": "43.1.0",
+    "electron-builder": "26.15.3",
+    "eslint": "10.7.0",
+    "prettier": "3.9.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.63.0",
+    "vite": "8.1.4",
+    "vitest": "4.1.10",
+    "wait-on": "9.0.10"
+  },
+  "build": {
+    "appId": "com.liran.sub2api.monitor",
+    "productName": "看看你还有💰吗？",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "artifactName": "Sub2API-Multi-Hub-Monitor-${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "executableName": "Sub2API-Monitor",
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

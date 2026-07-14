@@ -1,0 +1,308 @@
+<!DOCTYPE html><html class="light" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>站点管理与设置 - Sub2API</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#e2dfff",
+                        "surface-tint": "#4d44e3",
+                        "surface": "#fcf8ff",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed-dim": "#ffb695",
+                        "surface-container-highest": "#e4e1ee",
+                        "inverse-surface": "#302f39",
+                        "surface-bright": "#fcf8ff",
+                        "on-secondary-fixed": "#07006c",
+                        "primary-fixed-dim": "#c3c0ff",
+                        "surface-dim": "#dcd8e5",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "background": "#F8F9FF",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed": "#0f0069",
+                        "surface-container-high": "#eae6f4",
+                        "inverse-on-surface": "#f3effc",
+                        "on-surface-variant": "#464555",
+                        "on-tertiary-container": "#ffd2be",
+                        "outline-variant": "#c7c4d8",
+                        "primary": "#4F46E5",
+                        "on-background": "#1b1b24",
+                        "secondary-container": "#6063ee",
+                        "tertiary": "#7e3000",
+                        "on-tertiary-fixed-variant": "#7b2f00",
+                        "surface-variant": "#e4e1ee",
+                        "secondary-fixed": "#e1e0ff",
+                        "surface-container-low": "#f5f2ff",
+                        "on-primary-container": "#dad7ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface": "#1b1b24",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#a44100",
+                        "surface-container": "#f0ecf9",
+                        "inverse-primary": "#c3c0ff",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#fffbff",
+                        "on-primary-fixed-variant": "#3323cc",
+                        "tertiary-fixed": "#ffdbcc",
+                        "on-tertiary": "#ffffff",
+                        "primary-container": "#4f46e5",
+                        "secondary": "#4648d4",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "outline": "#777587",
+                        "on-tertiary-fixed": "#351000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "24px",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "container-padding": "32px",
+                        "stack-gap-lg": "24px",
+                        "max-width-desktop": "1200px",
+                        "stack-gap-md": "16px",
+                        "grid-gutter": "20px",
+                        "sidebar_width": "240px",
+                        "toolbar_height": "72px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body": ["Plus Jakarta Sans"],
+                        "label": ["Plus Jakarta Sans"],
+                        "heading": ["Plus Jakarta Sans"],
+                        "secondary": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "label-md": ["14px", { "lineHeight": "1.4", "letterSpacing": "0.01em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800" }],
+                        "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "1.3", "fontWeight": "700" }],
+                        "body": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label": ["13px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "heading": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "secondary": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .glass-panel { background: #ffffff; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03); }
+        .tab-btn.active { color: theme('colors.primary'); border-bottom: 2px solid theme('colors.primary'); }
+        .toggle-checkbox:checked { right: 0; border-color: theme('colors.primary'); }
+        .toggle-checkbox:checked + .toggle-label { background-color: theme('colors.primary'); }
+
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden antialiased font-body text-body bg-background">
+<!-- SideNavBar Component -->
+<nav class="bg-surface-container-lowest shadow-[0_4px_32px_rgba(79,70,229,0.06)] fixed left-6 top-6 h-[calc(100vh-48px)] w-[260px] rounded-[24px] flex flex-col py-8 px-6 z-20 border border-outline-variant/20">
+<div class="mb-10 flex items-center gap-4 px-2">
+<div class="w-10 h-10 rounded-[12px] bg-primary flex items-center justify-center shadow-sm bg-gradient-to-br from-primary to-primary-container">
+<span class="material-symbols-outlined text-on-primary text-[24px]">donut_small</span>
+</div>
+<div>
+<h1 class="font-heading text-[18px] font-bold text-on-surface leading-tight tracking-tight">Sub2API</h1>
+<p class="font-secondary text-[12px] text-primary/80 font-medium tracking-wide">Monitoring Suite</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 flex-1">
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="">全部站点</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="">使用记录</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="">渠道状态</span>
+</li>
+<li class="bg-primary text-on-primary font-label text-[14px] cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all shadow-[0_4px_12px_rgba(79,70,229,0.2)] bg-gradient-to-r from-primary to-primary-container">
+<span class="material-symbols-outlined text-[20px]">settings_input_component</span>
+<span class="font-bold tracking-wide">站点管理</span>
+</li>
+
+</ul>
+<ul class="flex flex-col gap-2 mt-auto pt-6 border-t border-outline-variant/30">
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="">通知</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="">设置</span>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-[284px] flex-1 flex flex-col h-screen relative z-10">
+<!-- TopNavBar Component -->
+<header class="fixed top-0 right-0 h-[80px] w-[calc(100%-284px)] flex justify-between items-center px-8 z-20 pt-8"><div class="flex items-center gap-4"></div><div class="flex items-center gap-6"><span class="font-secondary text-[12px] text-primary bg-primary-fixed/60 px-4 py-2 rounded-full shadow-sm font-bold tracking-wide">最后更新: 12:45</span><div class="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-full shadow-sm border border-outline-variant/20"><button class="w-[36px] h-[36px] flex items-center justify-center rounded-full hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[20px]">refresh</span></button></div><div class="flex items-center gap-1 bg-surface-container-lowest p-1 rounded-full shadow-sm border border-outline-variant/20 ml-2"><button class="w-[36px] h-[36px] flex items-center justify-center rounded-full hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors" title="Minimize"><span class="material-symbols-outlined text-[20px]">remove</span></button><button class="w-[36px] h-[36px] flex items-center justify-center rounded-full hover:bg-error-container/30 text-error transition-colors" title="Close"><span class="material-symbols-outlined text-[20px]">close</span></button></div></div></header>
+<!-- Inner Scrollable Viewport -->
+<div class="p-stack-gap-lg overflow-y-auto flex-1 bg-background pt-0 pt-8 flex flex-col items-center pt-12">
+<!-- Segmented Control Tabs -->
+<div class="grid grid-cols-1 lg:grid-cols-2 items-start gap-8 justify-center w-full mt-20">
+<!-- Site Entry Form -->
+<section class="glass-panel rounded-2xl flex flex-col gap-2 h-fit lg:col-span-2 p-6"><div class="flex justify-between items-center mb-2">
+<h2 class="font-heading text-heading text-on-surface">添加新站点</h2>
+<button class="flex items-center gap-1.5 text-primary font-label text-label hover:bg-primary/5 px-3 py-1.5 rounded-[8px] transition-colors">
+<span class="material-symbols-outlined text-[16px]">history_edu</span>
+                            从模板填充
+                        </button>
+</div>
+<div class="grid grid-cols-1 gap-2"><div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="flex flex-col gap-1">
+        <label class="font-label text-label text-on-surface-variant font-medium">站点名称</label>
+        <input class="h-[36px] bg-white border border-outline-variant/40 rounded-[10px] px-3 font-body text-body focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm" placeholder="例如: OpenAI 备用节点" type="text">
+    </div>
+    <div class="flex flex-col gap-1">
+        <label class="font-label text-label text-on-surface-variant font-medium">API URL</label>
+        <input class="h-[36px] bg-white border border-outline-variant/40 rounded-[10px] px-3 font-body text-body focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm" placeholder="https://api.example.com" type="url">
+    </div>
+    <div class="flex flex-col gap-1">
+        <label class="font-label text-label text-on-surface-variant font-medium">用户名 (可选)</label>
+        <input class="h-[36px] bg-white border border-outline-variant/40 rounded-[10px] px-3 font-body text-body focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm" type="text">
+    </div>
+    <div class="flex flex-col gap-1">
+        <label class="font-label text-label text-on-surface-variant font-medium">密码 (可选)</label>
+        <input class="h-[36px] bg-white border border-outline-variant/40 rounded-[10px] px-3 font-body text-body focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all shadow-sm" type="password">
+    </div>
+</div></div>
+<div class="bg-surface-container-low/50 p-2 rounded-xl border border-outline-variant/20 flex justify-between items-center px-8 mt-4">
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</div>
+<span class="font-secondary text-secondary text-primary font-medium">连通性测试</span>
+</div>
+<div class="flex-1 h-[2px] bg-outline-variant/30 mx-4 rounded-full relative">
+<div class="absolute left-0 top-0 h-full w-1/2 bg-primary/40 rounded-full"></div>
+</div>
+<div class="flex flex-col items-center gap-1">
+<div class="w-8 h-8 rounded-full bg-white border border-outline-variant/30 flex items-center justify-center text-on-surface-variant shadow-sm">
+<span class="material-symbols-outlined text-[18px]">pending</span>
+</div>
+<span class="font-secondary text-secondary text-on-surface-variant font-medium">获取额度</span>
+</div>
+<div class="flex-1 h-[2px] bg-outline-variant/30 mx-4 rounded-full"></div>
+<div class="flex flex-col items-center gap-1 opacity-70">
+<div class="w-8 h-8 rounded-full bg-surface-variant/30 flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">circle</span>
+</div>
+<span class="font-secondary text-secondary text-on-surface-variant font-medium">验证模型</span>
+</div>
+</div>
+<button class="mt-1 h-[40px] bg-primary text-white font-label text-label rounded-[10px] hover:bg-primary/90 transition-colors w-full flex items-center justify-center gap-2 shadow-md shadow-primary/20">
+<span class="material-symbols-outlined text-[18px]">add</span> 添加并验证
+                    </button></section>
+<div class="flex flex-col gap-6 h-full lg:col-span-2 lg:grid lg:grid-cols-2">
+<!-- Batch Verification Table -->
+<section class="glass-panel rounded-2xl flex flex-col overflow-hidden h-full p-6">
+<div class="p-6 border-b border-outline-variant/10 flex justify-between items-center">
+<h2 class="font-heading text-heading text-on-surface">批量验证任务</h2>
+<span class="bg-primary/10 text-primary px-3 py-1 rounded-full font-label text-[12px] font-medium">3 进行中</span>
+</div>
+<div class="overflow-x-auto p-2">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="h-[40px]">
+<th class="font-label text-[12px] text-on-surface-variant/70 px-4 font-medium uppercase tracking-wider">目标 URL</th>
+<th class="font-label text-[12px] text-on-surface-variant/70 px-4 font-medium uppercase tracking-wider">状态</th>
+<th class="font-label text-[12px] text-on-surface-variant/70 px-4 font-medium uppercase tracking-wider text-right">详情</th>
+</tr>
+</thead>
+<tbody class="font-body text-[14px] text-on-surface">
+<tr class="border-b border-outline-variant/5 h-[52px] hover:bg-surface-container-low/50 transition-colors rounded-lg">
+<td class="px-4 font-medium">api.openai-proxy.com</td>
+<td class="px-4">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-blue-50 text-blue-700 font-label text-[12px]">
+<span class="material-symbols-outlined text-[14px] animate-spin">sync</span> 验证中
+                                        </div>
+</td>
+<td class="px-4 text-right text-on-surface-variant font-secondary">检查额度...</td>
+</tr>
+<tr class="border-b border-outline-variant/5 h-[52px] hover:bg-surface-container-low/50 transition-colors">
+<td class="px-4 font-medium">claude.api-hub.net</td>
+<td class="px-4">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-green-50 text-green-700 font-label text-[12px]">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> 成功
+                                        </div>
+</td>
+<td class="px-4 text-right text-on-surface-variant font-secondary">所有能力可用</td>
+</tr>
+<tr class="h-[52px] hover:bg-surface-container-low/50 transition-colors">
+<td class="px-4 font-medium">dead.endpoint.org</td>
+<td class="px-4">
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-red-50 text-red-700 font-label text-[12px]">
+<span class="material-symbols-outlined text-[14px]">error</span> 失败
+                                        </div>
+</td>
+<td class="px-4 text-right text-error font-secondary">401 Unauthorized</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<!-- Notification Settings -->
+<section class="glass-panel rounded-2xl p-6 flex flex-col gap-2 h-full">
+<h2 class="font-heading text-heading text-on-surface mb-2">通知规则设置</h2>
+<div class="flex items-center justify-between py-3 border-b border-outline-variant/10">
+<div>
+<div class="font-label text-[14px] text-on-surface font-medium">低额度警告</div>
+<div class="font-secondary text-[13px] text-on-surface-variant mt-0.5">当站点余额低于 $0.50 时触发</div>
+</div>
+<div class="relative inline-block w-11 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-transparent shadow-sm checked:right-0 transition-all duration-300" id="toggle1" name="toggle" style="top: -2px;" type="checkbox">
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer checked:bg-primary transition-colors duration-300" for="toggle1"></label>
+</div>
+</div>
+<div class="flex items-center justify-between py-3">
+<div>
+<div class="font-label text-[14px] text-on-surface font-medium">渠道降级/失败</div>
+<div class="font-secondary text-[13px] text-on-surface-variant mt-0.5">特定模型请求失败超过阈值</div>
+</div>
+<div class="relative inline-block w-11 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-transparent shadow-sm checked:right-0 transition-all duration-300" id="toggle2" name="toggle" style="top: -2px;" type="checkbox">
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer checked:bg-primary transition-colors duration-300" for="toggle2"></label>
+</div>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+
+
+
+
+
+
+</body></html>

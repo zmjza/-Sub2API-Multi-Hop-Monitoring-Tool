@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+release/
+test-results/
+playwright-report/
+liran_docs/stitch-artifacts/
+*.sqlite
+*.sqlite-*
+credentials.json

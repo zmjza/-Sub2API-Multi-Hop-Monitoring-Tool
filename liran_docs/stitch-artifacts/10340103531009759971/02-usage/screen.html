@@ -1,0 +1,504 @@
+<!DOCTYPE html><html lang="zh-CN" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">try{
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "error": "#ba1a1a",
+                "surface-bright": "#fcf8ff",
+                "on-surface": "#1b1b24",
+                "on-secondary-fixed-variant": "#2f2ebe",
+                "surface": "#fcf8ff",
+                "primary-fixed-dim": "#c3c0ff",
+                "on-tertiary-fixed-variant": "#7b2f00",
+                "on-background": "#1b1b24",
+                "error-container": "#ffdad6",
+                "inverse-surface": "#302f39",
+                "on-secondary-container": "#fffbff",
+                "on-primary": "#ffffff",
+                "surface-container-highest": "#e4e1ee",
+                "surface-container-low": "#f5f2ff",
+                "primary-fixed": "#e2dfff",
+                "background": "#fcf8ff",
+                "surface-dim": "#dcd8e5",
+                "surface-container-lowest": "#ffffff",
+                "tertiary-fixed-dim": "#ffb695",
+                "surface-tint": "#4d44e3",
+                "on-error": "#ffffff",
+                "surface-container": "#f0ecf9",
+                "outline-variant": "#c7c4d8",
+                "inverse-on-surface": "#f3effc",
+                "inverse-primary": "#c3c0ff",
+                "on-secondary": "#ffffff",
+                "on-error-container": "#93000a",
+                "surface-variant": "#e4e1ee",
+                "on-secondary-fixed": "#07006c",
+                "on-primary-fixed": "#0f0069",
+                "secondary": "#4648d4",
+                "primary": "#3525cd",
+                "on-tertiary": "#ffffff",
+                "secondary-fixed-dim": "#c0c1ff",
+                "secondary-fixed": "#e1e0ff",
+                "on-surface-variant": "#464555",
+                "on-primary-container": "#dad7ff",
+                "tertiary": "#7e3000",
+                "tertiary-fixed": "#ffdbcc",
+                "primary-container": "#4f46e5",
+                "on-tertiary-fixed": "#351000",
+                "tertiary-container": "#a44100",
+                "surface-container-high": "#eae6f4",
+                "on-primary-fixed-variant": "#3323cc",
+                "on-tertiary-container": "#ffd2be",
+                "secondary-container": "#6063ee",
+                "outline": "#777587",
+                "chart-cyan": "#06b6d4",
+                "chart-amber": "#f59e0b",
+                "chart-rose": "#e11d48",
+                "chart-emerald": "#10b981",
+                "chart-purple": "#a855f7"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "unit": "4px",
+                "stack-gap-md": "16px",
+                "container-padding": "32px",
+                "max-width-desktop": "1200px",
+                "grid-gutter": "20px",
+                "stack-gap-lg": "24px",
+                "sidebar_width": "216px",
+                "toolbar_height": "64px"
+        },
+        "fontFamily": {
+                "label-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg-mobile": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "display-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-md": [
+                        "Plus Jakarta Sans"
+                ]
+        },
+        "fontSize": {
+                "label-md": [
+                        "14px",
+                        {
+                                "lineHeight": "1.4",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "28px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "700"
+                        }
+                ]
+        }
+},
+    },
+  }
+}catch(_e){}</script></head><body class="font-body-md text-body-md min-h-screen overflow-x-hidden flex">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest shadow-[0_4px_32px_rgba(79,70,229,0.06)] fixed left-6 top-6 h-[calc(100vh-48px)] w-[260px] rounded-[24px] flex flex-col py-8 px-6 z-20 border border-outline-variant/20">
+<div class="mb-10 flex items-center gap-4 px-2">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center shadow-sm bg-gradient-to-br from-primary to-primary-container">
+<span class="material-symbols-outlined text-on-primary text-[24px]" data-original-icon="donut_small">donut_small</span>
+</div>
+<div>
+<h1 class="font-heading text-[18px] font-bold text-on-surface leading-tight tracking-tight">Sub2API</h1>
+<p class="font-secondary text-[12px] text-primary/80 font-medium tracking-wide">Monitoring Suite</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 flex-1">
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="">全部站点</span>
+</li>
+<li class="bg-primary text-on-primary font-label text-[14px] cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all shadow-[0_4px_12px_rgba(79,70,229,0.2)] bg-gradient-to-r from-primary to-primary-container">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="font-bold tracking-wide">使用记录</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="">渠道状态</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">settings_input_component</span>
+<span class="">站点管理</span>
+</li>
+
+</ul>
+<ul class="flex flex-col gap-2 mt-auto pt-6 border-t border-outline-variant/30">
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="">通知</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-lg transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="">设置</span>
+</li>
+</ul>
+</nav>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 h-[80px] w-[calc(100%-284px)] flex items-center z-20 pt-6 pl-8 pr-4 justify-end"><div class="relative mr-auto ml-0">
+  <button class="flex items-center gap-3 px-4 py-2 bg-surface-container-lowest border border-outline-variant/20 rounded-[8px] shadow-sm hover:bg-surface-container-low transition-all group">
+    <div class="w-2 h-2 rounded-full bg-chart-emerald shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+    <span class="text-[13px] font-bold text-on-surface tracking-wide">主站 - 官方渠道</span>
+    <span class="material-symbols-outlined text-[18px] text-on-surface-variant group-hover:text-primary transition-colors">expand_more</span>
+  </button>
+  <!-- Dropdown Menu (Hidden by default in static HTML, but styled for refinement) -->
+  <div class="absolute top-full left-0 mt-2 w-56 bg-surface-container-lowest border border-outline-variant/20 rounded-[8px] shadow-[0_4px_20px_rgba(0,0,0,0.08)] py-2 z-30 hidden">
+    <div class="px-4 py-2 text-[11px] font-bold text-outline-variant uppercase tracking-widest">切换站点</div>
+    <button class="w-full flex items-center px-4 py-2.5 text-[13px] text-on-surface hover:bg-primary/5 hover:text-primary transition-colors text-left">
+      备用节点 A
+    </button>
+    <button class="w-full flex items-center px-4 py-2.5 text-[13px] text-on-surface hover:bg-primary/5 hover:text-primary transition-colors text-left">
+      海外中转站
+    </button>
+    <button class="w-full flex items-center px-4 py-2.5 text-[13px] text-on-surface hover:bg-primary/5 hover:text-primary transition-colors text-left">
+      负载均衡节点
+    </button>
+  </div>
+</div>
+
+<div class="flex items-center gap-6">
+<span class="font-secondary text-[12px] text-primary bg-primary-fixed/60 px-4 py-2 rounded-[8px] shadow-sm font-bold tracking-wide">最后更新: 12:45</span>
+<div class="flex items-center gap-2 bg-surface-container-lowest p-1.5 rounded-[12px] shadow-[0_2px_8px_rgba(79,70,229,0.04)] border border-outline-variant/20">
+<button class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">refresh</span>
+</button>
+
+</div>
+<div class="flex items-center gap-2 bg-surface-container-lowest p-1.5 rounded-[12px] shadow-[0_2px_8px_rgba(79,70,229,0.04)] border border-outline-variant/20 ml-2">
+<button title="Minimize to Float" class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">remove</span>
+</button>
+<button title="Close Program" class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-error-container/30 text-error transition-colors">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div></div>
+</header>
+<!-- Main Content -->
+<main class="ml-[284px] mt-toolbar_height p-8 w-[calc(100%-284px)] flex flex-col gap-6 max-w-[1440px] mx-auto">
+<!-- Metric Cards -->
+<div class="flex gap-6 w-full"><div class="rounded-lg p-6 shadow-sm border border-outline-variant/20 flex items-start gap-4 w-[20%] bg-primary/5"><div class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0"><span class="material-symbols-outlined text-[24px]">description</span></div><div class="flex flex-col gap-1"><span class="text-[14px] text-on-surface-variant font-medium">总请求数</span><span class="text-[28px] font-bold text-on-surface leading-none">167</span><span class="text-[12px] text-on-surface-variant mt-1">所选范围内</span></div></div><div class="rounded-lg p-6 shadow-sm border border-outline-variant/20 flex items-start gap-4 w-[35%] bg-chart-amber/5"><div class="w-12 h-12 rounded-lg bg-chart-amber/10 flex items-center justify-center text-chart-amber shrink-0"><span class="material-symbols-outlined text-[24px]">package_2</span></div><div class="flex flex-col gap-1"><span class="text-[14px] text-on-surface-variant font-medium">总 Token</span><span class="text-[28px] font-bold text-on-surface leading-none">22.25M</span><div class="text-[12px] text-on-surface-variant mt-1 flex items-center gap-1"><span class="">输入: 2.01M / 输出: 204.94K / 缓存: 20.04M</span><span class="material-symbols-outlined text-[14px] cursor-help">info</span></div></div></div><div class="rounded-lg p-6 shadow-sm border border-outline-variant/20 flex items-start gap-4 w-[25%] bg-chart-emerald/5"><div class="w-12 h-12 rounded-lg bg-chart-emerald/10 flex items-center justify-center text-chart-emerald shrink-0"><span class="material-symbols-outlined text-[24px]">attach_money</span></div><div class="flex flex-col gap-1"><span class="text-[14px] text-on-surface-variant font-medium">总消费</span><span class="text-[28px] font-bold text-chart-emerald leading-none">$10.4332</span><span class="text-[12px] text-on-surface-variant mt-1">标准 $26.0831</span></div></div><div class="rounded-lg p-6 shadow-sm border border-outline-variant/20 flex items-start gap-4 w-[20%] bg-chart-purple/5"><div class="w-12 h-12 rounded-lg bg-chart-purple/10 flex items-center justify-center text-chart-purple shrink-0"><span class="material-symbols-outlined text-[24px]">schedule</span></div><div class="flex flex-col gap-1"><span class="text-[14px] text-on-surface-variant font-medium">平均耗时</span><span class="text-[28px] font-bold text-on-surface leading-none">17.61s</span></div></div></div>
+<!-- Time Range Header -->
+
+<!-- Charts Grid -->
+
+
+<!-- Filters Bar -->
+<div class="bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-outline-variant/20 flex flex-col gap-4"><div class="grid grid-cols-3 gap-x-6 gap-y-4">
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">API 密钥</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>请选择</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">模型</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>请选择</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">分组</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>请选择</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">类型</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>请选择</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">计费类型</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>全部计费类型</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+  <div class="flex flex-col gap-1.5">
+    <label class="text-[12px] text-on-surface-variant font-medium">计费模式</label>
+    <div class="relative">
+      <select class="w-full border border-outline-variant/40 rounded-lg h-10 px-3 text-[13px] text-on-surface bg-transparent appearance-none focus:border-primary transition-colors">
+        <option>全部计费模式</option>
+      </select>
+      <span class="material-symbols-outlined absolute right-2 top-2.5 text-[20px] text-on-surface-variant pointer-events-none">expand_more</span>
+    </div>
+  </div>
+</div>
+<div class="flex justify-end items-center gap-3 pt-4 border-t border-outline-variant/10 mt-2">
+  <button class="px-5 py-2 border border-outline-variant/40 rounded-lg text-[13px] font-medium text-on-surface hover:bg-surface-container-low transition-colors">刷新</button>
+  <button class="px-5 py-2 border border-outline-variant/40 rounded-lg text-[13px] font-medium text-on-surface hover:bg-surface-container-low transition-colors">重置</button>
+  <button class="px-5 py-2 border border-outline-variant/40 rounded-lg text-[13px] font-medium text-on-surface hover:bg-surface-container-low transition-colors flex items-center gap-2">
+    <span class="material-symbols-outlined text-[18px]">view_column</span>列设置
+  </button>
+  <button class="px-6 py-2 bg-primary text-on-primary rounded-lg text-[13px] font-bold hover:opacity-90 transition-all shadow-sm flex items-center gap-2">
+    <span class="material-symbols-outlined text-[18px]">download</span>导出 CSV
+  </button>
+</div></div>
+
+<!-- Data Table -->
+<div class="bg-surface-container-lowest rounded-lg shadow-sm border border-outline-variant/20 flex flex-col pb-4">
+<div class="flex justify-end px-4 py-3 border-b border-outline-variant/10 text-[12px] text-on-surface-variant items-center gap-2">
+<span class="">1 个 IP 待获取地区</span>
+<button class="text-chart-emerald hover:underline font-medium">批量获取地区</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse whitespace-nowrap min-w-[1200px]">
+<thead>
+<tr class="border-b border-outline-variant/10">
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">API 密钥</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium flex items-center gap-1">模型 <span class="material-symbols-outlined text-[14px]">arrow_drop_down</span></th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">推理强度</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">端点</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">IP</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">分组</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium text-center">类型</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium text-center">计费模式</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">TOKEN</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">费用</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium">延迟</th>
+<th class="h-12 px-4 text-[13px] text-on-surface-variant font-medium flex items-center gap-1">时间 <span class="material-symbols-outlined text-[14px]">arrow_drop_down</span></th>
+</tr>
+</thead>
+<tbody class="text-[13px] text-on-surface">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors border-b border-outline-variant/5">
+<td class="h-16 px-4">codex</td>
+<td class="h-16 px-4 font-bold">gpt-5.6-sol</td>
+<td class="h-16 px-4">Medium</td>
+<td class="h-16 px-4 text-on-surface-variant">入站: /v1/responses</td>
+<td class="h-16 px-4">
+<div class="flex flex-col">
+<span class="">8.234.158.187</span>
+<a href="#" class="text-chart-emerald hover:underline text-[12px]">获取地区</a>
+</div>
+</td>
+<td class="h-16 px-4">
+<span class="bg-primary/10 text-primary px-2 py-1 rounded text-[12px] font-medium border border-primary/20">ChatGPT-Plus【超低特惠-稳定通道】</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded text-[12px]">流式</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[12px]">按量</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<div class="flex items-center gap-2">
+<span class="text-chart-emerald flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_downward</span>23,265</span>
+<span class="text-chart-purple flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span>1,259</span>
+<span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</div>
+<div class="flex items-center gap-1 text-blue-600 mt-0.5">
+<span class="material-symbols-outlined text-[14px]">inventory_2</span>232.4K
+                            </div>
+</div>
+</td>
+<td class="h-16 px-4 text-chart-emerald flex items-center gap-1">
+                        $0.108128 <span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<span class="text-on-surface-variant">首字 <span class="text-chart-emerald">1.43s</span></span>
+<span class="text-on-surface-variant">总耗时 <span class="text-chart-emerald">11.35s</span></span>
+</div>
+</td>
+<td class="h-16 px-4 text-on-surface-variant">2026/07/12 15:28:11</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors border-b border-outline-variant/5">
+<td class="h-16 px-4">codex</td>
+<td class="h-16 px-4 font-bold">gpt-5.6-sol</td>
+<td class="h-16 px-4">Medium</td>
+<td class="h-16 px-4 text-on-surface-variant">入站: /v1/responses</td>
+<td class="h-16 px-4">
+<div class="flex flex-col">
+<span class="">8.234.158.187</span>
+<a href="#" class="text-chart-emerald hover:underline text-[12px]">获取地区</a>
+</div>
+</td>
+<td class="h-16 px-4">
+<span class="bg-primary/10 text-primary px-2 py-1 rounded text-[12px] font-medium border border-primary/20">ChatGPT-Plus【超低特惠-稳定通道】</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded text-[12px]">流式</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[12px]">按量</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<div class="flex items-center gap-2">
+<span class="text-chart-emerald flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_downward</span>428</span>
+<span class="text-chart-purple flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span>132</span>
+<span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</div>
+<div class="flex items-center gap-1 text-blue-600 mt-0.5">
+<span class="material-symbols-outlined text-[14px]">inventory_2</span>224.1K
+                            </div>
+</div>
+</td>
+<td class="h-16 px-4 text-chart-emerald flex items-center gap-1">
+                        $0.047266 <span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<span class="text-on-surface-variant">首字 <span class="text-chart-emerald">1.36s</span></span>
+<span class="text-on-surface-variant">总耗时 <span class="text-chart-emerald">5.23s</span></span>
+</div>
+</td>
+<td class="h-16 px-4 text-on-surface-variant">2026/07/12 15:27:56</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors border-b border-outline-variant/5">
+<td class="h-16 px-4">codex</td>
+<td class="h-16 px-4 font-bold">gpt-5.6-sol</td>
+<td class="h-16 px-4">Medium</td>
+<td class="h-16 px-4 text-on-surface-variant">入站: /v1/responses</td>
+<td class="h-16 px-4">
+<div class="flex flex-col">
+<span class="">8.234.158.187</span>
+<a href="#" class="text-chart-emerald hover:underline text-[12px]">获取地区</a>
+</div>
+</td>
+<td class="h-16 px-4">
+<span class="bg-primary/10 text-primary px-2 py-1 rounded text-[12px] font-medium border border-primary/20">ChatGPT-Plus【超低特惠-稳定通道】</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded text-[12px]">流式</span>
+</td>
+<td class="h-16 px-4 text-center">
+<span class="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[12px]">按量</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<div class="flex items-center gap-2">
+<span class="text-chart-emerald flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_downward</span>368</span>
+<span class="text-chart-purple flex items-center"><span class="material-symbols-outlined text-[14px]">arrow_upward</span>855</span>
+<span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</div>
+<div class="flex items-center gap-1 text-blue-600 mt-0.5">
+<span class="material-symbols-outlined text-[14px]">inventory_2</span>224.1K
+                            </div>
+</div>
+</td>
+<td class="h-16 px-4 text-chart-emerald flex items-center gap-1">
+                        $0.055822 <span class="material-symbols-outlined text-[14px] text-outline-variant cursor-help">info</span>
+</td>
+<td class="h-16 px-4">
+<div class="flex flex-col text-[12px]">
+<span class="text-on-surface-variant">首字 <span class="text-chart-emerald">1.29s</span></span>
+<span class="text-on-surface-variant">总耗时 <span class="text-chart-emerald">6.21s</span></span>
+</div>
+</td>
+<td class="h-16 px-4 text-on-surface-variant">2026/07/12 15:27:48</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="flex items-center justify-end px-6 pt-4 gap-4 text-[13px] text-on-surface-variant">
+<span class="flex items-center gap-1">
+<select class="border border-outline-variant/40 bg-transparent py-1 pl-2 pr-6 rounded cursor-pointer focus:ring-0 text-[13px] text-on-surface-variant">
+<option>20 条/页</option>
+<option>50 条/页</option>
+</select>
+</span>
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-low transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-low transition-colors">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-low transition-colors">3</button>
+<span class="w-8 h-8 flex items-center justify-center">...</span>
+<button class="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-low transition-colors">9&lt;/</button></div></div></div></main>
+
+
+
+
+
+
+
+
+
+
+
+
+
+</body></html>

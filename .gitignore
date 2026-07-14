@@ -1,0 +1,25 @@
+node_modules/
+dist/
+dist-electron/
+release/
+test-results/
+playwright-report/
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+credentials.json
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+.env*
+!.env.example
+
+# Local release artifacts are distributed separately from source history.
+*.dmg
+*.exe
+
+# npm/package-lock.json is the dependency source of truth for this project.
+pnpm-lock.yaml
+pnpm-workspace.yaml

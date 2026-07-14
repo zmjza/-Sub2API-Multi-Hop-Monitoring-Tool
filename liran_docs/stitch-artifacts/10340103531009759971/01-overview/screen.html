@@ -1,0 +1,405 @@
+<!DOCTYPE html><html lang="zh-CN" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">try{
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-tertiary-container": "#ffd2be",
+                "background": "#fcf8ff",
+                "tertiary-fixed": "#ffdbcc",
+                "on-tertiary-fixed": "#351000",
+                "surface-container-highest": "#e4e1ee",
+                "primary-fixed": "#e2dfff",
+                "on-surface": "#1b1b24",
+                "tertiary": "#7e3000",
+                "tertiary-fixed-dim": "#ffb695",
+                "secondary-fixed-dim": "#c0c1ff",
+                "tertiary-container": "#a44100",
+                "primary-container": "#4f46e5",
+                "surface-container": "#f0ecf9",
+                "primary-fixed-dim": "#c3c0ff",
+                "on-primary": "#ffffff",
+                "surface-variant": "#e4e1ee",
+                "surface-container-high": "#eae6f4",
+                "on-background": "#1b1b24",
+                "secondary": "#4648d4",
+                "on-primary-fixed-variant": "#3323cc",
+                "on-error": "#ffffff",
+                "error-container": "#ffdad6",
+                "on-secondary-container": "#fffbff",
+                "secondary-fixed": "#e1e0ff",
+                "on-primary-container": "#dad7ff",
+                "inverse-primary": "#c3c0ff",
+                "on-surface-variant": "#464555",
+                "primary": "#3525cd",
+                "on-tertiary-fixed-variant": "#7b2f00",
+                "outline-variant": "#c7c4d8",
+                "on-error-container": "#93000a",
+                "surface-container-lowest": "#ffffff",
+                "inverse-surface": "#302f39",
+                "on-secondary": "#ffffff",
+                "on-secondary-fixed-variant": "#2f2ebe",
+                "inverse-on-surface": "#f3effc",
+                "secondary-container": "#6063ee",
+                "surface-container-low": "#f5f2ff",
+                "outline": "#777587",
+                "error": "#ba1a1a",
+                "surface": "#fcf8ff",
+                "on-tertiary": "#ffffff",
+                "surface-dim": "#dcd8e5",
+                "on-secondary-fixed": "#07006c",
+                "surface-bright": "#fcf8ff",
+                "surface-tint": "#4d44e3",
+                "on-primary-fixed": "#0f0069"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "2xl": "1.25rem",
+                "3xl": "1.5rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "container-padding": "32px",
+                "unit": "4px",
+                "stack-gap-lg": "24px",
+                "grid-gutter": "20px",
+                "stack-gap-md": "16px",
+                "max-width-desktop": "1200px",
+                "sidebar_width": "260px",
+                "toolbar_height": "80px"
+        },
+        "fontFamily": {
+                "headline-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "display-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "label-md": [
+                        "Plus Jakarta Sans"
+                ],
+                "headline-lg-mobile": [
+                        "Plus Jakarta Sans"
+                ],
+                "body-lg": [
+                        "Plus Jakarta Sans"
+                ],
+                "body": ["Plus Jakarta Sans"],
+                "display": ["Plus Jakarta Sans"],
+                "section-title": ["Plus Jakarta Sans"],
+                "label": ["Plus Jakarta Sans"],
+                "heading": ["Plus Jakarta Sans"],
+                "secondary": ["Plus Jakarta Sans"]
+        },
+        "fontSize": {
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.3",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "800"
+                        }
+                ],
+                "label-md": [
+                        "14px",
+                        {
+                                "lineHeight": "1.4",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "28px",
+                        {
+                                "lineHeight": "1.2",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-lg": [
+                        "18px",
+                        {
+                                "lineHeight": "1.6",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body": ["14px", { "lineHeight": "1.5", "letterSpacing": "0", "fontWeight": "400" }],
+                "display": ["24px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                "section-title": ["16px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "600" }],
+                "label": ["12px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "600" }],
+                "heading": ["18px", { "lineHeight": "1.3", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                "secondary": ["12px", { "lineHeight": "1.4", "letterSpacing": "0", "fontWeight": "500" }]
+        }
+},
+    },
+  }
+}catch(_e){}</script></head><body class="text-on-background font-body text-body overflow-hidden h-screen w-screen flex bg-surface-container-low">
+<!-- Floating Capsule SideNavBar -->
+<nav class="bg-surface-container-lowest shadow-[0_4px_32px_rgba(79,70,229,0.06)] fixed left-6 top-6 h-[calc(100vh-48px)] w-[260px] rounded-[24px] flex flex-col py-8 px-6 z-20 border border-outline-variant/20">
+<div class="mb-10 flex items-center gap-4 px-2">
+<div class="w-10 h-10 rounded-[12px] bg-primary flex items-center justify-center shadow-sm bg-gradient-to-br from-primary to-primary-container">
+<span class="material-symbols-outlined text-on-primary text-[24px]">donut_small</span>
+</div>
+<div>
+<h1 class="font-heading text-[18px] font-bold text-on-surface leading-tight tracking-tight">Sub2API</h1>
+<p class="font-secondary text-[12px] text-primary/80 font-medium tracking-wide">Monitoring Suite</p>
+</div>
+</div>
+<ul class="flex flex-col gap-2 flex-1">
+<li class="bg-primary text-on-primary font-label text-[14px] cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all shadow-[0_4px_12px_rgba(79,70,229,0.2)] bg-gradient-to-r from-primary to-primary-container">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-bold tracking-wide">全部站点</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="">使用记录</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="">渠道状态</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">settings_input_component</span>
+<span class="">站点管理</span>
+</li>
+
+</ul>
+<ul class="flex flex-col gap-2 mt-auto pt-6 border-t border-outline-variant/30">
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="">通知</span>
+</li>
+<li class="text-on-surface-variant font-label text-[14px] hover:bg-surface-container-high hover:text-primary cursor-pointer active:scale-95 flex items-center gap-3 px-4 py-3 rounded-[12px] transition-all font-medium">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="">设置</span>
+</li>
+</ul>
+</nav>
+<!-- TopNavBar -->
+<header class="fixed top-0 right-0 h-[80px] w-[calc(100%-284px)] flex justify-between items-center px-8 z-20 pt-6">
+<div class="flex items-center gap-4">
+
+</div>
+<div class="flex items-center gap-6">
+<span class="font-secondary text-[12px] text-primary bg-primary-fixed/60 px-4 py-2 rounded-[8px] shadow-sm font-bold tracking-wide">最后更新: 12:45</span>
+<div class="flex items-center gap-2 bg-surface-container-lowest p-1.5 rounded-[12px] shadow-[0_2px_8px_rgba(79,70,229,0.04)] border border-outline-variant/20">
+<button class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">refresh</span>
+</button>
+
+</div><div class="flex items-center gap-2 bg-surface-container-lowest p-1.5 rounded-[12px] shadow-[0_2px_8px_rgba(79,70,229,0.04)] border border-outline-variant/20 ml-1"><button class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-primary-fixed/80 text-on-surface-variant hover:text-primary transition-colors" title="Minimize to Float"><span class="material-symbols-outlined text-[20px]">minimize</span></button><button class="w-[36px] h-[36px] flex items-center justify-center rounded-[8px] hover:bg-error/15 text-error transition-colors" title="Close Program"><span class="material-symbols-outlined text-[20px]">close</span></button></div>
+</div>
+</header>
+<!-- Main Viewport -->
+<main class="ml-[284px] mt-[80px] w-[calc(100%-284px)] h-[calc(100vh-80px)] p-8 pt-4 overflow-y-auto z-10 relative scrollbar-hide">
+<div class="w-full flex flex-col gap-8">
+<!-- Stats Strip with 24px border radius and soft shadow - NOW FULL WIDTH -->
+<div class="grid grid-cols-2 gap-6 w-full lg:grid-cols-5">
+<div class="bg-surface-container-lowest rounded-[24px] p-8 flex flex-col justify-center h-[120px] relative overflow-hidden shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10">
+<span class="font-secondary text-[12px] text-on-surface-variant mb-2 font-semibold tracking-wide uppercase">总余额</span>
+<div class="font-display text-[24px] font-extrabold text-primary tracking-tight">$12,450.80</div>
+<div class="absolute right-4 top-4 text-primary-fixed opacity-30">
+<span class="material-symbols-outlined text-[48px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-[24px] p-8 flex flex-col justify-center h-[120px] shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10">
+<span class="font-secondary text-[12px] text-on-surface-variant mb-2 font-semibold tracking-wide uppercase">今日消耗 Token</span>
+<div class="font-display text-[24px] font-extrabold text-on-surface tracking-tight">1.24M</div>
+</div>
+<div class="bg-surface-container-lowest rounded-[24px] p-6 flex flex-col relative overflow-hidden justify-center items-center text-center h-[120px] shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10"><div class="w-10 h-10 rounded-[12px] bg-primary-fixed/60 flex items-center justify-center mb-2 shadow-sm"><span class="material-symbols-outlined text-primary text-[20px] animate-spin-slow">hourglass_empty</span></div><p class="font-secondary text-[11px] text-primary font-bold bg-primary-fixed/40 px-3 py-1 rounded-[6px] tracking-wide">正在获取余额...</p></div><div class="bg-surface-container-lowest rounded-[24px] p-8 flex flex-col justify-center h-[120px] shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10">
+<span class="font-secondary text-[12px] text-on-surface-variant mb-2 font-semibold tracking-wide uppercase">今日消耗</span>
+<div class="font-display text-[24px] font-extrabold text-on-surface tracking-tight">$45.20</div>
+</div>
+<div class="bg-surface-container-lowest rounded-[24px] p-8 flex flex-col justify-center h-[120px] shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10">
+<span class="font-secondary text-[12px] text-on-surface-variant mb-2 font-semibold tracking-wide uppercase">站点状态</span>
+<div class="font-display text-[24px] font-extrabold text-on-surface flex items-baseline gap-2 tracking-tight">
+<span class="text-primary">24</span>
+<span class="text-[16px] text-outline-variant font-bold">/ 28</span>
+</div>
+</div>
+</div>
+
+<div class="w-full flex flex-col xl:flex-row gap-8">
+<!---->
+<div class="flex-1 flex flex-col gap-8 min-w-0">
+
+<!-- Site Table with rounded header -->
+<div class="bg-surface-container-lowest rounded-[24px] overflow-hidden flex flex-col shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/20 flex-1">
+<div class="min-w-[800px] overflow-x-auto">
+<div class="h-[60px] bg-primary-fixed/20 flex items-center px-6 border-b border-primary-fixed/40 font-secondary text-[12px] text-primary uppercase tracking-[0.05em] rounded-t-[24px] grid grid-cols-12 gap-4">
+<div class="col-span-3 truncate font-extrabold">站点名称</div>
+<div class="col-span-2 truncate font-extrabold">默认 Key</div>
+<div class="col-span-1 truncate text-right font-extrabold">倍率</div>
+<div class="col-span-2 truncate text-right text-primary font-extrabold flex items-center justify-end gap-1 cursor-pointer bg-primary-fixed/50 py-1.5 px-3 rounded-[8px] ml-auto">
+                            今日 Token <span class="material-symbols-outlined text-[14px]">arrow_downward</span>
+</div>
+<div class="col-span-2 truncate text-right font-extrabold pr-4">余额 / 消耗</div>
+<div class="col-span-2 truncate text-right font-extrabold">状态</div>
+</div>
+<div class="flex flex-col p-3 gap-2">
+<!-- Row 1: Selected -->
+<div class="h-[64px] grid grid-cols-12 gap-4 items-center px-4 rounded-[16px] table-row-selected font-body text-[14px] cursor-pointer transition-all bg-primary/5">
+<div class="col-span-3 truncate font-bold text-on-surface flex items-center gap-3">
+<div class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                                Site-A (生产环境)
+                            </div>
+<div class="col-span-2 truncate text-on-surface-variant font-mono text-[12px] bg-surface-container-low py-1.5 px-3 rounded-[8px] border border-outline-variant/30 font-semibold tracking-wide w-fit">sk-prod-****</div>
+<div class="col-span-1 truncate text-right font-semibold text-on-surface-variant text-[13px]">1.0</div>
+<div class="col-span-2 truncate text-right text-on-surface font-bold text-[14px]">420.5k</div>
+<div class="col-span-2 truncate text-right flex flex-col pr-4">
+<span class="font-bold text-primary text-[14px]">$4,520.10</span>
+<span class="font-medium text-on-surface-variant text-[11px]">$12.45</span>
+</div>
+<div class="col-span-2 flex items-center justify-end gap-3">
+<div class="px-2.5 py-1 bg-[#10b981]/15 text-[#059669] rounded-[8px] flex items-center justify-center font-secondary text-[11px] font-bold tracking-wide">98%</div>
+<span class="truncate text-right text-on-surface-variant text-[11px] font-medium w-12">现在</span>
+</div>
+</div>
+<!-- Row 2: Refreshing -->
+<div class="h-[64px] grid grid-cols-12 gap-4 items-center px-4 rounded-[16px] table-row-hover font-body text-[14px] cursor-pointer transition-colors">
+<div class="col-span-3 truncate font-bold text-on-surface flex items-center gap-3">
+<span class="material-symbols-outlined text-[16px] text-primary animate-spin-slow">sync</span>
+                                Site-B (测试环境)
+                            </div>
+<div class="col-span-2 truncate text-on-surface-variant font-mono text-[12px] py-1.5 px-3 opacity-80 font-semibold tracking-wide">sk-stg-****</div>
+<div class="col-span-1 truncate text-right font-semibold text-on-surface-variant text-[13px] opacity-80">1.2</div>
+<div class="col-span-2 truncate text-right text-on-surface font-bold text-[14px] opacity-80">150.2k</div>
+<div class="col-span-2 truncate text-right flex flex-col pr-4 opacity-80">
+<span class="font-bold text-[14px]">$850.00</span>
+<span class="font-medium text-on-surface-variant text-[11px]">$4.12</span>
+</div>
+<div class="col-span-2 flex items-center justify-end gap-3 opacity-90">
+<div class="px-2.5 py-1 bg-primary/15 text-primary rounded-[8px] flex items-center justify-center font-secondary text-[11px] font-bold tracking-wide">100%</div>
+<span class="truncate text-right text-primary text-[11px] font-bold w-12">同步中</span>
+</div>
+</div>
+<!-- Row 3: Stale -->
+<div class="h-[64px] grid grid-cols-12 gap-4 items-center px-4 rounded-[16px] table-row-hover font-body text-[14px] cursor-pointer transition-colors bg-surface-container-high/30">
+<div class="col-span-3 truncate font-bold text-on-surface flex items-center gap-3">
+<div class="w-2.5 h-2.5 rounded-full bg-[#f59e0b] shadow-[0_0_8px_rgba(245,158,11,0.4)]"></div>
+                                Site-C (旧版环境)
+                            </div>
+<div class="col-span-2 truncate text-on-surface-variant font-mono text-[12px] py-1.5 px-3 font-semibold tracking-wide">sk-leg-****</div>
+<div class="col-span-1 truncate text-right font-semibold text-on-surface-variant text-[13px]">0.8</div>
+<div class="col-span-2 truncate text-right text-on-surface font-bold text-[14px]">15.4k</div>
+<div class="col-span-2 truncate text-right flex flex-col pr-4">
+<span class="font-bold text-on-surface-variant text-[14px]">$12.45</span>
+<span class="font-medium text-on-surface-variant text-[11px]">$0.45</span>
+</div>
+<div class="col-span-2 flex items-center justify-end gap-3">
+<div class="px-2.5 py-1 bg-[#f59e0b]/15 text-[#d97706] rounded-[8px] flex items-center justify-center font-secondary text-[11px] font-bold tracking-wide">警告</div>
+<span class="truncate text-right text-[#d97706] text-[11px] font-bold flex items-center gap-1 w-12"><span class="material-symbols-outlined text-[12px]">schedule</span> 20m</span>
+</div>
+</div>
+<!-- Row 4: Normal -->
+<div class="h-[64px] grid grid-cols-12 gap-4 items-center px-4 rounded-[16px] table-row-hover font-body text-[14px] cursor-pointer transition-colors">
+<div class="col-span-3 truncate font-bold text-on-surface flex items-center gap-3">
+<div class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                                Site-D (备份环境)
+                            </div>
+<div class="col-span-2 truncate text-on-surface-variant font-mono text-[12px] py-1.5 px-3 font-semibold tracking-wide">sk-bak-****</div>
+<div class="col-span-1 truncate text-right font-semibold text-on-surface-variant text-[13px]">1.0</div>
+<div class="col-span-2 truncate text-right text-on-surface font-bold text-[14px]">0</div>
+<div class="col-span-2 truncate text-right flex flex-col pr-4">
+<span class="font-bold text-[14px]">$1,000.00</span>
+<span class="font-medium text-on-surface-variant text-[11px]">$0.00</span>
+</div>
+<div class="col-span-2 flex items-center justify-end gap-3">
+<div class="px-2.5 py-1 bg-surface-variant/60 text-on-surface-variant rounded-[8px] flex items-center justify-center font-secondary text-[11px] font-bold tracking-wide">空闲</div>
+<span class="truncate text-right text-on-surface-variant text-[11px] font-medium w-12">5m</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Floating Window Examples -->
+<div class="w-full xl:w-[400px] flex flex-col gap-6 flex-shrink-0 pb-8">
+<h3 class="font-heading text-[18px] font-bold text-primary mb-1 flex items-center gap-2 px-2">
+<span class="material-symbols-outlined text-[20px]">widgets</span> 组件状态
+                </h3>
+<!-- 1. Light Mode Success (Refined) -->
+<div class="w-full bg-surface-container-lowest rounded-[24px] p-6 flex flex-col relative overflow-hidden shadow-[0_4px_16px_rgba(79,70,229,0.04)] border border-outline-variant/10">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed/40 rounded-bl-full pointer-events-none"></div>
+<div class="flex items-center justify-between mb-6 relative z-10">
+<div class="flex items-center gap-3">
+<div class="w-[36px] h-[36px] rounded-[12px] bg-[#10b981]/15 flex items-center justify-center text-[#059669]">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+</div>
+<span class="font-heading text-[18px] font-bold text-on-surface">Site-A 状态</span>
+</div>
+<span class="font-secondary text-[12px] text-primary bg-primary-fixed/60 px-3 py-1.5 rounded-[8px] font-bold tracking-wide">活跃</span>
+</div>
+<p class="font-body text-[14px] text-on-surface-variant mb-6 relative z-10 font-medium leading-relaxed">这么有钱，就使劲蹬 Codex，别浪费！💸</p>
+<div class="grid grid-cols-2 gap-y-6 gap-x-4 mt-auto bg-surface-container-low/60 rounded-[16px] p-5 shadow-sm border border-outline-variant/15">
+<div class="flex flex-col gap-1">
+<span class="font-secondary text-[11px] text-primary font-bold tracking-wide uppercase">余额</span>
+<span class="font-display text-[24px] font-extrabold text-primary">$15.20</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-secondary text-[11px] text-primary font-bold tracking-wide uppercase">密钥</span>
+<span class="font-mono text-[12px] text-on-surface bg-surface-container-lowest px-2 py-1 rounded-[6px] w-max shadow-sm border border-outline-variant/30 font-semibold mt-1">Work_Key</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-secondary text-[11px] text-primary font-bold tracking-wide uppercase">今日 Token</span>
+<span class="font-label text-[16px] font-bold text-on-surface">5.2k</span>
+</div>
+<div class="flex flex-col gap-1">
+<span class="font-secondary text-[11px] text-primary font-bold tracking-wide uppercase">今日消耗</span>
+<span class="font-label text-[16px] font-bold text-on-surface">$0.12 <span class="text-outline text-[11px] font-medium ml-1">(倍率 1.0)</span></span>
+</div>
+</div>
+</div>
+<!-- 3. Querying -->
+
+<!-- 5. Error-->
+<div class="w-full bg-error-container/20 rounded-[24px] p-6 flex flex-col relative overflow-hidden border border-error-container/60 shadow-[0_4px_16px_rgba(186,26,26,0.04)]">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-3">
+<div class="w-[36px] h-[36px] rounded-[12px] bg-error/15 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[20px]">error</span>
+</div>
+<span class="font-heading text-[18px] font-bold text-on-surface">Site-F 状态</span>
+</div>
+<span class="font-secondary text-[12px] text-error bg-error/15 px-3 py-1.5 rounded-[8px] font-bold tracking-wide">失败</span>
+</div>
+<div class="flex-1 flex flex-col justify-center items-center py-6 bg-white/60 rounded-[16px] backdrop-blur-sm border border-white/50 shadow-sm">
+<p class="font-heading text-[16px] text-on-surface mb-4 font-bold tracking-wide">查询错误: 认证失效</p>
+</div></div></div></div></div></main>
+
+
+
+
+
+
+
+</body></html>
