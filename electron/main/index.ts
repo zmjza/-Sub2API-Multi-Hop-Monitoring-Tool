@@ -41,7 +41,11 @@ import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
 import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
-import { floatingCornerBounds, type FloatingCorner } from './domain/window-bounds.js';
+import {
+  floatingCornerBounds,
+  floatingWindowPolicy,
+  type FloatingCorner,
+} from './domain/window-bounds.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -83,6 +87,12 @@ function protectNavigation(window: BrowserWindow) {
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+}
+
+function showMainWindow(): void {
+  floatingWindow?.hide();
+  mainWindow?.show();
+  mainWindow?.focus();
 }
 
 function broadcastRefreshState(
@@ -211,11 +221,7 @@ function registerIpc() {
     siteService.setNotificationSettings(notificationSettingsSchema.parse(input)),
   );
   ipcMain.handle('notifications:permission', () => ({ supported: Notification.isSupported() }));
-  ipcMain.on('window:open-main', () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-    setTimeout(() => floatingWindow?.hide(), 50);
-  });
+  ipcMain.on('window:open-main', showMainWindow);
   ipcMain.on('window:minimize-main', () => {
     if (appSettingsSchema.parse(appDatabase.getAppSettings()).floatingEnabled) {
       mainWindow?.hide();
@@ -305,7 +311,7 @@ function createTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate(
       createTrayMenuTemplate({
-        showMain: () => mainWindow?.show(),
+        showMain: showMainWindow,
         toggleFloating: () =>
           floatingWindow?.isVisible() ? floatingWindow.hide() : floatingWindow?.showInactive(),
         quit: () => app.quit(),
@@ -346,15 +352,20 @@ async function createWindows() {
     appDatabase.getSetting('floating:settings', { position: 'top-right' }),
   );
   const floatingBounds = floatingBoundsFor(floatingSettings.position);
+  const floatingPolicy = floatingWindowPolicy(process.platform);
   floatingWindow = new BrowserWindow({
     ...secureWindowOptions(),
     ...floatingBounds,
     width: 380,
     height: 260,
     resizable: false,
-    alwaysOnTop: false,
+    alwaysOnTop: floatingPolicy.alwaysOnTop,
     focusable: true,
   });
+  if (floatingPolicy.visibleOnAllWorkspaces)
+    floatingWindow.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: floatingPolicy.visibleOnFullScreen,
+    });
   protectNavigation(floatingWindow);
   await loadRenderer(floatingWindow, 'floating');
 }

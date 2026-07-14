@@ -1,5 +1,20 @@
 export type FloatingCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
+export interface FloatingWindowPolicy {
+  alwaysOnTop: false;
+  visibleOnAllWorkspaces: boolean;
+  visibleOnFullScreen: boolean;
+}
+
+export function floatingWindowPolicy(platform: NodeJS.Platform): FloatingWindowPolicy {
+  const isMac = platform === 'darwin';
+  return {
+    alwaysOnTop: false,
+    visibleOnAllWorkspaces: isMac,
+    visibleOnFullScreen: false,
+  };
+}
+
 export function floatingCornerBounds(
   position: FloatingCorner,
   workArea: { x: number; y: number; width: number; height: number },

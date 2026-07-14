@@ -37,5 +37,7 @@ describe('SitesPage runtime state', () => {
     }
     expect(source).toContain('.appSettings()');
     expect(source).toContain('.setAppSettings(');
+    expect(source).toContain('常驻桌面且不会遮挡前台应用');
+    expect(source).not.toContain('悬浮窗保持普通桌面层级');
   });
 });

@@ -138,9 +138,15 @@ test('moves between the frameless main and floating windows and quits from close
       const floatingWindow = BrowserWindow.getAllWindows().find(
         (candidate) => candidate.getBounds().width <= 500,
       );
-      return floatingWindow?.isAlwaysOnTop();
+      return {
+        alwaysOnTop: floatingWindow?.isAlwaysOnTop(),
+        visibleOnAllWorkspaces: floatingWindow?.isVisibleOnAllWorkspaces(),
+      };
     }),
-  ).toBe(false);
+  ).toEqual({
+    alwaysOnTop: false,
+    visibleOnAllWorkspaces: process.platform === 'darwin',
+  });
 
   await expect
     .poll(() =>
@@ -164,6 +170,25 @@ test('moves between the frameless main and floating windows and quits from close
       }),
     )
     .toEqual({ main: false, floating: true });
+
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width <= 500)
+      ?.blur();
+  });
+  await expect
+    .poll(() =>
+      application.evaluate(({ BrowserWindow }) => {
+        const floatingWindow = BrowserWindow.getAllWindows().find(
+          (candidate) => candidate.getBounds().width <= 500,
+        );
+        return {
+          visible: floatingWindow?.isVisible(),
+          alwaysOnTop: floatingWindow?.isAlwaysOnTop(),
+        };
+      }),
+    )
+    .toEqual({ visible: true, alwaysOnTop: false });
 
   await application.evaluate(({ ipcMain }) => {
     ipcMain.emit('window:open-main', {} as Electron.IpcMainEvent);

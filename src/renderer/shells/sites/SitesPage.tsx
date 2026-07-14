@@ -376,7 +376,7 @@ export function SitesPage(props: SitesProps) {
             <div className="notification-row">
               <div>
                 <b>悬浮窗固定位置</b>
-                <small>默认右上角，悬浮窗保持普通桌面层级</small>
+                <small>默认右上角，常驻桌面且不会遮挡前台应用</small>
               </div>
               <select
                 className="settings-select"

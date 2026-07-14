@@ -38,7 +38,7 @@
 - 固定 `380 × 260` 逻辑尺寸，支持左上、右上、左下、右下四角停靠，默认右上并持久化。
 - 快速切换当前站点，展示余额、今日 Token/消费、倍率、实时状态和更新时间。
 - 主窗最小化时转入悬浮窗；点击扩大按钮恢复并聚焦主窗。
-- 不使用 `alwaysOnTop`，保持普通桌面窗口层级。
+- 不使用 `alwaysOnTop`：切换浏览器或其他应用后悬浮窗仍保持已显示，但前台应用可以覆盖它；macOS 台前调度/多 Space 下保持可见，不进入全屏应用上层。
 
 ## 界面预览
 
@@ -146,8 +146,8 @@ npm run dev
 
 | 平台             | 文件                                            | SHA-256                                                            |
 | ---------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-0.1.0-mac-arm64.dmg` | `bb5de32bebaf85fa03debebb69c1888bd18be3412f854a13740925938ae22d68` |
-| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-0.1.0-win-x64.exe`   | `93eab9b1a71b2cf0ca6004fdf838ed39a50b7d8559520b87dacc354ea529eebf` |
+| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.0.0-mac-arm64.dmg` | `1e68975558fe55f890f2cad6a1c9fe37153b6910e9f63c94ca37767409daccfe` |
+| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.0.0-win-x64.exe`   | `5b6e9fa17d7fc0eaf4bea26ab025a0c09ea9ddb6db8e263d318adf3084d4b021` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 
@@ -167,7 +167,7 @@ npm run dev
 2026-07-14 深度优化收口证据：
 
 - Prettier、ESLint、TypeScript：通过。
-- Vitest：18 个文件，69 项通过。
+- Vitest：18 个文件，71 项通过。
 - 开发 Electron E2E：6 项通过。
 - macOS 打包应用 E2E：4 项通过。
 - 五个业务界面与悬浮窗：稳定截图检查通过。

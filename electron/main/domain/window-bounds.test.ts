@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { floatingCornerBounds } from './window-bounds.js';
+import { floatingCornerBounds, floatingWindowPolicy } from './window-bounds.js';
 
 describe('floatingCornerBounds', () => {
   const workArea = { x: 10, y: 20, width: 1200, height: 800 };
@@ -28,6 +28,19 @@ describe('floatingCornerBounds', () => {
       y: 548,
       width: 380,
       height: 260,
+    });
+  });
+
+  it('keeps the floating window pinned across apps on macOS and Windows', () => {
+    expect(floatingWindowPolicy('darwin')).toEqual({
+      alwaysOnTop: false,
+      visibleOnAllWorkspaces: true,
+      visibleOnFullScreen: false,
+    });
+    expect(floatingWindowPolicy('win32')).toEqual({
+      alwaysOnTop: false,
+      visibleOnAllWorkspaces: false,
+      visibleOnFullScreen: false,
     });
   });
 });

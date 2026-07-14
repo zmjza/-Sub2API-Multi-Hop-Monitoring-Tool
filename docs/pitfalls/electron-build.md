@@ -425,3 +425,36 @@ Stitch 的 Screen 元数据描述设计画布，不保证托管截图的编码�
 **适用范围**
 
 Stitch 托管图像、Electron 应用图标、macOS DMG、Windows NSIS 和 Renderer 品牌资源。
+
+## Stage Manager 常驻不等于 alwaysOnTop
+
+**现象**
+
+产品要求悬浮窗切换应用后继续存在，同时浏览器和其他前台软件必须能够覆盖它。若直接启用 `alwaysOnTop`，悬浮窗会遮挡正常工作；若在失焦或切换应用时隐藏，则返回桌面后窗口已经消失。
+
+**根因**
+
+“常驻桌面”包含窗口生命周期与窗口层级两个独立要求：窗口应保持 `visible`，但层级仍应是普通窗口。macOS 台前调度和 Space 还需要单独配置跨工作区可见性，不能用置顶替代。
+
+**正确做法**
+
+所有平台保持 `alwaysOnTop=false`，不在 `blur`、应用切换或窗口切换事件中调用 `hide()`/`minimize()`。macOS 使用 `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: false })`，让悬浮窗在台前调度和 Space 间保持存在，但不覆盖全屏应用；Windows 保持普通工作区窗口。只有点击“打开主页面”时才隐藏悬浮窗并显示、聚焦主窗口。
+
+**验证方式**
+
+Electron E2E 断言 `isAlwaysOnTop() === false`、失焦后 `isVisible() === true`，并验证打开主页面后的反向切换。macOS 打包应用还需在开启台前调度时切换到浏览器，确认浏览器可以覆盖悬浮窗，同时通过应用状态确认悬浮窗仍为 visible。
+
+**禁止事项**
+
+不要把“保持显示”实现成 `alwaysOnTop`；不要监听失焦后自动隐藏；不要设置 `visibleOnFullScreen=true`；不要只凭一个原生标志推断台前调度下的实际遮挡行为。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/main/domain/window-bounds.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+macOS 台前调度、多 Space、Windows 普通窗口层，以及主窗口与悬浮窗的生命周期切换。
