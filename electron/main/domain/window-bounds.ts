@@ -4,6 +4,7 @@ export interface FloatingWindowPolicy {
   alwaysOnTop: false;
   visibleOnAllWorkspaces: boolean;
   visibleOnFullScreen: boolean;
+  activateOnShow: false;
 }
 
 export function floatingWindowPolicy(platform: NodeJS.Platform): FloatingWindowPolicy {
@@ -12,6 +13,7 @@ export function floatingWindowPolicy(platform: NodeJS.Platform): FloatingWindowP
     alwaysOnTop: false,
     visibleOnAllWorkspaces: isMac,
     visibleOnFullScreen: false,
+    activateOnShow: false,
   };
 }
 

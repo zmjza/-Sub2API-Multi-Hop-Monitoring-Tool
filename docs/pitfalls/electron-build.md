@@ -458,3 +458,36 @@ Electron E2E 断言 `isAlwaysOnTop() === false`、失焦后 `isVisible() === tru
 **适用范围**
 
 macOS 台前调度、多 Space、Windows 普通窗口层，以及主窗口与悬浮窗的生命周期切换。
+
+## 桌面常驻显示不能调用 show 并 focus
+
+**现象**
+
+悬浮窗设置为非置顶并跨 Space 可见，但在 macOS 台前调度中仍可能被收进当前应用缩略区域或出现窗口变小。
+
+**根因**
+
+桌面常驻要求窗口继续可见，不要求应用成为前台活动应用。`show()` 后再 `focus()` 会激活 Electron 应用，改变台前调度的前台窗口集合；这与“不遮挡前台应用”也不一致。
+
+**正确做法**
+
+显示悬浮窗时使用 `showInactive()`，不调用 `focus()`；只有用户点击悬浮窗“打开主页面”时才隐藏悬浮窗并显示、聚焦主窗口。托盘显示悬浮窗也必须走同一套非激活显示策略。
+
+**验证方式**
+
+Electron E2E 断言悬浮窗的非置顶和可见状态，并检查主窗最小化、托盘显示和扩大恢复路径。macOS 真机需开启台前调度，切换到其他应用后观察悬浮窗保持原尺寸和位置，且前台应用仍可覆盖。
+
+**禁止事项**
+
+不要在桌面常驻显示路径中调用 `focus()`；不要用 `alwaysOnTop=true` 补偿激活导致的窗口集合变化；不要把 `showInactive()` 的“非激活”误写成隐藏或最小化。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/main/domain/window-bounds.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+macOS Stage Manager、Space 切换、Windows 桌面常驻显示，以及主窗口最小化和托盘切换。

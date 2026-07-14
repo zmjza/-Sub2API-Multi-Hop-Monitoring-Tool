@@ -36,11 +36,13 @@ describe('floatingCornerBounds', () => {
       alwaysOnTop: false,
       visibleOnAllWorkspaces: true,
       visibleOnFullScreen: false,
+      activateOnShow: false,
     });
     expect(floatingWindowPolicy('win32')).toEqual({
       alwaysOnTop: false,
       visibleOnAllWorkspaces: false,
       visibleOnFullScreen: false,
+      activateOnShow: false,
     });
   });
 });

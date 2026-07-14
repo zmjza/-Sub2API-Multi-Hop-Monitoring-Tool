@@ -95,6 +95,15 @@ function showMainWindow(): void {
   mainWindow?.focus();
 }
 
+function showFloatingWindow(): void {
+  if (!floatingWindow) return;
+  const policy = floatingWindowPolicy(process.platform);
+  // Showing the desktop resident window must not activate the app. Activation
+  // can move it into the foreground collection in macOS Stage Manager.
+  if (policy.activateOnShow) floatingWindow.show();
+  else floatingWindow.showInactive();
+}
+
 function broadcastRefreshState(
   siteId: string,
   state: 'refreshing' | 'success' | 'error' | 'auth-required',
@@ -225,8 +234,9 @@ function registerIpc() {
   ipcMain.on('window:minimize-main', () => {
     if (appSettingsSchema.parse(appDatabase.getAppSettings()).floatingEnabled) {
       mainWindow?.hide();
-      floatingWindow?.show();
-      floatingWindow?.focus();
+      // Desktop residency must not activate the app. Activation can move the
+      // app into the foreground collection in Stage Manager and shrink it.
+      showFloatingWindow();
     } else {
       mainWindow?.hide();
     }
@@ -313,7 +323,7 @@ function createTray() {
       createTrayMenuTemplate({
         showMain: showMainWindow,
         toggleFloating: () =>
-          floatingWindow?.isVisible() ? floatingWindow.hide() : floatingWindow?.showInactive(),
+          floatingWindow?.isVisible() ? floatingWindow.hide() : showFloatingWindow(),
         quit: () => app.quit(),
       }),
     ),
