@@ -140,16 +140,24 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
+## 当前版本 1.0.0 恢复说明
+
+- 当前代码以 Gitee 历史提交 `0dd640c` 的完整 `1.0.0` 代码树为基线重新构建。
+- 使用记录保持该版本原有列结构，不显示后续版本加入的“延迟”列。
+- 本次属于指定历史版本恢复；此后的功能优化、Bug 修复或行为调整必须正常递增 SemVer。
+
 ## 构建与安装包
 
 当前本地构建产物：
 
 | 平台             | 文件                                            | SHA-256                                                            |
 | ---------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.0.0-mac-arm64.dmg` | `3fd6a7b41e05c112bec558df035dc7192f6185430acac01daf09ca16dd9e30f5` |
-| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.0.0-win-x64.exe`   | `6952a0c19e3ba9ae6b1a0c232add9397b27530634b3d4368a8d01416dbc26be9` |
+| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.0.0-mac-arm64.dmg` | `540b12a17b7fc2b060196c0cae8024f01b84bd7786e61d4642c903a475a0c9d2` |
+| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.0.0-win-x64.exe`   | `7e4d24c033e9f6c0549d2cb8b3a0e9b3a06ec31cc9c6044fd26e2c9a80ce2afa` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
+
+发布规则：每次功能优化或修复都必须递增版本号并重新生成 macOS ARM64 DMG、Windows x64 NSIS；`release/` 只保留最新版本产物，旧安装包应在生成新版本前清理。历史版本恢复必须基于对应远端提交的完整代码树，不能只回写版本号。
 
 ### macOS
 

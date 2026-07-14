@@ -14,3 +14,11 @@
 - [Knowledge-base rules and full index](docs/pitfalls/README.md)
 - [Electron build and renderer loading](docs/pitfalls/electron-build.md)
 - [Dependency and tooling behavior](docs/pitfalls/tooling.md)
+
+## Release Rule
+
+- 每次功能优化、Bug 修复或行为调整后，都必须递增 SemVer 版本，并重新生成最新 macOS ARM64 DMG 与 Windows x64 NSIS 安装包。
+- 安装包文件名必须包含当前版本号，更新说明必须同步记录本次变更和 SHA-256；不得把旧产物冒充当前版本。
+- `release/` 是当前发布目录，只保留最新版本的 DMG、EXE、blockmap 和当前构建元数据；生成新版本前清理旧版本产物。
+- 历史版本恢复必须以远端历史提交的完整代码树为基线，不能只修改 `package.json` 版本号。
+- Windows 仍只做交叉构建和 CI 证据，不冒充 Windows 真机验收；macOS 真机状态必须单独记录。
