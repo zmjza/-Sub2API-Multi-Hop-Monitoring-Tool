@@ -8,6 +8,9 @@ export interface UsageRecord {
   actualCost: string;
   keyLabel: string;
   reasoningEffort?: string;
+  cacheReadTokens?: string;
+  cacheCreationTokens?: string;
+  durationMs?: string;
 }
 export interface UsageEvents {
   onRefresh(): void;

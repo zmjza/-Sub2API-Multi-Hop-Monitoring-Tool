@@ -16,12 +16,12 @@ interface PackageManifest {
 }
 
 describe('electron-builder manifest', () => {
-  it('keeps the public application version on the 1.0 release line', () => {
+  it('keeps the public application version synchronized with the current release', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
 
-    expect(manifest.version).toBe('1.0.0');
-    expect(preloadSource).toContain("shellVersion: '1.0.0'");
+    expect(manifest.version).toBe('1.1.0');
+    expect(preloadSource).toContain("shellVersion: '1.1.0'");
   });
 
   it('keeps Electron as a build-time dependency', () => {

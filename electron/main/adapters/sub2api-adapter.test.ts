@@ -147,6 +147,51 @@ describe('Sub2ApiAdapter', () => {
     expect(JSON.stringify(result)).not.toContain('must-not-leave-main');
   });
 
+  it('normalizes optional channel relationships and orders timeline by checked time', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) =>
+        path === '/channels/available'
+          ? {
+              data: [
+                {
+                  name: 'codex',
+                  platforms: [
+                    {
+                      platform: 'openai',
+                      groups: [{ name: 'g', secret: 'drop' }],
+                      supported_models: [{ name: 'm', secret: 'drop' }],
+                    },
+                  ],
+                },
+              ],
+            }
+          : {
+              data: {
+                items: [
+                  {
+                    id: 1,
+                    name: 'c',
+                    provider: 'openai',
+                    timeline: [
+                      { status: 'operational', checked_at: '2026-01-02T00:00:00Z' },
+                      { status: 'degraded', checked_at: '2026-01-01T00:00:00Z' },
+                    ],
+                  },
+                ],
+              },
+            },
+    });
+    await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
+      availableChannels: [
+        {
+          name: 'codex',
+          platforms: [{ platform: 'openai', groupNames: ['g'], modelNames: ['m'] }],
+        },
+      ],
+      channels: [{ timeline: [{ status: 'degraded' }, { status: 'normal' }] }],
+    });
+  });
+
   it('reads per-key request counts for automatic default-key selection', async () => {
     const adapter = new Sub2ApiAdapter({
       getJson: async (path: string) => ({ total_requests: path.includes('api_key_id=a') ? 2 : 7 }),
@@ -298,7 +343,18 @@ describe('Sub2ApiAdapter', () => {
 
     await expect(adapter.readUsageFilters('access', 'Asia/Shanghai')).resolves.toEqual({
       models: ['gpt-5.4', 'claude-sonnet-4'],
-      groups: [{ id: '25', name: '高并发通道' }],
+      groups: [{ id: '25', name: '高并发通道', rate: 0.2 }],
     });
+  });
+
+  it('keeps absent usage metrics undefined instead of inventing zeroes', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async () => ({ data: { items: [{ id: 'missing-metrics', model: 'test-model' }] } }),
+    });
+    const result = await adapter.readUsage('access', { page: 1 });
+    expect(result.items[0]).toMatchObject({ id: 'missing-metrics', model: 'test-model' });
+    expect(result.items[0].durationMs).toBeUndefined();
+    expect(result.items[0].actualCost).toBeUndefined();
+    expect(result.items[0].totalTokens).toBeUndefined();
   });
 });

@@ -20,7 +20,19 @@ export function UsagePage(props: UsageProps) {
   });
   const [showColumns, setShowColumns] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(
-    () => new Set(['时间', 'API Key', '模型', '思考等级', '分组', '请求类型', 'Token', '实际消费']),
+    () =>
+      new Set([
+        '时间',
+        'API Key',
+        '模型',
+        '思考等级',
+        '分组',
+        '请求类型',
+        'Token',
+        '缓存 Token',
+        '耗时',
+        '实际消费',
+      ]),
   );
   const runtime = Boolean(window.sub2apiDesktop);
   const liveRecords = extractRecords(props.usageData);
@@ -83,6 +95,10 @@ export function UsagePage(props: UsageProps) {
               / 缓存:{' '}
               {props.selectedSite?.todayCacheReadTokens !== undefined
                 ? formatTokenCount(props.selectedSite.todayCacheReadTokens)
+                : '—'}{' '}
+              / 创建:{' '}
+              {props.selectedSite?.todayCacheCreationTokens !== undefined
+                ? formatTokenCount(props.selectedSite.todayCacheCreationTokens)
                 : '—'}
             </small>
           </div>
@@ -265,25 +281,34 @@ export function UsagePage(props: UsageProps) {
         </div>
         {showColumns && (
           <div className="column-settings" role="group" aria-label="列设置">
-            {['时间', 'API Key', '模型', '思考等级', '分组', '请求类型', 'Token', '实际消费'].map(
-              (column) => (
-                <label key={column}>
-                  <input
-                    type="checkbox"
-                    checked={visibleColumns.has(column)}
-                    onChange={() =>
-                      setVisibleColumns((current) => {
-                        const next = new Set(current);
-                        if (next.has(column)) next.delete(column);
-                        else next.add(column);
-                        return next;
-                      })
-                    }
-                  />
-                  {column}
-                </label>
-              ),
-            )}
+            {[
+              '时间',
+              'API Key',
+              '模型',
+              '思考等级',
+              '分组',
+              '请求类型',
+              'Token',
+              '缓存 Token',
+              '耗时',
+              '实际消费',
+            ].map((column) => (
+              <label key={column}>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.has(column)}
+                  onChange={() =>
+                    setVisibleColumns((current) => {
+                      const next = new Set(current);
+                      if (next.has(column)) next.delete(column);
+                      else next.add(column);
+                      return next;
+                    })
+                  }
+                />
+                {column}
+              </label>
+            ))}
           </div>
         )}
       </section>
@@ -305,7 +330,18 @@ export function UsagePage(props: UsageProps) {
             <table>
               <thead>
                 <tr>
-                  {['时间', 'API Key', '模型', '思考等级', '分组', '请求类型', 'Token', '实际消费']
+                  {[
+                    '时间',
+                    'API Key',
+                    '模型',
+                    '思考等级',
+                    '分组',
+                    '请求类型',
+                    'Token',
+                    '缓存 Token',
+                    '耗时',
+                    '实际消费',
+                  ]
                     .filter((column) => visibleColumns.has(column))
                     .map((x) => (
                       <th key={x}>
@@ -349,6 +385,10 @@ export function UsagePage(props: UsageProps) {
                       </td>
                     )}
                     {visibleColumns.has('Token') && <td>{row.tokens}</td>}
+                    {visibleColumns.has('缓存 Token') && (
+                      <td>{row.cacheCreationTokens ?? row.cacheReadTokens ?? '—'}</td>
+                    )}
+                    {visibleColumns.has('耗时') && <td>{row.durationMs ?? '—'}</td>}
                     {visibleColumns.has('实际消费') && <td className="cost">{row.actualCost}</td>}
                   </tr>
                 ))}
@@ -485,14 +525,36 @@ function extractRecords(value: unknown): typeof usageRecords {
           model: String(item.model ?? '未知模型'),
           groupName: String(item.groupName ?? '未分组'),
           requestType: String(item.requestType ?? 'unknown'),
-          tokens: formatTokenCount(Number(item.totalTokens ?? 0)),
-          actualCost: `$${Number(item.actualCost ?? 0).toFixed(4)}`,
+          tokens: formatOptionalToken(item.totalTokens),
+          actualCost: formatOptionalCost(item.actualCost),
           keyLabel: String(item.apiKeyLabel ?? 'Key · 已脱敏'),
           reasoningEffort:
             typeof item.reasoningEffort === 'string' ? item.reasoningEffort : undefined,
+          cacheReadTokens: formatOptionalToken(item.cacheReadTokens),
+          cacheCreationTokens: formatOptionalToken(item.cacheCreationTokens),
+          durationMs: formatOptionalDuration(item.durationMs),
         };
       })
     : [];
+}
+
+function numericValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function formatOptionalToken(value: unknown): string {
+  const number = numericValue(value);
+  return number === undefined ? '—' : formatTokenCount(number);
+}
+
+function formatOptionalCost(value: unknown): string {
+  const number = numericValue(value);
+  return number === undefined ? '—' : `$${number.toFixed(4)}`;
+}
+
+function formatOptionalDuration(value: unknown): string | undefined {
+  const number = numericValue(value);
+  return number === undefined ? undefined : `${(number / 1000).toFixed(2)}s`;
 }
 
 function reasoningLabel(value: string | undefined) {

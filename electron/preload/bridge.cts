@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.0.0',
+  shellVersion: '1.1.0',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -34,7 +34,7 @@ const desktopBridge: DesktopBridge = {
     startupSetting: () => ipcRenderer.invoke('startup:get'),
     setStartupSetting: (enabled) => ipcRenderer.invoke('startup:set', { enabled }),
     floatingSettings: () => ipcRenderer.invoke('floating:get'),
-    setFloatingSettings: (position) => ipcRenderer.invoke('floating:set', { position }),
+    setFloatingSettings: (value) => ipcRenderer.invoke('floating:set', value),
     appSettings: () => ipcRenderer.invoke('app-settings:get'),
     setAppSettings: (value) => {
       const request = ipcRenderer.invoke('app-settings:set', value);

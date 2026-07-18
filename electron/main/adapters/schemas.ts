@@ -34,6 +34,10 @@ export const refreshResponseSchema = z.object({
 export function normalizeApiKey(input: Record<string, unknown>): ApiKeySummary {
   const name = typeof input.name === 'string' && input.name ? input.name : '未命名 Key';
   const rawStatus = String(input.status ?? 'active').toLowerCase();
+  const group =
+    typeof input.group === 'object' && input.group !== null
+      ? (input.group as Record<string, unknown>)
+      : {};
   return {
     id: String(input.id ?? ''),
     name,
@@ -41,6 +45,13 @@ export function normalizeApiKey(input: Record<string, unknown>): ApiKeySummary {
     status: rawStatus === 'active' || rawStatus === 'enabled' ? 'active' : 'disabled',
     groupId:
       input.group_id === undefined || input.group_id === null ? undefined : String(input.group_id),
+    groupName:
+      typeof (input.group_name ?? group.name) === 'string' &&
+      String(input.group_name ?? group.name).trim()
+        ? String(input.group_name ?? group.name)
+            .trim()
+            .slice(0, 200)
+        : undefined,
   };
 }
 

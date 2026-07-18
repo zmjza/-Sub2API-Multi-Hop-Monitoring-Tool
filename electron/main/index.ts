@@ -251,13 +251,14 @@ function registerIpc() {
   });
   ipcMain.handle('floating:get', () =>
     floatingSettingsSchema.parse(
-      appDatabase.getSetting('floating:settings', { position: 'top-right' }),
+      appDatabase.getSetting('floating:settings', { position: 'top-right', opacity: 84 }),
     ),
   );
   ipcMain.handle('floating:set', (_event, input: unknown) => {
     const settings = floatingSettingsSchema.parse(input);
     appDatabase.setSetting('floating:settings', settings);
     floatingWindow?.setBounds(floatingBoundsFor(settings.position));
+    floatingWindow?.setOpacity(settings.opacity / 100);
     return settings;
   });
   ipcMain.handle('app-settings:get', () => appSettingsSchema.parse(appDatabase.getAppSettings()));
@@ -359,7 +360,7 @@ async function createWindows() {
   mainWindow.on('move', () => saveBounds('window:main', mainWindow));
 
   const floatingSettings = floatingSettingsSchema.parse(
-    appDatabase.getSetting('floating:settings', { position: 'top-right' }),
+    appDatabase.getSetting('floating:settings', { position: 'top-right', opacity: 84 }),
   );
   const floatingBounds = floatingBoundsFor(floatingSettings.position);
   const floatingPolicy = floatingWindowPolicy(process.platform);
@@ -372,6 +373,7 @@ async function createWindows() {
     alwaysOnTop: floatingPolicy.alwaysOnTop,
     focusable: true,
   });
+  floatingWindow.setOpacity(floatingSettings.opacity / 100);
   if (floatingPolicy.visibleOnAllWorkspaces)
     floatingWindow.setVisibleOnAllWorkspaces(true, {
       visibleOnFullScreen: floatingPolicy.visibleOnFullScreen,

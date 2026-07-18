@@ -8,6 +8,10 @@
   gap: 8px;
   margin-bottom: 24px;
 }
+.channel-sync-state {
+  color: #92400e;
+  font-size: 12px;
+}
 .channel-toolbar .select-field {
   width: 180px;
   height: 36px;

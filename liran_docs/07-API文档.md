@@ -15,22 +15,23 @@
 
 ## 接口清单
 
-| 能力           | 方法与路径                          | 主要输入                                                                                                      | 标准化输出                                          | 证据                                             |
-| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------ |
-| 登录           | `POST /auth/login`                  | 账号/邮箱、密码；具体字段按公开设置与实际响应适配                                                             | accessToken, refreshToken?, expiresIn, user         | 上游源码已确认；两个真实二开站已验证             |
-| Token 刷新     | `POST /auth/refresh`                | refresh_token                                                                                                 | 新 access/refresh token 与过期时间                  | 上游源码已确认；真实二开站待验证                 |
-| 当前用户       | `GET /auth/me`                      | Bearer                                                                                                        | 当前认证主体                                        | 上游源码已确认；真实二开站待验证                 |
-| 用户资料/余额  | `GET /user/profile`                 | Bearer                                                                                                        | UserProfile，包括 balance                           | 上游源码已确认；两个真实二开站已验证             |
-| Key 列表       | `GET /keys`                         | page, page_size, filters                                                                                      | Paginated<ApiKeySummary>                            | 上游源码已确认；两个真实二开站已验证             |
-| 可用分组       | `GET /groups/available`             | Bearer                                                                                                        | Group[]，含默认倍率                                 | 上游源码已确认；两个真实二开站已验证             |
-| 专属倍率       | `GET /groups/rates`                 | Bearer                                                                                                        | groupId -> customRate                               | 上游源码已确认；两个真实二开站已验证             |
-| 今日统计       | `GET /usage/stats`                  | period=today, timezone, api_key_id? 等                                                                        | UsageToday                                          | 上游源码已确认；两个真实二开站已验证             |
-| 使用记录       | `GET /usage`                        | page, page_size, dates, timezone, api_key_id, model, group_id, request_type, billing_type, billing_mode, sort | Paginated<UsageRecord>                              | 上游源码已确认；两个真实二开站已验证             |
-| 模型筛选       | `GET /usage/dashboard/models`       | Bearer；按站点当前会话                                                                                        | 使用记录可选模型字符串列表                          | 上游源码已确认；真实二开站只读验证纳入本轮       |
-| Dashboard 快照 | `GET /usage/dashboard/stats`        | Bearer                                                                                                        | 用户累计/今日聚合                                   | 上游源码已确认；是否使用待实现评估               |
-| 可用渠道       | `GET /channels/available`           | Bearer                                                                                                        | 渠道、平台、分组、模型与定价                        | 上游源码已确认；真实二开站待验证                 |
-| 渠道监控列表   | `GET /channel-monitors`             | Bearer                                                                                                        | MonitorList                                         | 上游源码已确认；两个真实二开站已验证 supported   |
-| 渠道监控详情   | `GET /channel-monitors/{id}/status` | id                                                                                                            | 站点实际返回基础渠道详情；可用率/延迟字段按能力适配 | 两个真实二开站已验证 supported；本次仅见基础字段 |
+| 能力           | 方法与路径                                | 主要输入                                                                                                      | 标准化输出                                          | 证据                                             |
+| -------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------ |
+| 登录           | `POST /auth/login`                        | 账号/邮箱、密码；具体字段按公开设置与实际响应适配                                                             | accessToken, refreshToken?, expiresIn, user         | 上游源码已确认；两个真实二开站已验证             |
+| Token 刷新     | `POST /auth/refresh`                      | refresh_token                                                                                                 | 新 access/refresh token 与过期时间                  | 上游源码已确认；真实二开站待验证                 |
+| 当前用户       | `GET /auth/me`                            | Bearer                                                                                                        | 当前认证主体                                        | 上游源码已确认；真实二开站待验证                 |
+| 用户资料/余额  | `GET /user/profile`                       | Bearer                                                                                                        | UserProfile，包括 balance                           | 上游源码已确认；两个真实二开站已验证             |
+| Key 列表       | `GET /keys`                               | page, page_size, filters                                                                                      | Paginated<ApiKeySummary>                            | 上游源码已确认；两个真实二开站已验证             |
+| 可用分组       | `GET /groups/available`                   | Bearer                                                                                                        | Group[]，含默认倍率                                 | 上游源码已确认；两个真实二开站已验证             |
+| 专属倍率       | `GET /groups/rates`                       | Bearer                                                                                                        | groupId -> customRate                               | 上游源码已确认；两个真实二开站已验证             |
+| 今日统计       | `GET /usage/stats`                        | period=today, timezone, api_key_id? 等                                                                        | UsageToday                                          | 上游源码已确认；两个真实二开站已验证             |
+| 使用记录       | `GET /usage`                              | page, page_size, dates, timezone, api_key_id, model, group_id, request_type, billing_type, billing_mode, sort | Paginated<UsageRecord>                              | 上游源码已确认；两个真实二开站已验证             |
+| 模型筛选       | `GET /usage/dashboard/models`             | Bearer；按站点当前会话                                                                                        | 使用记录可选模型字符串列表                          | 上游源码已确认；真实二开站只读验证纳入本轮       |
+| Dashboard 快照 | `GET /usage/dashboard/stats`              | Bearer                                                                                                        | 用户累计/今日聚合                                   | 上游源码已确认；是否使用待实现评估               |
+| 可用渠道       | `GET /channels/available`                 | Bearer                                                                                                        | 渠道、平台、分组、模型与定价                        | 上游源码已确认；真实二开站待验证                 |
+| 渠道监控列表   | `GET /channel-monitors`                   | Bearer                                                                                                        | MonitorList                                         | 上游源码已确认；两个真实二开站已验证 supported   |
+| 渠道监控详情   | `GET /channel-monitors/{id}/status`       | id                                                                                                            | 站点实际返回基础渠道详情；可用率/延迟字段按能力适配 | 两个真实二开站已验证 supported；本次仅见基础字段 |
+| Radar 公开摘要 | `GET https://codexradar.com/current.json` | 无站点认证；浏览器公开 GET                                                                                    | Radar 模型摘要、评分、成本、耗时、推理等级          | 本次新增规划；待网络/CSP/空态验证                |
 
 ## 今日统计字段
 
@@ -102,4 +103,13 @@
 - 使用记录 CSV 由主进程按当前查询生成，前端只接收导出结果；完整 API Key、Token、密码不进入导出。
 - 登录 refresh 失败后会尝试使用安全凭据重新登录，只有新登录及核心读取成功后才替换旧会话。
 - 两个真实站点的登录、profile、Key、倍率、今日统计、usage 和渠道列表/详情只读验证已在最终打包应用中成功；具体实时数值不作为固定 API 断言。
+
+## 2026-07-18 外发版合并待验证接口与字段
+
+以下是 1.1.0 功能合并记录，相关实现、自动化和验收证据已完成：
+
+- `/channels/available`：仅按 `name`、`platforms[].platform`、`groups[].name`、`supported_models[].name` 读取关系；请求失败或字段不完整时降级为无关联排序。
+- `/usage`：保留 `reasoning_effort`、`cache_creation_tokens`、`duration_ms` 及今日汇总对应的缓存创建 Token/平均耗时；所有字段必须在适配器和 Zod 共享契约中显式允许。
+- `https://codexradar.com/current.json`：只作为公开页面数据源，不进入 sub2api 认证、Token、数据库或 CSV 流程。结构字段缺失、非 2xx、网络失败和超时必须有独立测试。
+- 朋友版新增的任何字段若无法从真实上游源码或当前响应证实，必须标记“待确认”，不得写入 API 合同或伪造默认值。
 - refresh 失败后的密码重登由本地 HTTP 集成测试覆盖；不得主动破坏真实站点 Token 来制造失败。

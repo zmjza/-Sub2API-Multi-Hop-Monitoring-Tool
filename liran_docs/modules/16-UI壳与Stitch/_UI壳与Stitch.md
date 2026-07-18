@@ -45,3 +45,12 @@ Stitch HTML > Stitch 代码/样式/规范 > Stitch 截图。可从 HTML 确认�
 ## 任务范围
 
 TASK-08-01 至 TASK-08-04、TASK-09-01 至 TASK-09-06、TASK-10-08、TASK-12-11。
+
+## 2026-07-18 外发版合并增量（内部实现完成；视觉真机待实测）
+
+本轮 macOS 页面样式检查已完成。总览、usage、channels、floating 和 Radar 截图位于 `real-test-evidence/macos-1.1.0/playwright/` 与 `test-results/radar.png`；未发现重叠、异常截断、大片空白或控件规格回归。
+
+- 本次新增 Radar 不走 Stitch 路线，不创建新的 Stitch Screen；使用现有固定浅色视觉基线，在真实 Renderer 中创建单独局部 UI 壳清单。
+- 使用记录、渠道状态和悬浮窗只补充已确认功能的字段、状态、事件和实例级尺寸约束，不扩大到主题切换、全局组件替换或新的视觉方案。
+- 页面样式检查由 Codex 在 macOS 真机执行，Windows 仅检查交叉构建后的页面自动化和结构证据；不得将平台证据混写。
+- 规划任务 MERGE-03、MERGE-04、MERGE-06、MERGE-07、MERGE-09 进入 UI 壳和视觉接收范围。

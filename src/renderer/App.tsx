@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   Network,
+  Radio,
   Settings,
   SlidersHorizontal,
   TimerReset,
@@ -19,8 +20,10 @@ import {
 import { OverviewPage } from './shells/overview/OverviewPage';
 import { UsagePage } from './shells/usage/UsagePage';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
+import { ChannelLoadCoordinator } from './channel-load-coordinator';
 import { SitesPage } from './shells/sites/SitesPage';
 import { FloatingWindow } from './shells/floating/FloatingWindow';
+import { RadarPage } from './shells/radar/RadarPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
 const initialLocation = parsePreviewLocation(window.location.search);
@@ -42,21 +45,26 @@ export function App() {
   const [channelDetail, setChannelDetail] = useState<unknown>();
   const [selectedChannelId, setSelectedChannelId] = useState<string>();
   const [keyOptions, setKeyOptions] = useState<
-    Array<{ id: string; maskedLabel: string; status: string }>
+    Array<{ id: string; maskedLabel: string; status: string; groupId?: string; groupName?: string }>
   >([]);
   const [usageFilterOptions, setUsageFilterOptions] = useState<{
     models: string[];
-    groups: Array<{ id: string; name: string }>;
+    groups: Array<{ id: string; name: string; rate?: number }>;
   }>({ models: [], groups: [] });
   const [floatingPosition, setFloatingPosition] = useState<
     'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   >('top-right');
+  const [floatingOpacity, setFloatingOpacity] = useState(84);
   const [keyPreference, setKeyPreference] = useState<{ mode: 'auto' | 'manual'; keyId?: string }>({
     mode: 'auto',
   });
   const [currentSiteId, setCurrentSiteId] = useState<string>();
   const [sitesSection, setSitesSection] = useState<'notifications' | 'settings'>();
   const currentSiteRef = useRef<string | undefined>(undefined);
+  const channelLoadCoordinatorRef = useRef(new ChannelLoadCoordinator());
+  const siteRequestRef = useRef(0);
+  const usageRequestRef = useRef(0);
+  const channelDetailRequestRef = useRef(0);
   const selectedSite = dashboard?.sites.find(
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
@@ -94,8 +102,25 @@ export function App() {
     setSitesSection(section);
     setShell('sites');
   };
+  async function loadKeyContext(siteId: string) {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) return;
+    const [keys, filters, preference] = await Promise.all([
+      desktop.keys(siteId).catch(() => []),
+      desktop.usageFilters(siteId).catch(() => ({ models: [], groups: [] })),
+      desktop.keyPreference(siteId).catch(() => ({ mode: 'auto' as const })),
+    ]);
+    if (currentSiteRef.current !== siteId) return;
+    setKeyOptions(Array.isArray(keys) ? (keys as typeof keyOptions) : []);
+    if (filters && typeof filters === 'object' && 'models' in filters && 'groups' in filters)
+      setUsageFilterOptions(filters as typeof usageFilterOptions);
+    if (preference && typeof preference === 'object' && 'mode' in preference)
+      setKeyPreference(preference as typeof keyPreference);
+  }
   const selectSite = (siteId: string) => {
     if (siteId === selectedSite?.id) return;
+    const requestId = ++siteRequestRef.current;
+    currentSiteRef.current = siteId;
     setCurrentSiteId(siteId);
     setUsageData(undefined);
     setChannelsData(undefined);
@@ -107,10 +132,14 @@ export function App() {
     void window.sub2apiDesktop?.sites
       .select(siteId)
       .then((value) => {
+        if (siteRequestRef.current !== requestId || currentSiteRef.current !== siteId) return;
         setDashboard(value);
         setState('success');
       })
-      .catch(() => setState('error'));
+      .catch(() => {
+        if (siteRequestRef.current === requestId && currentSiteRef.current === siteId)
+          setState('error');
+      });
   };
   const moveSite = (direction: -1 | 1) => {
     if (!dashboard?.sites.length) return;
@@ -125,15 +154,19 @@ export function App() {
   };
   const refreshSelected = () => {
     if (!selectedSite) return;
+    const siteId = selectedSite.id;
     setState('refreshing');
     void window.sub2apiDesktop?.sites
-      .refresh(selectedSite.id)
+      .refresh(siteId)
       .then(() => window.sub2apiDesktop?.sites.list())
       .then((value) => {
+        if (currentSiteRef.current !== siteId) return;
         if (value) setDashboard(value);
         setState('success');
       })
-      .catch(() => setState('error'));
+      .catch(() => {
+        if (currentSiteRef.current === siteId) setState('error');
+      });
   };
   context.onSelectSite = selectSite;
   context.onRefreshSite = refreshSelected;
@@ -159,34 +192,58 @@ export function App() {
   };
   context.onSelectChannel = (channelId) => {
     if (!selectedSite) return;
+    const siteId = selectedSite.id;
+    const requestId = ++channelDetailRequestRef.current;
     setSelectedChannelId(channelId);
     void window.sub2apiDesktop?.sites
-      .channelStatus(selectedSite.id, channelId)
-      .then(setChannelDetail)
-      .catch(() => setChannelDetail({ state: 'error' }));
+      .channelStatus(siteId, channelId)
+      .then((value) => {
+        if (currentSiteRef.current === siteId && channelDetailRequestRef.current === requestId)
+          setChannelDetail(value);
+      })
+      .catch(() => {
+        if (currentSiteRef.current === siteId && channelDetailRequestRef.current === requestId)
+          setChannelDetail({ state: 'error' });
+      });
   };
   context.onRefreshChannels = () => {
     if (!selectedSite) return;
     void loadChannels(selectedSite.id);
   };
   context.floatingPosition = floatingPosition;
+  context.floatingOpacity = floatingOpacity;
   context.onFloatingPositionChange = (position) => {
     setFloatingPosition(position);
     void window.sub2apiDesktop?.sites
-      .setFloatingSettings(position)
-      .then((value) => setFloatingPosition(value.position));
+      .setFloatingSettings({ position, opacity: floatingOpacity })
+      .then((value) => {
+        setFloatingPosition(value.position);
+        setFloatingOpacity(value.opacity);
+      });
+  };
+  context.onFloatingOpacityChange = (opacity) => {
+    setFloatingOpacity(opacity);
+    void window.sub2apiDesktop?.sites
+      .setFloatingSettings({ position: floatingPosition, opacity })
+      .catch(() => undefined);
   };
   context.onUsageQuery = ({ period, page, ...filters }) => {
     if (!selectedSite) return;
+    const siteId = selectedSite.id;
+    const requestId = ++usageRequestRef.current;
     setUsageData(undefined);
     setState('loading');
     void window.sub2apiDesktop?.sites
-      .usage({ siteId: selectedSite.id, period, page, pageSize: 20, ...filters })
+      .usage({ siteId, period, page, pageSize: 20, ...filters })
       .then((value) => {
+        if (currentSiteRef.current !== siteId || usageRequestRef.current !== requestId) return;
         setUsageData(value);
         setState('success');
       })
-      .catch(() => setState('error'));
+      .catch(() => {
+        if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
+          setState('error');
+      });
   };
   useEffect(() => {
     const refresh = () =>
@@ -216,43 +273,39 @@ export function App() {
   }, []);
   useEffect(() => {
     if (!selectedSite || initialLocation.surface === 'floating') return;
+    const siteId = selectedSite.id;
+    const requestId = ++usageRequestRef.current;
     void window.sub2apiDesktop?.sites
-      .usage({ siteId: selectedSite.id, period: 'today', page: 1, pageSize: 20 })
-      .then(setUsageData)
+      .usage({ siteId, period: 'today', page: 1, pageSize: 20 })
+      .then((value) => {
+        if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
+          setUsageData(value);
+      })
       .catch(() => undefined);
     void loadChannels(selectedSite.id);
-    void window.sub2apiDesktop?.sites
-      .keys(selectedSite.id)
-      .then((value) => setKeyOptions(Array.isArray(value) ? (value as typeof keyOptions) : []))
-      .catch(() => setKeyOptions([]));
-    void window.sub2apiDesktop?.sites
-      .usageFilters(selectedSite.id)
-      .then((value) => {
-        if (value && typeof value === 'object' && 'models' in value && 'groups' in value)
-          setUsageFilterOptions(value as typeof usageFilterOptions);
-      })
-      .catch(() => setUsageFilterOptions({ models: [], groups: [] }));
-    void window.sub2apiDesktop?.sites
-      .keyPreference(selectedSite.id)
-      .then((value) => {
-        if (value && typeof value === 'object' && 'mode' in value)
-          setKeyPreference(value as typeof keyPreference);
-      })
-      .catch(() => setKeyPreference({ mode: 'auto' }));
+    void loadKeyContext(siteId);
   }, [selectedSite?.id]);
   useEffect(() => {
     void window.sub2apiDesktop?.sites
       .floatingSettings()
-      .then((value) => setFloatingPosition(value.position))
+      .then((value) => {
+        setFloatingPosition(value.position);
+        setFloatingOpacity(value.opacity);
+      })
       .catch(() => undefined);
   }, []);
 
   async function loadChannels(siteId: string) {
-    setChannelsData(undefined);
-    setChannelDetail(undefined);
-    setState('refreshing');
+    const request = channelLoadCoordinatorRef.current.begin(siteId);
+    const isCurrent = () =>
+      channelLoadCoordinatorRef.current.isCurrent(request, currentSiteRef.current);
+    if (isCurrent()) {
+      setChannelDetail(undefined);
+      setState('refreshing');
+    }
     try {
       const value = await window.sub2apiDesktop?.sites.channels(siteId);
+      if (!isCurrent()) return;
       setChannelsData(value);
       const rawChannels =
         value && typeof value === 'object' && 'channels' in value ? value.channels : undefined;
@@ -265,11 +318,14 @@ export function App() {
         setState('success');
         return;
       }
+      const detailRequestId = ++channelDetailRequestRef.current;
       const detail = await window.sub2apiDesktop?.sites.channelStatus(siteId, id);
-      setChannelDetail(detail);
-      setState('success');
+      if (isCurrent() && channelDetailRequestRef.current === detailRequestId)
+        setChannelDetail(detail);
+      if (isCurrent()) setState('success');
     } catch {
-      setChannelsData({ state: 'error', channels: [] });
+      if (!isCurrent()) return;
+      setChannelsData((current: unknown) => current ?? { state: 'error', channels: [] });
       setChannelDetail({ state: 'error' });
       setState('error');
     }
@@ -278,6 +334,9 @@ export function App() {
     document.documentElement.dataset.reduceTransparency = String(reducedTransparency);
     document.documentElement.dataset.highContrast = String(highContrast);
   }, [reducedTransparency, highContrast]);
+  useEffect(() => {
+    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0, left: 0 });
+  }, [shell]);
   if (initialLocation.surface === 'floating')
     return <FloatingWindow {...context} onStateChange={setState} />;
   const pages = {
@@ -285,12 +344,14 @@ export function App() {
     usage: <UsagePage {...context} />,
     channels: <ChannelsPage {...context} />,
     sites: <SitesPage {...context} />,
+    radar: <RadarPage />,
   };
   const navigation = [
     ['overview', '全部站点', LayoutDashboard],
     ['usage', '使用记录', TimerReset],
     ['channels', '渠道状态', Network],
     ['sites', '站点管理', SlidersHorizontal],
+    ['radar', '雷达', Radio],
   ] as const;
   return (
     <main className="app-shell" data-shell={shell} data-state={effectiveState}>

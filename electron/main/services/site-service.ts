@@ -452,13 +452,16 @@ export class SiteService {
   }
 
   listKeys(siteId: string) {
-    return (this.keys.get(siteId) ?? []).map(({ id, name, maskedLabel, status, groupId }) => ({
-      id,
-      name,
-      maskedLabel,
-      status,
-      groupId,
-    }));
+    return (this.keys.get(siteId) ?? []).map(
+      ({ id, name, maskedLabel, status, groupId, groupName }) => ({
+        id,
+        name,
+        maskedLabel,
+        status,
+        groupId,
+        groupName,
+      }),
+    );
   }
 
   getKeyPreference(siteId: string): KeyPreference {

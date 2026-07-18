@@ -84,9 +84,53 @@ test('opens the controlled renderer preview', async () => {
     Math.abs((geometry.bounds?.height ?? 0) - Math.round(geometry.workArea.height * 0.9)),
   ).toBeLessThanOrEqual(2);
   await window.screenshot({ path: 'test-results/overview.png' });
-  for (const shell of ['usage', 'channels', 'sites']) {
+  for (const shell of ['usage', 'channels', 'sites', 'radar']) {
+    let radarMode: 'success' | 'empty' | 'error' = 'success';
+    if (shell === 'radar') {
+      await window.route('https://codexradar.com/current.json*', async (route) => {
+        if (radarMode === 'error') {
+          await route.fulfill({ status: 503, body: 'unavailable' });
+          return;
+        }
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body:
+            radarMode === 'empty'
+              ? JSON.stringify({ model_iq: { comparisons: {} } })
+              : JSON.stringify({
+                  monitored_at: '2026-07-18T00:00:00Z',
+                  model_iq: {
+                    latest: {
+                      model: 'gpt-5',
+                      reasoning_effort: 'high',
+                      score: 123,
+                      passed: 9,
+                      tasks: 10,
+                      cost_usd: 1.2,
+                      wall_seconds: 60,
+                    },
+                    comparisons: {},
+                  },
+                }),
+        });
+      });
+    }
     await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=${shell}`);
     await expect(window.locator('.app-shell')).toBeVisible();
+    if (shell === 'radar') {
+      await expect(window.getByRole('heading', { name: '模型选型雷达' })).toBeVisible();
+      await expect(window.getByRole('heading', { name: 'GPT-5 high', exact: true })).toBeVisible();
+      radarMode = 'empty';
+      await window.reload();
+      await expect(window.getByText('暂无可用模型数据。', { exact: true })).toBeVisible();
+      radarMode = 'error';
+      await window.reload();
+      await expect(
+        window.getByText('公开数据读取失败，请检查网络或稍后重试。', { exact: true }),
+      ).toBeVisible();
+      await window.unroute('https://codexradar.com/current.json*');
+    }
     await window.screenshot({ path: `test-results/${shell}.png` });
   }
   for (const state of [
@@ -225,6 +269,24 @@ test('opens the independent floating preview at the fixed size', async () => {
   expect(floating).toBeTruthy();
   if (floating) {
     await expect(floating.locator('.floating-window')).toBeVisible();
+    await expect(floating.locator('input[type="range"]')).toHaveAttribute('min', '35');
+    await expect(floating.locator('input[type="range"]')).toHaveAttribute('max', '100');
+    await floating.evaluate(async () => {
+      await window.sub2apiDesktop?.sites.setFloatingSettings({
+        position: 'top-right',
+        opacity: 35,
+      });
+    });
+    await expect
+      .poll(() =>
+        application.evaluate(({ BrowserWindow }) => {
+          const current = BrowserWindow.getAllWindows().find(
+            (candidate) => candidate.getBounds().width <= 500,
+          );
+          return current?.getOpacity();
+        }),
+      )
+      .toBeCloseTo(0.35, 2);
     await floating.screenshot({ path: 'test-results/floating.png' });
     await floating.goto(
       `file://${process.cwd()}/dist/index.html?surface=floating&preview=true&state=loading`,
@@ -320,7 +382,7 @@ test('persists floating placement and general settings across restarts', async (
     )
     .toEqual({
       app: { refreshIntervalMinutes: 10, floatingEnabled: false, staleAfterMinutes: 30 },
-      floating: { position: 'bottom-left' },
+      floating: { position: 'bottom-left', opacity: 84 },
     });
   await second.close();
 });
@@ -501,6 +563,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     )
     .toMatchObject({ mode: 'manual', keyId: 'key-e2e' });
   await main.getByRole('button', { name: '使用记录', exact: true }).click();
+  await main.locator('.usage-summary').scrollIntoViewIfNeeded();
   await expect(main.locator('.usage-summary').getByText('1.23K', { exact: true })).toBeVisible();
   await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model']);
   await expect(main.getByLabel('分组').locator('option')).toContainText(['全部', 'E2E 分组']);

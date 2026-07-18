@@ -18,6 +18,7 @@ export interface ApiKeySummary {
   maskedLabel: string;
   status: 'active' | 'disabled';
   groupId?: string;
+  groupName?: string;
 }
 
 export interface SiteSnapshot {

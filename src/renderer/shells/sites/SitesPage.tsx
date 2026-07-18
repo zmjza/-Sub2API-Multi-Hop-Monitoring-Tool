@@ -31,6 +31,7 @@ export function SitesPage(props: SitesProps) {
   const [floatingPosition, setFloatingPosition] = useState<
     'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
   >('top-right');
+  const [floatingOpacity, setFloatingOpacity] = useState(84);
   const [siteFailures, setSiteFailures] = useState(true);
   const [channelFailures, setChannelFailures] = useState(true);
   const [recoveryNotifications, setRecoveryNotifications] = useState(true);
@@ -68,7 +69,10 @@ export function SitesPage(props: SitesProps) {
       .catch(() => undefined);
     void window.sub2apiDesktop?.sites
       .floatingSettings()
-      .then((value) => setFloatingPosition(value.position))
+      .then((value) => {
+        setFloatingPosition(value.position);
+        setFloatingOpacity(value.opacity);
+      })
       .catch(() => undefined);
     void window.sub2apiDesktop?.sites
       .appSettings()
@@ -386,8 +390,11 @@ export function SitesPage(props: SitesProps) {
                   const position = event.target.value as typeof floatingPosition;
                   setFloatingPosition(position);
                   void window.sub2apiDesktop?.sites
-                    .setFloatingSettings(position)
-                    .then((value) => setFloatingPosition(value.position));
+                    .setFloatingSettings({ position, opacity: floatingOpacity })
+                    .then((value) => {
+                      setFloatingPosition(value.position);
+                      setFloatingOpacity(value.opacity);
+                    });
                 }}
               >
                 <option value="top-left">左上角</option>

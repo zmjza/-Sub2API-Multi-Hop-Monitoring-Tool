@@ -140,11 +140,10 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.0.0 恢复说明
+## 当前版本 1.1.0
 
-- 当前代码以 Gitee 历史提交 `0dd640c` 的完整 `1.0.0` 代码树为基线重新构建。
-- 使用记录保持该版本原有列结构，不显示后续版本加入的“延迟”列。
-- 本次属于指定历史版本恢复；此后的功能优化、Bug 修复或行为调整必须正常递增 SemVer。
+- `1.1.0` 合并了 Codex Radar、使用记录字段增强、渠道关系/请求协调和悬浮窗透明度功能。
+- 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
@@ -152,8 +151,8 @@ npm run dev
 
 | 平台             | 文件                                            | SHA-256                                                            |
 | ---------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.0.0-mac-arm64.dmg` | `540b12a17b7fc2b060196c0cae8024f01b84bd7786e61d4642c903a475a0c9d2` |
-| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.0.0-win-x64.exe`   | `7e4d24c033e9f6c0549d2cb8b3a0e9b3a06ec31cc9c6044fd26e2c9a80ce2afa` |
+| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.1.0-mac-arm64.dmg` | `cf3eaf9372f855647dc7041c25802a4bf3f533f6ec6208512e371976dd33848a` |
+| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.1.0-win-x64.exe`   | `2219f4ea1ad0f218160a7df617e01839250493eedd429c17decc76ad49efcba8` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 

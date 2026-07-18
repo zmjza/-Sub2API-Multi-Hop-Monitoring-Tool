@@ -1,5 +1,37 @@
 # Electron 构建避坑
 
+## macOS 内部目录构建应显式关闭自动签名发现
+
+**现象**
+
+在本机使用 `electron-builder --dir` 生成 macOS ARM64 内部目录包时，自动发现本机签名身份可能停留在逐文件 `codesign`，长时间没有完成；这不是 Renderer 或 Electron 编译失败。
+
+**根因**
+
+构建机存在可发现的本地签名身份，但内部验收包不需要签名/公证，electron-builder 仍会尝试执行分发签名流程。
+
+**正确做法**
+
+内部目录验收使用 `CSC_IDENTITY_AUTO_DISCOVERY=false ./node_modules/.bin/electron-builder --dir ...`，把输出放到独立证据目录；正式发布阶段再按发布规则单独处理签名、公证和产物门禁。
+
+**验证方式**
+
+确认日志出现 `skipped macOS application code signing`，应用目录生成且 Electron Playwright 能连接两个窗口并通过业务 E2E。
+
+**禁止事项**
+
+不要把签名等待误判为源码失败；不要把未签名内部包写成正式发布包；不要为绕过等待修改窗口安全配置或版本号。
+
+**相关文件或命令**
+
+- `package.json`
+- `real-test-evidence/macos-1.1.0/app-nosign/`
+- `CSC_IDENTITY_AUTO_DISCOVERY=false ./node_modules/.bin/electron-builder --dir`
+
+**适用范围**
+
+macOS 本地内部目录构建和真机验收准备。
+
 ## macOS 无框窗口不应依赖原生 minimize 完成产品切换
 
 **现象**
@@ -491,3 +523,37 @@ Electron E2E 断言悬浮窗的非置顶和可见状态，并检查主窗最小�
 **适用范围**
 
 macOS Stage Manager、Space 切换、Windows 桌面常驻显示，以及主窗口最小化和托盘切换。
+
+## 外发版合并不能恢复 `show() + focus()` 窗口回归
+
+**现象**
+
+对比 `外发版/源码/electron/main/index.ts` 时发现，朋友版为透明度功能改造删除了主线的 `showFloatingWindow()` 非激活封装，并在主窗口最小化路径使用 `floatingWindow?.show()` 与 `focus()`。直接移植会让 macOS 台前调度/Space 下的悬浮窗重新进入前台应用集合，破坏主线已通过的常驻行为。
+
+**根因**
+
+透明度设置与窗口显示策略属于不同职责。朋友版把原生窗口聚焦行为带入透明度变更，覆盖了主线针对 macOS 无框窗口和台前调度的非激活显示修复。
+
+**正确做法**
+
+功能合并时只移植透明度 schema、设置持久化、Renderer 控件和 `setOpacity` 调用；所有常驻显示、托盘显示和主窗最小化路径继续统一使用 `showInactive()`，用户主动点击扩大按钮时才允许显示并聚焦主窗口。
+
+**验证方式**
+
+在 macOS 打包应用中验证透明度 35/84/100、重启恢复、失焦、Chrome 覆盖、Stage Manager、Space 和全屏路径；Electron E2E 同时断言透明度 IPC 与窗口非激活显示。
+
+**禁止事项**
+
+不要整文件覆盖 `electron/main/index.ts`；不要用 `focus()` 修复透明度显示；不要把透明度 CSS 变量应用到整个内容面板；不要以“窗口可见”替代“窗口非激活且不进入前台集合”的行为断言。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/shared/contracts.ts`
+- `src/renderer/shells/floating/FloatingWindow.tsx`
+- `外发版/源码/electron/main/index.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+本次外发版功能级合并、macOS 台前调度/Space、Windows 普通窗口层和所有涉及悬浮窗透明度的后续改动。

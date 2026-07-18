@@ -13,6 +13,13 @@ import type {
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { ChannelsProps } from './types';
+import {
+  channelSyncPresentation,
+  currentKeyGroupName,
+  isChannelDataStale,
+  rankChannels,
+  usageModelsForGroup,
+} from './channel-ranking';
 import { channels } from './data';
 import './channels.css';
 export function ChannelsPage(props: ChannelsProps) {
@@ -37,8 +44,21 @@ export function ChannelsPage(props: ChannelsProps) {
           availability7d: Number.parseFloat(item.availability),
           timeline: [],
         }));
+  const keyGroupName = currentKeyGroupName(
+    props.keyOptions ?? [],
+    props.usageFilterOptions?.groups ?? [],
+    props.keyPreference,
+    props.selectedSite?.defaultKeyLabel,
+  );
+  const usageModels = usageModelsForGroup(props.usageData, keyGroupName);
+  const rankedChannels = rankChannels(
+    channelItems,
+    keyGroupName,
+    liveChannels?.availableChannels ?? [],
+    usageModels,
+  );
   const selectedItem =
-    channelItems.find((item) => item.id === props.selectedChannelId) ?? channelItems[0];
+    rankedChannels.find((item) => item.id === props.selectedChannelId) ?? rankedChannels[0];
   const detail = readChannelDetail(props.channelDetail);
   const detailModel =
     detail?.models.find((model) => model.model === selectedItem?.primaryModel) ?? detail?.models[0];
@@ -51,12 +71,28 @@ export function ChannelsPage(props: ChannelsProps) {
         : detailModel?.availability30d;
   const detailLatency = period === 7 ? detailModel?.averageLatency7dMs : undefined;
   const lastChecked = selectedItem?.timeline.at(-1)?.checkedAt;
+  const sync = channelSyncPresentation(props.state, props.channelsData);
+  const stale = isChannelDataStale(props.channelsData);
   return (
     <section className="channels-page">
       <div className="channel-toolbar">
         <button className="channel-refresh" aria-label="刷新渠道" onClick={props.onRefreshChannels}>
           <RefreshCw size={16} />
         </button>
+        {(stale ||
+          ['failed', 'loading', 'stale', 'partial', 'unsupported'].includes(sync.kind)) && (
+          <span className="channel-sync-state">
+            {sync.kind === 'loading'
+              ? '渠道数据更新中'
+              : sync.kind === 'failed'
+                ? '渠道数据读取失败，保留最近结果'
+                : sync.kind === 'unsupported'
+                  ? '该站未开放渠道监控'
+                  : sync.kind === 'partial'
+                    ? '渠道数据部分可用'
+                    : '渠道数据可能已过期'}
+          </span>
+        )}
       </div>
       <div className="channel-detail channel-detail-top">
         <div>
@@ -103,7 +139,7 @@ export function ChannelsPage(props: ChannelsProps) {
         </div>
       ) : (
         <div className="channel-cards">
-          {channelItems.map((item) => (
+          {rankedChannels.map((item) => (
             <article
               className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
               key={item.id}

@@ -13,7 +13,7 @@ export const previewStates = [
 ] as const;
 export type PreviewState = (typeof previewStates)[number];
 export type ThemeMode = 'light';
-export type MainShell = 'overview' | 'usage' | 'channels' | 'sites';
+export type MainShell = 'overview' | 'usage' | 'channels' | 'sites' | 'radar';
 export interface PreviewContext {
   state: PreviewState;
   theme: ThemeMode;
@@ -27,10 +27,16 @@ export interface PreviewContext {
   channelsData?: unknown;
   channelDetail?: unknown;
   selectedChannelId?: string;
-  keyOptions?: Array<{ id: string; maskedLabel: string; status: string }>;
+  keyOptions?: Array<{
+    id: string;
+    maskedLabel: string;
+    status: string;
+    groupId?: string;
+    groupName?: string;
+  }>;
   usageFilterOptions?: {
     models: string[];
-    groups: Array<{ id: string; name: string }>;
+    groups: Array<{ id: string; name: string; rate?: number }>;
   };
   keyPreference?: { mode: 'auto' | 'manual'; keyId?: string };
   onSelectSite?: (siteId: string) => void;
@@ -55,9 +61,11 @@ export interface PreviewContext {
   onSelectChannel?: (channelId: string) => void;
   onRefreshChannels?: () => void;
   floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  floatingOpacity?: number;
   onFloatingPositionChange?: (
     position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
   ) => void;
+  onFloatingOpacityChange?: (opacity: number) => void;
 }
 
 export interface PreviewLocation extends Omit<PreviewContext, 'theme'> {
@@ -69,7 +77,9 @@ export function parsePreviewLocation(search: string): PreviewLocation {
   const params = new URLSearchParams(search);
   const surface = params.get('surface') === 'floating' ? 'floating' : 'main';
   const shellValue = params.get('shell');
-  const shell: MainShell = ['overview', 'usage', 'channels', 'sites'].includes(shellValue ?? '')
+  const shell: MainShell = ['overview', 'usage', 'channels', 'sites', 'radar'].includes(
+    shellValue ?? '',
+  )
     ? (shellValue as MainShell)
     : 'overview';
   const stateValue = params.get('state');

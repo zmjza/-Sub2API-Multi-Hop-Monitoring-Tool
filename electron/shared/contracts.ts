@@ -58,6 +58,7 @@ export const startupSettingSchema = z.object({ enabled: z.boolean() });
 export const floatingSettingsSchema = z
   .object({
     position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']),
+    opacity: z.number().int().min(35).max(100).default(84),
   })
   .strict();
 export const appSettingsSchema = z
@@ -72,7 +73,13 @@ export const usageFilterOptionsSchema = z
     models: z.array(z.string().min(1).max(200)).max(500),
     groups: z
       .array(
-        z.object({ id: z.string().min(1).max(128), name: z.string().min(1).max(200) }).strict(),
+        z
+          .object({
+            id: z.string().min(1).max(128),
+            name: z.string().min(1).max(200),
+            rate: z.number().nonnegative().optional(),
+          })
+          .strict(),
       )
       .max(500),
   })
@@ -159,6 +166,7 @@ export const apiKeySummarySchema = z.object({
   maskedLabel: z.string(),
   status: z.enum(['active', 'disabled']),
   groupId: z.string().optional(),
+  groupName: z.string().optional(),
 });
 const normalizedChannelStatusSchema = z.enum(['normal', 'degraded', 'failed', 'unknown']);
 const channelTimelinePointSchema = z
@@ -208,6 +216,27 @@ export const channelViewSchema = z
   .object({
     state: z.enum(['supported', 'unsupported']),
     channels: z.array(channelSummarySchema),
+    availableChannels: z
+      .array(
+        z
+          .object({
+            name: z.string().min(1).max(200),
+            platforms: z
+              .array(
+                z
+                  .object({
+                    platform: z.string().min(1).max(100),
+                    groupNames: z.array(z.string().min(1).max(200)).max(500),
+                    modelNames: z.array(z.string().min(1).max(200)).max(500),
+                  })
+                  .strict(),
+              )
+              .max(100),
+          })
+          .strict(),
+      )
+      .max(200)
+      .optional(),
   })
   .strict();
 export const channelDetailViewSchema = z
@@ -231,14 +260,14 @@ export const usageRecordSchema = z
     requestType: z.string(),
     billingType: z.string().optional(),
     billingMode: z.string().optional(),
-    inputTokens: z.number(),
-    outputTokens: z.number(),
-    cacheReadTokens: z.number(),
-    cacheCreationTokens: z.number(),
-    totalTokens: z.number(),
-    actualCost: z.number(),
-    totalCost: z.number(),
-    durationMs: z.number(),
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    cacheReadTokens: z.number().optional(),
+    cacheCreationTokens: z.number().optional(),
+    totalTokens: z.number().optional(),
+    actualCost: z.number().optional(),
+    totalCost: z.number().optional(),
+    durationMs: z.number().optional(),
   })
   .strict();
 export const usagePayloadSchema = z

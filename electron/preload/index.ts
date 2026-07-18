@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  FloatingSettings,
   BatchSiteInput,
   DashboardSnapshot,
   SiteInput,
@@ -38,12 +39,8 @@ export interface DesktopBridge {
     hideMainWindow(): void;
     startupSetting(): Promise<{ enabled: boolean }>;
     setStartupSetting(enabled: boolean): Promise<{ enabled: boolean }>;
-    floatingSettings(): Promise<{
-      position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-    }>;
-    setFloatingSettings(
-      position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
-    ): Promise<{ position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' }>;
+    floatingSettings(): Promise<FloatingSettings>;
+    setFloatingSettings(value: FloatingSettings): Promise<FloatingSettings>;
     appSettings(): Promise<AppSettings>;
     setAppSettings(value: AppSettings): Promise<AppSettings>;
     notificationPermission(): Promise<{ supported: boolean }>;

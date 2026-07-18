@@ -97,7 +97,14 @@ describe('IPC boundary schemas', () => {
     ).toThrow();
     expect(floatingSettingsSchema.parse({ position: 'top-right' })).toEqual({
       position: 'top-right',
+      opacity: 84,
     });
+    expect(floatingSettingsSchema.parse({ position: 'bottom-left', opacity: 35 })).toEqual({
+      position: 'bottom-left',
+      opacity: 35,
+    });
+    expect(() => floatingSettingsSchema.parse({ position: 'top-right', opacity: 34 })).toThrow();
+    expect(() => floatingSettingsSchema.parse({ position: 'top-right', opacity: 101 })).toThrow();
     expect(() => floatingSettingsSchema.parse({ position: 'center' })).toThrow();
   });
 

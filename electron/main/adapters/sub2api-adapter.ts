@@ -29,14 +29,14 @@ export interface NormalizedUsageRecord {
   requestType: string;
   billingType?: string;
   billingMode?: string;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-  totalTokens: number;
-  actualCost: number;
-  totalCost: number;
-  durationMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  totalTokens?: number;
+  actualCost?: number;
+  totalCost?: number;
+  durationMs?: number;
 }
 
 export interface NormalizedUsagePayload {
@@ -65,6 +65,15 @@ export interface NormalizedChannelSummary {
     latencyMs?: number;
     pingMs?: number;
     checkedAt?: string;
+  }>;
+}
+
+export interface NormalizedAvailableChannel {
+  name: string;
+  platforms: Array<{
+    platform: string;
+    groupNames: string[];
+    modelNames: string[];
   }>;
 }
 
@@ -148,12 +157,19 @@ export class Sub2ApiAdapter {
 
   async readOptionalChannels(accessToken: string) {
     try {
-      const raw = await this.client.getJson('/channel-monitors', accessToken, 'channelMonitors');
+      const [raw, availableRaw] = await Promise.all([
+        this.client.getJson('/channel-monitors', accessToken, 'channelMonitors'),
+        this.client
+          .getJson('/channels/available', accessToken, 'availableChannels')
+          .catch(() => undefined),
+      ]);
+      const availableChannels = normalizeAvailableChannels(availableRaw);
       return {
         state: 'supported' as const,
         channels: asArray(unwrapPayload(raw)).map((item) =>
           normalizeChannelSummary(asRecord(item)),
         ),
+        ...(availableChannels.length ? { availableChannels } : {}),
       };
     } catch (error) {
       if (isUnsupported(error)) return { state: 'unsupported' as const, channels: [] };
@@ -187,18 +203,23 @@ export class Sub2ApiAdapter {
   }
 
   async readUsageFilters(accessToken: string, timezone: string) {
-    const [groupsRaw, modelsRaw] = await Promise.all([
+    const [groupsRaw, modelsRaw, ratesRaw] = await Promise.all([
       this.client.getJson('/groups/available', accessToken, 'groups'),
       this.client.getJson(
         `/usage/dashboard/models?timezone=${encodeURIComponent(timezone)}`,
         accessToken,
         'usageModels',
       ),
+      this.client.getJson('/groups/rates', accessToken, 'groupRates').catch(() => ({})),
     ]);
+    const rateMap = asRecord(unwrapPayload(ratesRaw));
     const groups = asArray(unwrapPayload(groupsRaw)).flatMap((item) => {
       const id = stringOrUndefined(item.id ?? item.group_id);
       const name = stringOrUndefined(item.name ?? item.group_name);
-      return id && name ? [{ id, name }] : [];
+      const rate = id
+        ? numberOrUndefined(rateMap[id] ?? item.rate_multiplier ?? item.ratio ?? item.rate)
+        : undefined;
+      return id && name ? [{ id, name, rate }] : [];
     });
     const modelContainer = unwrapPayload(modelsRaw);
     const rawModels = Array.isArray(modelContainer)
@@ -232,6 +253,35 @@ export class Sub2ApiAdapter {
   }
 }
 
+function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[] {
+  return asArray(unwrapPayload(value)).flatMap((entry) => {
+    const channel = asRecord(entry);
+    const name = stringOrUndefined(channel.name ?? channel.channel_name);
+    if (!name || !Array.isArray(channel.platforms)) return [];
+    const platforms = channel.platforms.flatMap((platformEntry) => {
+      const section = asRecord(platformEntry);
+      const platform = stringOrUndefined(section.platform);
+      if (!platform) return [];
+      return [
+        {
+          platform,
+          groupNames: asArray(section.groups).flatMap((groupEntry) => {
+            const group = asRecord(groupEntry);
+            const groupName = stringOrUndefined(group.name ?? group.group_name);
+            return groupName ? [groupName] : [];
+          }),
+          modelNames: asArray(section.supported_models).flatMap((modelEntry) => {
+            const model = asRecord(modelEntry);
+            const modelName = stringOrUndefined(model.name ?? model.model);
+            return modelName ? [modelName] : [];
+          }),
+        },
+      ];
+    });
+    return platforms.length ? [{ name, platforms }] : [];
+  });
+}
+
 function normalizeChannelSummary(input: Record<string, unknown>): NormalizedChannelSummary {
   return {
     id: String(input.id ?? input.monitor_id ?? ''),
@@ -247,17 +297,24 @@ function normalizeChannelSummary(input: Record<string, unknown>): NormalizedChan
     pingMs: numberOrUndefined(input.primary_ping_latency_ms ?? input.ping_latency_ms),
     availability7d: numberOrUndefined(input.availability_7d),
     timeline: Array.isArray(input.timeline)
-      ? input.timeline.map((entry) => {
-          const point = asRecord(entry);
-          return {
-            status: normalizeChannelStatus(point.status),
-            latencyMs: numberOrUndefined(point.latency_ms),
-            pingMs: numberOrUndefined(point.ping_latency_ms),
-            checkedAt: stringOrUndefined(point.checked_at),
-          };
-        })
+      ? input.timeline
+          .map((entry) => {
+            const point = asRecord(entry);
+            return {
+              status: normalizeChannelStatus(point.status),
+              latencyMs: numberOrUndefined(point.latency_ms),
+              pingMs: numberOrUndefined(point.ping_latency_ms),
+              checkedAt: stringOrUndefined(point.checked_at),
+            };
+          })
+          .sort((a, b) => timelineTime(a.checkedAt) - timelineTime(b.checkedAt))
       : [],
   };
+}
+
+function timelineTime(value?: string): number {
+  const parsed = Date.parse(value ?? '');
+  return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
 }
 
 function normalizeChannelDetail(input: Record<string, unknown>): NormalizedChannelDetail {
@@ -307,11 +364,23 @@ function normalizeUsageRecord(input: Record<string, unknown>): NormalizedUsageRe
   const apiKey = asRecord(input.api_key);
   const group = asRecord(input.group);
   const apiKeyId = stringOrUndefined(input.api_key_id ?? apiKey.id);
-  const inputTokens = numberOrUndefined(input.input_tokens) ?? 0;
-  const outputTokens = numberOrUndefined(input.output_tokens) ?? 0;
-  const cacheReadTokens = numberOrUndefined(input.cache_read_tokens) ?? 0;
-  const cacheCreationTokens = numberOrUndefined(input.cache_creation_tokens) ?? 0;
-  const imageOutputTokens = numberOrUndefined(input.image_output_tokens) ?? 0;
+  const inputTokens = numberOrUndefined(input.input_tokens);
+  const outputTokens = numberOrUndefined(input.output_tokens);
+  const cacheReadTokens = numberOrUndefined(input.cache_read_tokens);
+  const cacheCreationTokens = numberOrUndefined(input.cache_creation_tokens);
+  const imageOutputTokens = numberOrUndefined(input.image_output_tokens);
+  const componentTokens = [
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    cacheCreationTokens,
+    imageOutputTokens,
+  ];
+  const totalTokens =
+    numberOrUndefined(input.total_tokens) ??
+    (componentTokens.some((value) => value !== undefined)
+      ? componentTokens.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+      : undefined);
   return {
     id: String(input.id ?? input.request_id ?? ''),
     createdAt: String(input.created_at ?? input.time ?? ''),
@@ -330,12 +399,10 @@ function normalizeUsageRecord(input: Record<string, unknown>): NormalizedUsageRe
     outputTokens,
     cacheReadTokens,
     cacheCreationTokens,
-    totalTokens:
-      numberOrUndefined(input.total_tokens) ??
-      inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens + imageOutputTokens,
-    actualCost: numberOrUndefined(input.actual_cost ?? input.cost) ?? 0,
-    totalCost: numberOrUndefined(input.total_cost) ?? 0,
-    durationMs: numberOrUndefined(input.duration_ms) ?? 0,
+    totalTokens,
+    actualCost: numberOrUndefined(input.actual_cost ?? input.cost),
+    totalCost: numberOrUndefined(input.total_cost),
+    durationMs: numberOrUndefined(input.duration_ms),
   };
 }
 

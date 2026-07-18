@@ -2,11 +2,12 @@ export interface CsvUsageRecord {
   time: string;
   keyLabel: string;
   model: string;
-  tokens: number;
-  actualCost: number;
+  tokens?: number;
+  actualCost?: number;
 }
 
-function safeCell(value: string | number): string {
+function safeCell(value: string | number | undefined): string {
+  if (value === undefined) return '';
   let text = String(value);
   if (/^[=+\-@]/.test(text)) text = `\t${text}`;
   if (/[",\n]/.test(text)) text = `"${text.replaceAll('"', '""')}"`;

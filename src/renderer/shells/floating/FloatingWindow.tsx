@@ -126,6 +126,19 @@ export function FloatingWindow(props: FloatingProps) {
               <option value="bottom-right">右下角</option>
             </select>
           </label>
+          <label>
+            透明度
+            <input
+              aria-label="透明度"
+              type="range"
+              min="35"
+              max="100"
+              step={1}
+              value={props.floatingOpacity ?? 84}
+              onChange={(event) => props.onFloatingOpacityChange?.(Number(event.target.value))}
+            />
+            <output>{props.floatingOpacity ?? 84}%</output>
+          </label>
         </details>
         <span className={`floating-live-state state-${props.state}`}>
           <i />

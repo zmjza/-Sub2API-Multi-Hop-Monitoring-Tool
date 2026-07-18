@@ -30,3 +30,12 @@ preload 已只暴露 `sites.list/addAndVerify/refresh/usage/channels` 命名 API
 ## 任务范围
 
 TASK-01-03、TASK-01-04、TASK-12-07 至 TASK-12-09。
+
+## 2026-07-18 外发版合并增量（内部测试通过；真机待实测）
+
+本轮已复核生产 CSP、preload 桥、安全窗口选项、公开 Radar 来源白名单和敏感信息扫描；Windows asar 中包含 `dist-electron/preload/bridge.cjs`，未发现新增凭据泄露。
+
+- Radar 是唯一新增的公开 Renderer 网络来源，CSP 只增加 `https://codexradar.com` 的 `connect-src`，禁止 `connect-src *`、任意站点域名和凭据接口。
+- Radar 响应不得经过站点 IPC、日志 redactor 以外的敏感数据流或 SQLite；外部链接只允许明确来源并交给系统浏览器。
+- 透明度设置必须继续通过现有 Zod IPC 边界，不开放任意窗口参数、文件路径、shell 或导航能力。
+- MERGE-03、MERGE-07、MERGE-08、MERGE-10 必须补充 CSP、preload 桥、敏感扫描、窗口显示和 Windows 结构证据。

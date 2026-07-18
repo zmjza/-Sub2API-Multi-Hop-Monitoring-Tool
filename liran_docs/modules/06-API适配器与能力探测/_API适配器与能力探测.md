@@ -41,3 +41,14 @@
 ## 任务范围
 
 TASK-04-01 至 TASK-04-05。
+
+## 2026-07-18 外发版合并增量（内部测试通过；真实站点复测待执行）
+
+本轮两个真实站点只读复测成功：登录、core、usage list/filter、channels 和 channel detail 均已取得脱敏能力结论；证据来自 `scripts/verify-real-sites.mjs` 的当前轮命令输出，凭据未写入文件。
+
+- 新增可选 `/channels/available` 读取，仅归一化渠道名、平台、分组名和模型名关系；请求失败或字段不完整时能力状态为 `unsupported`/`unknown`，不得阻塞核心站点保存。
+- usage 归一化补齐 `reasoning_effort`、`cache_creation_tokens`、`duration_ms` 和平均耗时，并在共享契约中保留可选字段边界。
+- 关系解析必须丢弃完整 Key、Token、密码和原始响应；多候选关系返回未确定，由 Renderer 保持稳定原顺序。
+- 新增契约、适配器和兼容二开响应测试；真实站点只读复测留到第二次 `/goal` 和 macOS 真机阶段。
+
+对应规划任务：MERGE-02、MERGE-05。

@@ -2,6 +2,8 @@ node_modules/
 dist/
 dist-electron/
 release/
+外发版/
+real-test-evidence/
 test-results/
 playwright-report/
 liran_docs/stitch-artifacts/
