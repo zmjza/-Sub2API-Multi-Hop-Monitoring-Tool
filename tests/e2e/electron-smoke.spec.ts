@@ -446,10 +446,19 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       );
     if (url === '/api/v1/user/profile')
       return response.end(JSON.stringify({ data: { balance: 8.5, status: 'active' } }));
-    if (url === '/api/v1/keys')
+    if (url === '/api/v1/keys' || url.startsWith('/api/v1/keys?'))
       return response.end(
         JSON.stringify({
-          data: [{ id: 'key-e2e', name: 'E2E Key', status: 'active', group_id: 'g1' }],
+          data: [
+            {
+              id: 'key-e2e',
+              name: 'E2E Key',
+              status: 'active',
+              group_id: 'g1',
+              quota: 80.88,
+              quota_used: 66.5,
+            },
+          ],
         }),
       );
     if (url === '/api/v1/groups/available')
@@ -486,6 +495,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
                 group_name: 'E2E 分组',
                 total_tokens: 1234,
                 actual_cost: 0.25,
+                first_token_ms: 9999,
+                duration_ms: 15000,
               },
             ],
           },
@@ -533,9 +544,23 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByLabel('密码', { exact: true }).fill('runtime-only');
   await main.getByRole('button', { name: '添加并验证' }).click();
   await expect(main.getByText('站点验证成功')).toBeVisible({ timeout: 15_000 });
+  await main.getByLabel('密码', { exact: true }).fill('runtime-only');
+  await main.getByText('批量添加站点', { exact: true }).click();
+  await main.locator('.batch-entry textarea').fill(`http://localhost:${address.port}\nnot-a-url`);
+  await main.getByRole('button', { name: '批量验证并保存' }).click();
+  await expect(main.locator('.batch-progress-panel')).toBeVisible({ timeout: 15_000 });
+  await expect(main.locator('.batch-progress-panel')).toContainText('全部完成', {
+    timeout: 15_000,
+  });
+  await expect(main.locator('.batch-progress-panel')).toContainText('100%');
+  await captureEvidence(main, '07-batch-progress');
   await main.getByRole('button', { name: '全部站点', exact: true }).click();
   await expect(main.getByText('正在获取余额', { exact: false })).toHaveCount(0);
-  await expect(main.getByRole('table').getByText('本地集成站点', { exact: true })).toBeVisible();
+  await expect(main.locator('.site-card').getByText('本地集成站点', { exact: true })).toBeVisible();
+  await main.locator('.site-card').filter({ hasText: '本地集成站点' }).dblclick();
+  await main.getByLabel('站点备注').fill('本地集成备注');
+  await main.getByLabel('站点备注').press('Enter');
+  await expect(main.getByText('本地集成备注', { exact: true })).toBeVisible();
   expect(
     await main.locator('.metric-card').evaluateAll((cards) =>
       cards.some((card) => {
@@ -553,6 +578,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   ).toBe(false);
   await captureEvidence(main, '01-overview');
   await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e');
+  await expect(main.locator('.quota-summary')).toContainText('总额 $80.88');
+  await expect(main.locator('.quota-summary')).toContainText('已用 $66.50');
+  await captureEvidence(main, '06-overview-quota');
   await expect
     .poll(() =>
       main.evaluate(async () => {
@@ -568,6 +596,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model']);
   await expect(main.getByLabel('分组').locator('option')).toContainText(['全部', 'E2E 分组']);
   await expect(main.locator('.usage-table-panel').getByText('高', { exact: true })).toBeVisible();
+  await expect(main.locator('.usage-table-panel').getByText('首字', { exact: true })).toBeVisible();
   await expect(
     main.locator('.usage-table-panel').getByText(/\d{2}月 \d{2}日 \d{2}时 \d{2}分 \d{2}秒/),
   ).toBeVisible();

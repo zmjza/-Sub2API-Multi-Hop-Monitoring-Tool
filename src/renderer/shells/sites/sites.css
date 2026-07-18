@@ -322,13 +322,41 @@
 .site-batch-button:disabled {
   opacity: 0.45;
 }
+.batch-progress-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e8e4f2;
+  border-radius: 10px;
+  background: #fbfaff;
+}
+.batch-progress-panel.is-loading {
+  border-color: #c4b5fd;
+}
+.batch-progress-panel.is-complete {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.batch-progress-heading,
+.batch-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+}
+.batch-progress-heading strong {
+  color: #37334a;
+}
+.batch-progress-heading span,
+.batch-progress-meta {
+  color: #777587;
+}
 .batch-progress {
   position: relative;
-  height: 22px;
-  margin-top: 8px;
+  height: 8px;
+  margin-top: 9px;
   overflow: hidden;
-  border-radius: 6px;
-  background: #eeecf5;
+  border-radius: 999px;
+  background: #e8e4f2;
 }
 .batch-progress i {
   position: absolute;
@@ -337,15 +365,17 @@
   background: #4f46e5;
   transition: width 220ms ease;
 }
-.batch-progress span {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  mix-blend-mode: difference;
-  font-weight: 700;
+.batch-progress-panel.is-complete .batch-progress i {
+  background: #16a34a;
+}
+.batch-progress-meta {
+  margin-top: 8px;
+}
+.batch-progress-meta span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .threshold-field {
   display: inline-flex;

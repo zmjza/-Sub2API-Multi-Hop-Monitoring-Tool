@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readUsagePagination, usageResetQuery } from './UsagePage';
+import { firstTokenClass, readUsagePagination, usageResetQuery } from './UsagePage';
 
 describe('readUsagePagination', () => {
   it('restores the documented default query when filters are reset', () => {
@@ -36,5 +36,16 @@ describe('readUsagePagination', () => {
       rangeEnd: 0,
       pageButtons: [],
     });
+  });
+});
+
+describe('firstTokenClass', () => {
+  it('keeps the requested latency boundaries', () => {
+    expect(firstTokenClass(9999)).toBe('first-token-fast');
+    expect(firstTokenClass(10000)).toBe('first-token-medium');
+    expect(firstTokenClass(19999)).toBe('first-token-medium');
+    expect(firstTokenClass(20000)).toBe('first-token-slow');
+    expect(firstTokenClass(undefined)).toBe('');
+    expect(firstTokenClass(-1)).toBe('');
   });
 });

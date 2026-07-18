@@ -158,6 +158,14 @@ export function FloatingWindow(props: FloatingProps) {
         <button aria-label="打开主页面" onClick={props.onOpenSite}>
           <ExternalLink size={15} />
         </button>
+        <button
+          aria-label="刷新悬浮窗"
+          title="刷新当前站点"
+          onClick={props.onRefreshFloating}
+          disabled={!props.selectedSite || busy}
+        >
+          <RefreshCw size={15} className={busy ? 'spin' : ''} />
+        </button>
       </footer>
     </main>
   );

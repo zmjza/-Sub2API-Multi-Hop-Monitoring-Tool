@@ -52,7 +52,13 @@ export function normalizeApiKey(input: Record<string, unknown>): ApiKeySummary {
             .trim()
             .slice(0, 200)
         : undefined,
+    quota: numberOrUndefined(input.quota),
+    quotaUsed: numberOrUndefined(input.quota_used),
   };
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 export function normalizeError(

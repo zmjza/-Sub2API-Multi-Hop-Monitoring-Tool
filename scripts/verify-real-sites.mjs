@@ -5,6 +5,12 @@ import { normalizeSiteUrl } from '../dist-electron/main/adapters/url.js';
 
 const sites = [
   {
+    name: 'walkai',
+    url: 'https://walkai.top',
+    email: process.env.WALKAI_EMAIL,
+    password: process.env.WALKAI_PASSWORD,
+  },
+  {
     name: 'maok',
     url: 'https://ai.maok.shop',
     email: process.env.MAOK_EMAIL,

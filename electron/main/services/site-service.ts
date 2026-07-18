@@ -83,9 +83,18 @@ export class SiteService {
     return this.listSites();
   }
 
+  setSiteNote(siteId: string, note: string): SiteSummary {
+    if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
+    this.db.setSiteNote(siteId, note);
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    return this.toSummary(site);
+  }
+
   deleteSite(siteId: string): DashboardSnapshot {
     if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
     this.vault.remove(siteId);
+    this.db.setSiteNote(siteId, '');
     this.db.deleteSite(siteId);
     this.snapshots.delete(siteId);
     this.errors.delete(siteId);
@@ -414,6 +423,8 @@ export class SiteService {
         keyLabel: item.apiKeyLabel,
         model: item.model,
         tokens: item.totalTokens,
+        firstTokenMs: item.firstTokenMs,
+        durationMs: item.durationMs,
         actualCost: item.actualCost,
       })),
     );
@@ -453,13 +464,15 @@ export class SiteService {
 
   listKeys(siteId: string) {
     return (this.keys.get(siteId) ?? []).map(
-      ({ id, name, maskedLabel, status, groupId, groupName }) => ({
+      ({ id, name, maskedLabel, status, groupId, groupName, quota, quotaUsed }) => ({
         id,
         name,
         maskedLabel,
         status,
         groupId,
         groupName,
+        quota,
+        quotaUsed,
       }),
     );
   }
@@ -542,6 +555,7 @@ export class SiteService {
       capabilities: site.capabilities,
       estimatedDurationMs: estimateDurationRange(this.durations.get(site.id) ?? []),
       ...this.runtime.get(site.id),
+      note: this.db.getSiteNote(site.id),
     };
   }
 }

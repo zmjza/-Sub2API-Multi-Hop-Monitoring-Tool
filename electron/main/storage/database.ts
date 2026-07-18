@@ -189,6 +189,14 @@ export class AppDatabase {
     this.setSetting(`site:${siteId}:keyPreference`, preference);
   }
 
+  getSiteNote(siteId: string): string {
+    return this.getSetting(`site:${siteId}:note`, '');
+  }
+
+  setSiteNote(siteId: string, note: string): void {
+    this.setSetting(`site:${siteId}:note`, note.trim().slice(0, 500));
+  }
+
   getNotificationSettings(): {
     enabled: boolean;
     threshold: number;

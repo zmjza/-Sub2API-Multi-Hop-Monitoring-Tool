@@ -36,6 +36,7 @@ export interface NormalizedUsageRecord {
   totalTokens?: number;
   actualCost?: number;
   totalCost?: number;
+  firstTokenMs?: number;
   durationMs?: number;
 }
 
@@ -108,7 +109,7 @@ export class Sub2ApiAdapter {
     const profileRaw = await this.client.getJson('/user/profile', accessToken, 'profile');
     await this.pause();
     this.onPhase('keys');
-    const keysRaw = await this.client.getJson('/keys', accessToken, 'keys');
+    const keysRaw = await this.readAllKeys(accessToken, timezone);
     await this.pause();
     this.onPhase('groups');
     const groupsRaw = await this.client.getJson('/groups/available', accessToken, 'groups');
@@ -175,6 +176,28 @@ export class Sub2ApiAdapter {
       if (isUnsupported(error)) return { state: 'unsupported' as const, channels: [] };
       throw error;
     }
+  }
+
+  private async readAllKeys(accessToken: string, timezone: string): Promise<unknown[]> {
+    const items: unknown[] = [];
+    let page = 1;
+    let pages: number | undefined;
+    do {
+      const raw = await this.client.getJson(
+        page === 1
+          ? '/keys'
+          : `/keys?page=${page}&page_size=100&sort_by=created_at&sort_order=desc&timezone=${encodeURIComponent(timezone)}`,
+        accessToken,
+        'keys',
+      );
+      const payload = unwrapPayload(raw);
+      const record = asRecord(payload);
+      const pageItems = asArray(payload);
+      items.push(...pageItems);
+      pages = Math.max(1, numberOrUndefined(record.pages) ?? 1);
+      page += 1;
+    } while (page <= (pages ?? 1) && page <= 100);
+    return items;
   }
 
   async readChannelStatus(accessToken: string, channelId: string) {
@@ -402,6 +425,7 @@ function normalizeUsageRecord(input: Record<string, unknown>): NormalizedUsageRe
     totalTokens,
     actualCost: numberOrUndefined(input.actual_cost ?? input.cost),
     totalCost: numberOrUndefined(input.total_cost),
+    firstTokenMs: numberOrUndefined(input.first_token_ms),
     durationMs: numberOrUndefined(input.duration_ms),
   };
 }

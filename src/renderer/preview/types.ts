@@ -33,6 +33,8 @@ export interface PreviewContext {
     status: string;
     groupId?: string;
     groupName?: string;
+    quota?: number;
+    quotaUsed?: number;
   }>;
   usageFilterOptions?: {
     models: string[];
@@ -41,6 +43,7 @@ export interface PreviewContext {
   keyPreference?: { mode: 'auto' | 'manual'; keyId?: string };
   onSelectSite?: (siteId: string) => void;
   onRefreshSite?: () => void;
+  onRefreshFloating?: () => void;
   onPreviousSite?: () => void;
   onNextSite?: () => void;
   onOpenSite?: () => void;
@@ -58,6 +61,7 @@ export interface PreviewContext {
     sort?: 'asc' | 'desc';
   }) => void;
   onKeyPreferenceChange?: (value: { mode: 'auto' | 'manual'; keyId?: string }) => void;
+  onSiteNoteChange?: (note: string) => Promise<void>;
   onSelectChannel?: (channelId: string) => void;
   onRefreshChannels?: () => void;
   floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';

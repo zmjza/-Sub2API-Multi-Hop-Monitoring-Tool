@@ -108,6 +108,12 @@
 
 以下是 1.1.0 功能合并记录，相关实现、自动化和验收证据已完成：
 
+## 1.2.0 API 增量
+
+- `/usage` 安全白名单新增 `first_token_ms -> firstTokenMs`，继续保留 `duration_ms -> durationMs`。
+- `/keys` 首次请求保持兼容，若响应包含分页元数据则按页继续读取；只向 Renderer 返回脱敏 Key、分组、quota 和 quotaUsed。
+- 新增本地 IPC `sites:note:set`，输入经过 `siteNoteSchema` 校验，只更新本地备注，不向站点发请求。
+
 - `/channels/available`：仅按 `name`、`platforms[].platform`、`groups[].name`、`supported_models[].name` 读取关系；请求失败或字段不完整时降级为无关联排序。
 - `/usage`：保留 `reasoning_effort`、`cache_creation_tokens`、`duration_ms` 及今日汇总对应的缓存创建 Token/平均耗时；所有字段必须在适配器和 Zod 共享契约中显式允许。
 - `https://codexradar.com/current.json`：只作为公开页面数据源，不进入 sub2api 认证、Token、数据库或 CSV 流程。结构字段缺失、非 2xx、网络失败和超时必须有独立测试。

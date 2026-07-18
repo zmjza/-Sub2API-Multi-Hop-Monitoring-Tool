@@ -30,6 +30,7 @@ export function UsagePage(props: UsageProps) {
         '请求类型',
         'Token',
         '缓存 Token',
+        '首字',
         '耗时',
         '实际消费',
       ]),
@@ -290,6 +291,7 @@ export function UsagePage(props: UsageProps) {
               '请求类型',
               'Token',
               '缓存 Token',
+              '首字',
               '耗时',
               '实际消费',
             ].map((column) => (
@@ -339,6 +341,7 @@ export function UsagePage(props: UsageProps) {
                     '请求类型',
                     'Token',
                     '缓存 Token',
+                    '首字',
                     '耗时',
                     '实际消费',
                   ]
@@ -387,6 +390,11 @@ export function UsagePage(props: UsageProps) {
                     {visibleColumns.has('Token') && <td>{row.tokens}</td>}
                     {visibleColumns.has('缓存 Token') && (
                       <td>{row.cacheCreationTokens ?? row.cacheReadTokens ?? '—'}</td>
+                    )}
+                    {visibleColumns.has('首字') && (
+                      <td className={firstTokenClass(row.firstTokenValue)}>
+                        {row.firstTokenMs ?? '—'}
+                      </td>
                     )}
                     {visibleColumns.has('耗时') && <td>{row.durationMs ?? '—'}</td>}
                     {visibleColumns.has('实际消费') && <td className="cost">{row.actualCost}</td>}
@@ -532,6 +540,8 @@ function extractRecords(value: unknown): typeof usageRecords {
             typeof item.reasoningEffort === 'string' ? item.reasoningEffort : undefined,
           cacheReadTokens: formatOptionalToken(item.cacheReadTokens),
           cacheCreationTokens: formatOptionalToken(item.cacheCreationTokens),
+          firstTokenValue: numericValue(item.firstTokenMs),
+          firstTokenMs: formatOptionalDuration(item.firstTokenMs),
           durationMs: formatOptionalDuration(item.durationMs),
         };
       })
@@ -554,7 +564,14 @@ function formatOptionalCost(value: unknown): string {
 
 function formatOptionalDuration(value: unknown): string | undefined {
   const number = numericValue(value);
-  return number === undefined ? undefined : `${(number / 1000).toFixed(2)}s`;
+  return number === undefined || number < 0 ? undefined : `${(number / 1000).toFixed(2)}s`;
+}
+
+export function firstTokenClass(value: number | undefined): string {
+  if (value === undefined || value < 0) return '';
+  if (value < 10_000) return 'first-token-fast';
+  if (value < 20_000) return 'first-token-medium';
+  return 'first-token-slow';
 }
 
 function reasoningLabel(value: string | undefined) {

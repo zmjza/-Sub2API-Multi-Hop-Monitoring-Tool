@@ -18,6 +18,7 @@ import {
   siteInputSchema,
   batchSiteInputSchema,
   refreshRequestSchema,
+  siteNoteSchema,
   usageQuerySchema,
   keyPreferenceSchema,
   notificationSettingsSchema,
@@ -161,6 +162,10 @@ function registerIpc() {
     );
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
     return result;
+  });
+  ipcMain.handle('sites:note:set', (_event, input: unknown) => {
+    const value = siteNoteSchema.parse(input);
+    return siteSummarySchema.parse(siteService.setSiteNote(value.siteId, value.note));
   });
   ipcMain.handle('usage:list', async (_event, input: unknown) =>
     usagePayloadSchema.parse(await siteService.usage(usageQuerySchema.parse(input))),

@@ -19,6 +19,8 @@ export interface ApiKeySummary {
   status: 'active' | 'disabled';
   groupId?: string;
   groupName?: string;
+  quota?: number;
+  quotaUsed?: number;
 }
 
 export interface SiteSnapshot {

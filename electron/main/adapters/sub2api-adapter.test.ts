@@ -7,7 +7,19 @@ describe('Sub2ApiAdapter', () => {
       getJson: async (path: string) => {
         if (path === '/user/profile') return { balance: 3.2 };
         if (path === '/keys')
-          return { data: [{ id: 1, name: 'main', key: 'secret', status: 'active', group_id: 2 }] };
+          return {
+            data: [
+              {
+                id: 1,
+                name: 'main',
+                key: 'secret',
+                status: 'active',
+                group_id: 2,
+                quota: 80.88,
+                quota_used: 66.5,
+              },
+            ],
+          };
         if (path === '/groups/available') return { data: [{ group_id: 2, ratio: 1.5 }] };
         if (path === '/groups/rates') return { data: { '2': 2 } };
         if (path.startsWith('/usage/stats'))
@@ -18,6 +30,7 @@ describe('Sub2ApiAdapter', () => {
     const result = await adapter.readCore('access', 'Asia/Shanghai');
     expect(result.profile.balance).toBe(3.2);
     expect(result.keys[0].maskedLabel).toContain('••••');
+    expect(result.keys[0]).toMatchObject({ quota: 80.88, quotaUsed: 66.5 });
     expect(result.rates.get('2')).toBe(2);
     expect(result.usage.totalTokens).toBe(12);
   });
@@ -356,5 +369,22 @@ describe('Sub2ApiAdapter', () => {
     expect(result.items[0].durationMs).toBeUndefined();
     expect(result.items[0].actualCost).toBeUndefined();
     expect(result.items[0].totalTokens).toBeUndefined();
+  });
+
+  it('normalizes first-token latency and reads additional key pages', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path === '/keys') return { data: { items: [{ id: 1, name: 'first' }], pages: 2 } };
+        if (path.startsWith('/keys?page=2'))
+          return { data: { items: [{ id: 2, name: 'second' }], pages: 2 } };
+        if (path.startsWith('/usage?'))
+          return { data: { items: [{ id: 1, first_token_ms: 10000, duration_ms: 20000 }] } };
+        return { data: [] };
+      },
+    });
+    const core = await adapter.readCore('access', 'Asia/Shanghai');
+    expect(core.keys).toHaveLength(2);
+    const usage = await adapter.readUsage('access', { page: 1 });
+    expect(usage.items[0]).toMatchObject({ firstTokenMs: 10000, durationMs: 20000 });
   });
 });

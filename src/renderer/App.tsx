@@ -45,7 +45,15 @@ export function App() {
   const [channelDetail, setChannelDetail] = useState<unknown>();
   const [selectedChannelId, setSelectedChannelId] = useState<string>();
   const [keyOptions, setKeyOptions] = useState<
-    Array<{ id: string; maskedLabel: string; status: string; groupId?: string; groupName?: string }>
+    Array<{
+      id: string;
+      maskedLabel: string;
+      status: string;
+      groupId?: string;
+      groupName?: string;
+      quota?: number;
+      quotaUsed?: number;
+    }>
   >([]);
   const [usageFilterOptions, setUsageFilterOptions] = useState<{
     models: string[];
@@ -190,6 +198,20 @@ export function App() {
       })
       .catch(() => undefined);
   };
+  context.onSiteNoteChange = async (note) => {
+    if (!selectedSite) return;
+    const updated = await window.sub2apiDesktop?.sites.setNote(selectedSite.id, note);
+    if (!updated) return;
+    setDashboard((current) =>
+      current
+        ? {
+            ...current,
+            sites: current.sites.map((site) => (site.id === updated.id ? updated : site)),
+          }
+        : current,
+    );
+  };
+  context.onRefreshFloating = refreshSelected;
   context.onSelectChannel = (channelId) => {
     if (!selectedSite) return;
     const siteId = selectedSite.id;

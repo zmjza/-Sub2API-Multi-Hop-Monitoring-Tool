@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.1.0',
+  shellVersion: '1.2.0',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -23,6 +23,7 @@ const desktopBridge: DesktopBridge = {
     keyPreference: (siteId) => ipcRenderer.invoke('keys:preference:get', siteId),
     setKeyPreference: (siteId, value) =>
       ipcRenderer.invoke('keys:preference:set', { siteId, ...value }),
+    setNote: (siteId, note) => ipcRenderer.invoke('sites:note:set', { siteId, note }),
     notificationSettings: () => ipcRenderer.invoke('notifications:get'),
     setNotificationSettings: (value) => ipcRenderer.invoke('notifications:set', value),
     openMainWindow: () => ipcRenderer.send('window:open-main'),

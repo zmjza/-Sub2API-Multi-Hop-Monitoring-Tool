@@ -9,6 +9,11 @@ export function siteTaskSummary(submitting: boolean, sites: Array<{ status: stri
   return sites.length ? `${sites.length} 个站点` : '暂无任务';
 }
 
+export function batchProgressPercent(current: number, total: number): number {
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(current)) return 0;
+  return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
+}
+
 export function SitesPage(props: SitesProps) {
   const draft = siteDrafts[0];
   const runtime = Boolean(window.sub2apiDesktop);
@@ -21,6 +26,8 @@ export function SitesPage(props: SitesProps) {
   const [submissionMode, setSubmissionMode] = useState<'single' | 'batch'>('single');
   const [validationPhase, setValidationPhase] = useState('等待开始');
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [batchPhase, setBatchPhase] = useState('等待开始');
+  const [batchCurrentUrl, setBatchCurrentUrl] = useState('');
   const [batchResults, setBatchResults] = useState<
     Array<{ url: string; status: 'success' | 'failed'; error?: string }>
   >([]);
@@ -90,7 +97,10 @@ export function SitesPage(props: SitesProps) {
     });
     const unsubscribeBatch = window.sub2apiDesktop?.sites.onBatchProgress((value) => {
       if (!submitting || submissionMode !== 'batch') return;
-      setBatchProgress({ current: value.current, total: value.total });
+      const current = Math.min(Math.max(value.current, 0), Math.max(value.total, 0));
+      setBatchProgress({ current, total: Math.max(value.total, 0) });
+      setBatchCurrentUrl(value.url);
+      setBatchPhase(value.status === 'success' ? '已完成当前站点' : '当前站点失败，继续处理');
       setBatchResults((current) => [
         ...current.filter((item) => item.url !== value.url),
         { url: value.url, status: value.status, error: value.error },
@@ -166,14 +176,29 @@ export function SitesPage(props: SitesProps) {
                       .filter(Boolean),
                   ),
                 ];
+                if (!urls.length) {
+                  setMessage('请至少输入一个有效站点地址');
+                  setBatchPhase('输入无效');
+                  return;
+                }
                 setSubmissionMode('batch');
                 setSubmitting(true);
                 setBatchProgress({ current: 0, total: urls.length });
                 setBatchResults([]);
+                setBatchCurrentUrl('');
+                setBatchPhase('准备验证');
                 setMessage(`正在批量验证 ${urls.length} 个站点…`);
-                void window.sub2apiDesktop?.sites
-                  .addBatch({ urls, account, password })
+                const request = window.sub2apiDesktop?.sites.addBatch({ urls, account, password });
+                if (!request) {
+                  setBatchPhase('无法连接桌面服务');
+                  setMessage('当前环境不支持批量验证');
+                  setSubmitting(false);
+                  return;
+                }
+                void request
                   .then((result) => {
+                    setBatchProgress({ current: urls.length, total: urls.length });
+                    setBatchPhase('全部完成');
                     setMessage(
                       `批量验证完成：成功 ${result.successes.length}，失败 ${result.failures.length}`,
                     );
@@ -182,9 +207,10 @@ export function SitesPage(props: SitesProps) {
                       setPassword('');
                     }
                   })
-                  .catch((error: unknown) =>
-                    setMessage(error instanceof Error ? error.message : '批量验证失败'),
-                  )
+                  .catch((error: unknown) => {
+                    setBatchPhase('验证中断');
+                    setMessage(error instanceof Error ? error.message : '批量验证失败');
+                  })
                   .finally(() => setSubmitting(false));
               }}
             >
@@ -198,11 +224,33 @@ export function SitesPage(props: SitesProps) {
               )}
             </button>
             {batchProgress.total > 0 && (
-              <div className="batch-progress" aria-label="批量验证进度">
-                <i style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }} />
-                <span>
-                  {batchProgress.current}/{batchProgress.total}
-                </span>
+              <div
+                className={`batch-progress-panel ${submitting ? 'is-loading' : 'is-complete'}`}
+                role="status"
+                aria-live="polite"
+                aria-label="批量验证进度"
+              >
+                <div className="batch-progress-heading">
+                  <strong>{submitting ? '正在验证站点' : batchPhase}</strong>
+                  <span>
+                    {batchProgress.current}/{batchProgress.total}（
+                    {batchProgressPercent(batchProgress.current, batchProgress.total)}%）
+                  </span>
+                </div>
+                <div className="batch-progress">
+                  <i
+                    style={{
+                      width: `${Math.min(100, (batchProgress.current / batchProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="batch-progress-meta">
+                  <span>{batchCurrentUrl || '正在准备任务…'}</span>
+                  <span>
+                    成功 {batchResults.filter((item) => item.status === 'success').length} · 失败{' '}
+                    {batchResults.filter((item) => item.status === 'failed').length}
+                  </span>
+                </div>
               </div>
             )}
           </details>

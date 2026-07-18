@@ -10,6 +10,8 @@ export interface UsageRecord {
   reasoningEffort?: string;
   cacheReadTokens?: string;
   cacheCreationTokens?: string;
+  firstTokenMs?: string;
+  firstTokenValue?: number;
   durationMs?: string;
 }
 export interface UsageEvents {

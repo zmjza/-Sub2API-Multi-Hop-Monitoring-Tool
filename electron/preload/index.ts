@@ -31,6 +31,7 @@ export interface DesktopBridge {
       siteId: string,
       value: { mode: 'auto' | 'manual'; keyId?: string },
     ): Promise<unknown>;
+    setNote(siteId: string, note: string): Promise<SiteSummary>;
     notificationSettings(): Promise<unknown>;
     setNotificationSettings(value: unknown): Promise<unknown>;
     openMainWindow(): void;

@@ -140,19 +140,21 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.1.0
+## 当前版本 1.2.0
 
-- `1.1.0` 合并了 Codex Radar、使用记录字段增强、渠道关系/请求协调和悬浮窗透明度功能。
+- `1.2.0` 新增使用记录首字延迟与颜色分级、站点卡片和备注、Key quota 余额、批量验证进度及悬浮窗手动刷新。
 - 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
-当前本地构建产物：
+本轮 1.2.0 双平台构建产物及校验值：
 
-| 平台             | 文件                                            | SHA-256                                                            |
-| ---------------- | ----------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64      | `Sub2API-Multi-Hub-Monitor-1.1.0-mac-arm64.dmg` | `cf3eaf9372f855647dc7041c25802a4bf3f533f6ec6208512e371976dd33848a` |
-| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.1.0-win-x64.exe`   | `2219f4ea1ad0f218160a7df617e01839250493eedd429c17decc76ad49efcba8` |
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.2.0-mac-arm64.dmg`          | `7fc08f1a9802af6e9cdf9f874d276642caf0d00c6163c4dc2cad4141f7552d88` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.2.0-mac-arm64.dmg.blockmap` | `adbb7c900edcc55c6320eb6c12701fbc59916628cb86635c5d470f1459a51ba1` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.2.0-win-x64.exe`            | `6b35ae13cdb8a6515898b7209da40b126d22b4626202a41c08707e7638aec014` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.2.0-win-x64.exe.blockmap`   | `bb73d6c561250123ef58157641fd9ebf412728ee0273d39072ed30b3375a1ae5` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 

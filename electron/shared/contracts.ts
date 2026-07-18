@@ -16,6 +16,7 @@ export type BatchSiteInput = z.infer<typeof batchSiteInputSchema>;
 
 export const siteIdSchema = z.string().min(1).max(128);
 export const refreshRequestSchema = z.object({ siteId: siteIdSchema });
+export const siteNoteSchema = z.object({ siteId: siteIdSchema, note: z.string().trim().max(500) });
 export const usageQuerySchema = z.object({
   siteId: siteIdSchema,
   period: z.enum(['today', '7d', '30d', 'custom']).default('today'),
@@ -32,6 +33,7 @@ export const usageQuerySchema = z.object({
   sort: z.enum(['asc', 'desc']).default('desc'),
 });
 export type UsageQuery = z.input<typeof usageQuerySchema>;
+export type SiteNoteInput = z.infer<typeof siteNoteSchema>;
 export const keyPreferenceSchema = z
   .object({ mode: z.enum(['auto', 'manual']), keyId: z.string().min(1).max(128).optional() })
   .superRefine((value, context) => {
@@ -109,6 +111,7 @@ export interface SiteSummary {
   fetchedAt?: number;
   errors: string[];
   defaultKeyLabel?: string;
+  note?: string;
   rate?: number;
   capabilities?: Record<string, string>;
   estimatedDurationMs?: [number, number];
@@ -145,6 +148,7 @@ export const siteSummarySchema = z.object({
   fetchedAt: z.number().optional(),
   errors: z.array(z.string()),
   defaultKeyLabel: z.string().optional(),
+  note: z.string().max(500).optional(),
   rate: z.number().optional(),
   capabilities: z.record(z.string(), z.string()).optional(),
   estimatedDurationMs: z.tuple([z.number(), z.number()]).optional(),
@@ -167,6 +171,8 @@ export const apiKeySummarySchema = z.object({
   status: z.enum(['active', 'disabled']),
   groupId: z.string().optional(),
   groupName: z.string().optional(),
+  quota: z.number().finite().optional(),
+  quotaUsed: z.number().finite().optional(),
 });
 const normalizedChannelStatusSchema = z.enum(['normal', 'degraded', 'failed', 'unknown']);
 const channelTimelinePointSchema = z
@@ -267,6 +273,7 @@ export const usageRecordSchema = z
     totalTokens: z.number().optional(),
     actualCost: z.number().optional(),
     totalCost: z.number().optional(),
+    firstTokenMs: z.number().optional(),
     durationMs: z.number().optional(),
   })
   .strict();

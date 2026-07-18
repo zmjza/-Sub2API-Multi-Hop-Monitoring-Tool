@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { siteTaskSummary } from './SitesPage';
+import { batchProgressPercent, siteTaskSummary } from './SitesPage';
 
 describe('SitesPage runtime state', () => {
   it('never reports a static in-progress count for saved runtime sites', () => {
     expect(siteTaskSummary(false, [])).toBe('暂无任务');
     expect(siteTaskSummary(false, [{ status: 'success' }, { status: 'error' }])).toBe('2 个站点');
     expect(siteTaskSummary(true, [{ status: 'success' }])).toBe('验证中');
+  });
+
+  it('clamps batch progress at safe boundaries', () => {
+    expect(batchProgressPercent(0, 4)).toBe(0);
+    expect(batchProgressPercent(1, 4)).toBe(25);
+    expect(batchProgressPercent(4, 4)).toBe(100);
+    expect(batchProgressPercent(9, 4)).toBe(100);
+    expect(batchProgressPercent(-1, 4)).toBe(0);
+    expect(batchProgressPercent(1, 0)).toBe(0);
   });
 
   it('marks credentials as required and removes completed shell TODO markers', () => {

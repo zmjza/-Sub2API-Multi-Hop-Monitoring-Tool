@@ -215,6 +215,18 @@
   color: #047857;
   font-weight: 700;
 }
+.first-token-fast {
+  color: #047857;
+  font-weight: 700;
+}
+.first-token-medium {
+  color: #b45309;
+  font-weight: 700;
+}
+.first-token-slow {
+  color: #b91c1c;
+  font-weight: 700;
+}
 .table-footer {
   display: flex;
   justify-content: space-between;
