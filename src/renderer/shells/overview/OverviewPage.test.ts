@@ -38,4 +38,29 @@ describe('overview quota display', () => {
     expect(formatSiteBalance(site, props({ quota: 0 }))).toBe('$12.00');
     expect(formatSiteBalance(site, props(undefined))).toBe('$12.00');
   });
+
+  it('uses the manual key context owned by a non-selected site', () => {
+    const multiSiteProps = {
+      ...props(undefined),
+      selectedSite: { ...props(undefined).selectedSite!, id: 'site-2' },
+      keyContexts: {
+        'site-1': {
+          preference: { mode: 'manual', keyId: 'key-1' },
+          keys: [
+            {
+              id: 'key-1',
+              maskedLabel: 'Key',
+              status: 'active',
+              quota: 80.88,
+              quotaUsed: 66.5265,
+            },
+          ],
+        },
+        'site-2': { preference: { mode: 'auto' }, keys: [] },
+      },
+    } as unknown as OverviewProps;
+
+    expect(quotaForSite(site, multiSiteProps)?.remaining).toBeCloseTo(14.3535, 4);
+    expect(formatSiteBalance(site, multiSiteProps)).toBe('$14.35');
+  });
 });

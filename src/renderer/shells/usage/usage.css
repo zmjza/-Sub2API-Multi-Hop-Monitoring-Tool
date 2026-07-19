@@ -195,6 +195,43 @@
   padding: 0 16px;
   border-bottom: 1px solid #f0ecf9;
 }
+.usage-token-cell {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  min-width: 138px;
+  min-height: 48px;
+}
+.usage-token-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.usage-token-flow span,
+.usage-token-cache {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.usage-token-flow b,
+.usage-token-cache b {
+  color: #26233a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.usage-token-input {
+  color: #059669;
+}
+.usage-token-output {
+  color: #7c3aed;
+}
+.usage-token-cache {
+  color: #0284c7;
+}
+.usage-token-cache b {
+  color: #0284c7;
+}
 .usage-table-panel tr:hover {
   background: #faf9ff;
 }

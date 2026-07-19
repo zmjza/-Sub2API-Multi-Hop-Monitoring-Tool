@@ -10,7 +10,7 @@ export function formatLocalTimestamp(value: string | number | Date | undefined):
   if (value === undefined) return '—';
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) return '—';
-  return `${pad(date.getMonth() + 1)}月 ${pad(date.getDate())}日 ${pad(date.getHours())}时 ${pad(date.getMinutes())}分 ${pad(date.getSeconds())}秒`;
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function trimDecimals(value: number): string {

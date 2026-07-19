@@ -1,5 +1,16 @@
 import { useState } from 'react';
-import { Clock3, Columns3, DollarSign, Download, FileText, Package, RotateCcw } from 'lucide-react';
+import {
+  Archive,
+  ArrowDown,
+  ArrowUp,
+  Clock3,
+  Columns3,
+  DollarSign,
+  Download,
+  FileText,
+  Package,
+  RotateCcw,
+} from 'lucide-react';
 import type { UsageProps } from './types';
 import { usageRecords } from './data';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
@@ -29,14 +40,13 @@ export function UsagePage(props: UsageProps) {
         '分组',
         '请求类型',
         'Token',
-        '缓存 Token',
         '首字',
         '耗时',
         '实际消费',
       ]),
   );
   const runtime = Boolean(window.sub2apiDesktop);
-  const liveRecords = extractRecords(props.usageData);
+  const liveRecords = readUsageRecords(props.usageData);
   const isEmpty =
     props.state === 'empty' || (props.usageData !== undefined && liveRecords.length === 0);
   const records =
@@ -47,11 +57,13 @@ export function UsagePage(props: UsageProps) {
         : usageRecords.concat([
             {
               ...usageRecords[0],
-              time: '今天 14:12',
+              time: '2026/07/19 14:12:00',
               model: 'gpt-5.4 · 长模型名称示例',
               groupName: '默认分组',
               requestType: 'Chat',
-              tokens: '8,240',
+              inputTokens: '8,240',
+              outputTokens: '1,205',
+              cacheReadTokens: '—',
               actualCost: '$0.036',
             },
           ]);
@@ -290,7 +302,6 @@ export function UsagePage(props: UsageProps) {
               '分组',
               '请求类型',
               'Token',
-              '缓存 Token',
               '首字',
               '耗时',
               '实际消费',
@@ -340,7 +351,6 @@ export function UsagePage(props: UsageProps) {
                     '分组',
                     '请求类型',
                     'Token',
-                    '缓存 Token',
                     '首字',
                     '耗时',
                     '实际消费',
@@ -387,9 +397,37 @@ export function UsagePage(props: UsageProps) {
                         <span className="table-tag">{row.requestType}</span>
                       </td>
                     )}
-                    {visibleColumns.has('Token') && <td>{row.tokens}</td>}
-                    {visibleColumns.has('缓存 Token') && (
-                      <td>{row.cacheCreationTokens ?? row.cacheReadTokens ?? '—'}</td>
+                    {visibleColumns.has('Token') && (
+                      <td>
+                        <div className="usage-token-cell">
+                          <div className="usage-token-flow">
+                            <span
+                              className="usage-token-input"
+                              aria-label={`输入 Token ${row.inputTokens}`}
+                              title="输入 Token"
+                            >
+                              <ArrowDown size={15} aria-hidden />
+                              <b>{row.inputTokens}</b>
+                            </span>
+                            <span
+                              className="usage-token-output"
+                              aria-label={`输出 Token ${row.outputTokens}`}
+                              title="输出 Token"
+                            >
+                              <ArrowUp size={15} aria-hidden />
+                              <b>{row.outputTokens}</b>
+                            </span>
+                          </div>
+                          <span
+                            className="usage-token-cache"
+                            aria-label={`缓存读取 Token ${row.cacheReadTokens}`}
+                            title="缓存读取 Token"
+                          >
+                            <Archive size={15} aria-hidden />
+                            <b>{row.cacheReadTokens}</b>
+                          </span>
+                        </div>
+                      </td>
                     )}
                     {visibleColumns.has('首字') && (
                       <td className={firstTokenClass(row.firstTokenValue)}>
@@ -520,7 +558,7 @@ function compactFilters(filters: {
   >;
 }
 
-function extractRecords(value: unknown): typeof usageRecords {
+export function readUsageRecords(value: unknown): typeof usageRecords {
   if (Array.isArray(value)) return value as typeof usageRecords;
   if (typeof value !== 'object' || value === null) return [];
   const record = value as Record<string, unknown>;
@@ -533,13 +571,13 @@ function extractRecords(value: unknown): typeof usageRecords {
           model: String(item.model ?? '未知模型'),
           groupName: String(item.groupName ?? '未分组'),
           requestType: String(item.requestType ?? 'unknown'),
-          tokens: formatOptionalToken(item.totalTokens),
+          inputTokens: formatUsageToken(item.inputTokens),
+          outputTokens: formatUsageToken(item.outputTokens),
+          cacheReadTokens: formatUsageToken(item.cacheReadTokens),
           actualCost: formatOptionalCost(item.actualCost),
           keyLabel: String(item.apiKeyLabel ?? 'Key · 已脱敏'),
           reasoningEffort:
             typeof item.reasoningEffort === 'string' ? item.reasoningEffort : undefined,
-          cacheReadTokens: formatOptionalToken(item.cacheReadTokens),
-          cacheCreationTokens: formatOptionalToken(item.cacheCreationTokens),
           firstTokenValue: numericValue(item.firstTokenMs),
           firstTokenMs: formatOptionalDuration(item.firstTokenMs),
           durationMs: formatOptionalDuration(item.durationMs),
@@ -548,13 +586,15 @@ function extractRecords(value: unknown): typeof usageRecords {
     : [];
 }
 
-function numericValue(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+function formatUsageToken(value: unknown): string {
+  const number = numericValue(value);
+  if (number === undefined) return '—';
+  if (Math.abs(number) < 10_000) return Math.round(number).toLocaleString('en-US');
+  return formatTokenCount(number);
 }
 
-function formatOptionalToken(value: unknown): string {
-  const number = numericValue(value);
-  return number === undefined ? '—' : formatTokenCount(number);
+function numericValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function formatOptionalCost(value: unknown): string {

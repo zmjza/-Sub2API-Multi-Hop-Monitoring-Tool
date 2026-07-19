@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { firstTokenClass, readUsagePagination, usageResetQuery } from './UsagePage';
+import {
+  firstTokenClass,
+  readUsagePagination,
+  readUsageRecords,
+  usageResetQuery,
+} from './UsagePage';
 
 describe('readUsagePagination', () => {
   it('restores the documented default query when filters are reset', () => {
@@ -47,5 +52,26 @@ describe('firstTokenClass', () => {
     expect(firstTokenClass(20000)).toBe('first-token-slow');
     expect(firstTokenClass(undefined)).toBe('');
     expect(firstTokenClass(-1)).toBe('');
+  });
+});
+
+describe('readUsageRecords', () => {
+  it('keeps input, output, and cache-read token values in one row model', () => {
+    const [row] = readUsageRecords({
+      items: [
+        {
+          createdAt: new Date(2026, 6, 19, 14, 54, 38).toISOString(),
+          inputTokens: 2008,
+          outputTokens: 1879,
+          cacheReadTokens: 65_300,
+        },
+      ],
+    });
+
+    expect(row).toMatchObject({
+      inputTokens: '2,008',
+      outputTokens: '1,879',
+      cacheReadTokens: '65.3K',
+    });
   });
 });

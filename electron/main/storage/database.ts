@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { AvailableRateGroup } from '../../shared/contracts.js';
 
 export interface SiteRow {
   id: string;
@@ -181,6 +182,18 @@ export class AppDatabase {
       .run(key, JSON.stringify(value));
   }
 
+  deleteSetting(key: string): void {
+    this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  }
+
+  getKeyCache(siteId: string): unknown {
+    return this.getSetting(`site:${siteId}:keyCache`, []);
+  }
+
+  setKeyCache(siteId: string, keys: unknown[]): void {
+    this.setSetting(`site:${siteId}:keyCache`, keys);
+  }
+
   getKeyPreference(siteId: string): { mode: 'auto' | 'manual'; keyId?: string } {
     return this.getSetting(`site:${siteId}:keyPreference`, { mode: 'auto' as const });
   }
@@ -195,6 +208,33 @@ export class AppDatabase {
 
   setSiteNote(siteId: string, note: string): void {
     this.setSetting(`site:${siteId}:note`, note.trim().slice(0, 500));
+  }
+
+  getRateCache(siteId: string): { groups: AvailableRateGroup[]; fetchedAt?: number } {
+    return this.getSetting(`site:${siteId}:rateCache`, { groups: [] });
+  }
+
+  setRateCache(siteId: string, value: { groups: AvailableRateGroup[]; fetchedAt: number }): void {
+    this.setSetting(`site:${siteId}:rateCache`, value);
+  }
+
+  getRechargeRatio(siteId: string): number | undefined {
+    const value = this.getSetting<unknown>(`site:${siteId}:rechargeRatio`, undefined);
+    return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+  }
+
+  setRechargeRatio(siteId: string, ratio: number): void {
+    if (!Number.isFinite(ratio) || ratio <= 0) throw new Error('INVALID_RECHARGE_RATIO');
+    this.setSetting(`site:${siteId}:rechargeRatio`, ratio);
+  }
+
+  getRechargeRatios(): Record<string, number> {
+    return Object.fromEntries(
+      this.listSites().flatMap((site) => {
+        const ratio = this.getRechargeRatio(site.id);
+        return ratio === undefined ? [] : [[site.id, ratio]];
+      }),
+    );
   }
 
   getNotificationSettings(): {

@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.2.0',
+  shellVersion: '1.3.3',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -13,13 +13,20 @@ const desktopBridge: DesktopBridge = {
     addAndVerify: (input) => ipcRenderer.invoke('sites:add-and-verify', input),
     addBatch: (input) => ipcRenderer.invoke('sites:add-batch', input),
     refresh: (siteId) => ipcRenderer.invoke('sites:refresh', siteId),
+    refreshAll: () => ipcRenderer.invoke('sites:refresh-all'),
+    rateContexts: () => ipcRenderer.invoke('rates:contexts'),
+    refreshRateGroups: (siteId) => ipcRenderer.invoke('rates:refresh', siteId),
+    refreshAllRateGroups: () => ipcRenderer.invoke('rates:refresh-all'),
+    setRechargeRatio: (siteId, ratio) => ipcRenderer.invoke('rates:ratio:set', { siteId, ratio }),
     usage: (query) => ipcRenderer.invoke('usage:list', query),
-    usageFilters: (siteId) => ipcRenderer.invoke('usage:filters', siteId),
+    usageGroups: (siteId) => ipcRenderer.invoke('usage:groups', siteId),
+    usageModels: (siteId) => ipcRenderer.invoke('usage:models', siteId),
     usageCsv: (query) => ipcRenderer.invoke('usage:csv', query),
     channels: (siteId) => ipcRenderer.invoke('channels:list', siteId),
     channelStatus: (siteId, channelId) =>
       ipcRenderer.invoke('channels:status', { siteId, channelId }),
     keys: (siteId) => ipcRenderer.invoke('keys:list', siteId),
+    keyContexts: () => ipcRenderer.invoke('keys:contexts'),
     keyPreference: (siteId) => ipcRenderer.invoke('keys:preference:get', siteId),
     setKeyPreference: (siteId, value) =>
       ipcRenderer.invoke('keys:preference:set', { siteId, ...value }),
@@ -47,6 +54,12 @@ const desktopBridge: DesktopBridge = {
       const handler = () => listener();
       ipcRenderer.on('sites:changed', handler);
       return () => ipcRenderer.removeListener('sites:changed', handler);
+    },
+    onKeyContextChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: { siteId: string }) =>
+        listener(value.siteId);
+      ipcRenderer.on('keys:changed', handler);
+      return () => ipcRenderer.removeListener('keys:changed', handler);
     },
     onRefreshState: (listener) => {
       const handler = (

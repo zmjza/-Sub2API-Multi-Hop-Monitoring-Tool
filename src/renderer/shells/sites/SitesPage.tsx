@@ -36,7 +36,7 @@ export function SitesPage(props: SitesProps) {
   const [notificationThreshold, setNotificationThreshold] = useState(0.5);
   const [startupEnabled, setStartupEnabled] = useState(false);
   const [floatingPosition, setFloatingPosition] = useState<
-    'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+    'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom'
   >('top-right');
   const [floatingOpacity, setFloatingOpacity] = useState(84);
   const [siteFailures, setSiteFailures] = useState(true);
@@ -100,7 +100,13 @@ export function SitesPage(props: SitesProps) {
       const current = Math.min(Math.max(value.current, 0), Math.max(value.total, 0));
       setBatchProgress({ current, total: Math.max(value.total, 0) });
       setBatchCurrentUrl(value.url);
-      setBatchPhase(value.status === 'success' ? '已完成当前站点' : '当前站点失败，继续处理');
+      setBatchPhase(
+        value.total > 0 && current >= value.total
+          ? '全部完成'
+          : value.status === 'success'
+            ? '已完成当前站点'
+            : '当前站点失败，继续处理',
+      );
       setBatchResults((current) => [
         ...current.filter((item) => item.url !== value.url),
         { url: value.url, status: value.status, error: value.error },
@@ -435,7 +441,7 @@ export function SitesPage(props: SitesProps) {
                 aria-label="悬浮窗固定位置"
                 value={floatingPosition}
                 onChange={(event) => {
-                  const position = event.target.value as typeof floatingPosition;
+                  const position = event.target.value as Exclude<typeof floatingPosition, 'custom'>;
                   setFloatingPosition(position);
                   void window.sub2apiDesktop?.sites
                     .setFloatingSettings({ position, opacity: floatingOpacity })
@@ -445,6 +451,11 @@ export function SitesPage(props: SitesProps) {
                     });
                 }}
               >
+                {floatingPosition === 'custom' && (
+                  <option value="custom" disabled>
+                    自定义位置
+                  </option>
+                )}
                 <option value="top-left">左上角</option>
                 <option value="top-right">右上角</option>
                 <option value="bottom-left">左下角</option>

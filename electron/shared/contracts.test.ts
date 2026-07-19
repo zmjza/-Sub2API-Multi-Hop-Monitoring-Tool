@@ -7,6 +7,9 @@ import {
   floatingSettingsSchema,
   keyPreferenceSchema,
   notificationSettingsSchema,
+  availableRateGroupSchema,
+  rateContextsSchema,
+  rechargeRatioRequestSchema,
   siteInputSchema,
   usageRecordSchema,
   usageQuerySchema,
@@ -103,6 +106,15 @@ describe('IPC boundary schemas', () => {
       position: 'bottom-left',
       opacity: 35,
     });
+    expect(
+      floatingSettingsSchema.parse({
+        position: 'custom',
+        x: -420,
+        y: 120,
+        opacity: 84,
+      }),
+    ).toEqual({ position: 'custom', x: -420, y: 120, opacity: 84 });
+    expect(() => floatingSettingsSchema.parse({ position: 'custom', x: 10 })).toThrow();
     expect(() => floatingSettingsSchema.parse({ position: 'top-right', opacity: 34 })).toThrow();
     expect(() => floatingSettingsSchema.parse({ position: 'top-right', opacity: 101 })).toThrow();
     expect(() => floatingSettingsSchema.parse({ position: 'center' })).toThrow();
@@ -121,6 +133,65 @@ describe('IPC boundary schemas', () => {
         refreshIntervalMinutes: 3,
         floatingEnabled: true,
         staleAfterMinutes: 10,
+      }),
+    ).toThrow();
+  });
+
+  it('keeps available rate groups and recharge ratios strict', () => {
+    expect(
+      availableRateGroupSchema.parse({
+        id: '25',
+        name: '特惠通道',
+        description: '公开说明',
+        platform: 'openai',
+        status: 'active',
+        rate: 0,
+      }),
+    ).toEqual({
+      id: '25',
+      name: '特惠通道',
+      description: '公开说明',
+      platform: 'openai',
+      status: 'active',
+      rate: 0,
+    });
+    expect(() =>
+      availableRateGroupSchema.parse({
+        id: '25',
+        name: '特惠通道',
+        platform: 'openai',
+        rate: 0.4,
+        accessToken: 'must-not-pass',
+      }),
+    ).toThrow();
+    expect(rechargeRatioRequestSchema.parse({ siteId: 'site-a', ratio: 10 })).toEqual({
+      siteId: 'site-a',
+      ratio: 10,
+    });
+    for (const ratio of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
+      expect(() => rechargeRatioRequestSchema.parse({ siteId: 'site-a', ratio })).toThrow();
+  });
+
+  it('rejects secret fields from cached rate contexts', () => {
+    const context = {
+      sites: {
+        'site-a': {
+          siteId: 'site-a',
+          groups: [{ id: '25', name: '特惠通道', platform: 'openai', status: 'active', rate: 0.4 }],
+          fetchedAt: 1_721_000_000_000,
+          source: 'cache',
+          state: 'success',
+        },
+      },
+      ratios: { 'site-a': 10 },
+    };
+    expect(rateContextsSchema.parse(context)).toEqual(context);
+    expect(() =>
+      rateContextsSchema.parse({
+        ...context,
+        sites: {
+          'site-a': { ...context.sites['site-a'], password: 'must-not-pass' },
+        },
       }),
     ).toThrow();
   });

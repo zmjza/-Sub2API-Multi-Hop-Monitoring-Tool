@@ -21,6 +21,7 @@ export interface ApiKeySummary {
   groupName?: string;
   quota?: number;
   quotaUsed?: number;
+  rate?: number;
 }
 
 export interface SiteSnapshot {

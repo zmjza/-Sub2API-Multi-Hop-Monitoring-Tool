@@ -557,3 +557,102 @@ macOS Stage Manager、Space 切换、Windows 桌面常驻显示，以及主窗�
 **适用范围**
 
 本次外发版功能级合并、macOS 台前调度/Space、Windows 普通窗口层和所有涉及悬浮窗透明度的后续改动。
+
+## 无框悬浮窗拖动必须区分用户移动与程序化停靠
+
+**现象**
+
+给无框窗口增加 CSS drag region 后，用户拖动可以触发 `move`，但四角预设调用 `setBounds` 也会触发同一事件；若统一保存 custom 坐标，用户刚选择的预设会立即被覆盖成自定义位置。
+
+**根因**
+
+Electron 的窗口 `move` 事件不区分指针拖动和主进程程序化移动，多次事件还可能在 `setBounds` 返回后继续到达。Renderer 交互控件若未声明 `no-drag`，点击也会被窗口拖动区域吞掉。
+
+**正确做法**
+
+只把 header 非交互区域设为 drag，所有按钮、下拉和 footer 控件设为 `no-drag`。主进程在程序化停靠期间记录目标坐标并忽略对应 move；用户移动使用防抖保存最终 custom x/y。恢复时按可见显示器工作区校正，屏幕消失则回退主显示器安全位置。
+
+**验证方式**
+
+Electron E2E 依次验证预设停靠、模拟用户 move、custom 设置持久化、重启恢复和再次选择预设覆盖；纯函数覆盖负坐标、越界和显示器消失。macOS 打包应用实际拖动标题并点击所有右下角控件。
+
+**禁止事项**
+
+不要在每个 move 事件同步写数据库；不要把整个窗口设为 drag；不要用全局鼠标监听；不要假定所有显示器坐标都为正数。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/main/domain/window-bounds.ts`
+- `src/renderer/shells/floating/floating.css`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+macOS 和 Windows 无框 Electron 悬浮窗、四角停靠、自由拖动和多显示器恢复。
+
+## 启动时无站点的后台加载必须响应站点集合变化
+
+**现象**
+
+应用首次启动时没有站点，倍率后台加载立即完成；随后用户新增站点并设置充值比例，跨站倍率区仍为空，只有手动打开单站弹层后才取得数据。
+
+**根因**
+
+Renderer 的倍率初始化 effect 只在挂载时运行一次，启动时的空站点集合成为永久结果。普通余额刷新又不能直接作为依赖，否则每次快照时间变化都会重复请求倍率。
+
+**正确做法**
+
+使用排序后的稳定 site ID 集合作为倍率初始化依赖。新增或删除站点时重新读取安全缓存并后台刷新；余额、状态、更新时间等快照字段变化不触发该 effect。倍率请求继续与 Key 和全站余额刷新隔离。
+
+**验证方式**
+
+Electron E2E 从空 userData 添加站点，等待后台倍率加载，设置 `1:10` 后断言跨站区出现 `0.04`；单站倍率刷新时 `/groups/available` 计数增加而 `/keys` 计数不变。
+
+**禁止事项**
+
+不要把整个 dashboard 对象作为 effect 依赖；不要要求用户先打开 Popover 才加载跨站数据；不要用 Key 刷新顺带承担倍率刷新。
+
+**相关文件或命令**
+
+- `src/renderer/App.tsx`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有依赖动态实体集合、但不应随实体快照字段反复重载的 Renderer 后台数据源。
+
+## IPC 最后进度事件必须自身表达终态
+
+**现象**
+
+批量验证 Promise 已完成并显示“全部完成”后，最后一个 `sites:batch-progress` 事件可能迟到，把界面覆盖成“当前站点失败，继续处理”，即使进度已经是 `2/2（100%）`。
+
+**根因**
+
+Renderer 只根据单项 success/failed 设置阶段文案，没有使用事件携带的 `current/total` 判断整批终态。IPC 事件投递与 invoke Promise 返回的先后顺序不能作为业务保证。
+
+**正确做法**
+
+每个进度事件必须可独立还原状态：当 `total > 0 && current >= total` 时直接显示“全部完成”；只有尚未到最后一项时才显示“已完成当前站点”或“当前站点失败，继续处理”。Promise 结果继续负责最终成功/失败汇总。
+
+**验证方式**
+
+Electron E2E 批量提交一个成功 URL 和一个非法 URL，断言面板最终同时显示 `全部完成`、`100%`、成功 1 和失败 1；重复运行不得依赖 IPC 与 Promise 的偶然顺序。
+
+**禁止事项**
+
+不要用 `setTimeout` 猜测最后事件何时到达；不要仅在 Promise `.then()` 中写终态；不要把最后一个失败项继续描述为仍有任务待处理。
+
+**相关文件或命令**
+
+- `src/renderer/shells/sites/SitesPage.tsx`
+- `electron/main/index.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有通过 Electron IPC 同时使用逐项事件和最终 Promise 返回值的批处理、导入、刷新与验证流程。

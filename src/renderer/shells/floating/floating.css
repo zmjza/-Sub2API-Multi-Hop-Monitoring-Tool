@@ -24,6 +24,7 @@ body:has(.floating-window) {
   min-height: 48px;
   padding: 8px 20px;
   border-bottom: 1px solid #f1f5f9;
+  -webkit-app-region: drag;
 }
 .floating-header button,
 .floating-window footer button {
@@ -35,6 +36,7 @@ body:has(.floating-window) {
   color: #64748b;
   display: grid;
   place-items: center;
+  -webkit-app-region: no-drag;
 }
 .floating-header strong {
   overflow: hidden;
@@ -95,8 +97,9 @@ body:has(.floating-window) {
 .floating-window footer {
   position: absolute;
   inset: auto 0 0;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
   margin-top: 0;
   min-height: 49px;
@@ -105,6 +108,7 @@ body:has(.floating-window) {
   background: #f8fafc;
   color: #64748b;
   font-size: 11px;
+  -webkit-app-region: no-drag;
 }
 .floating-settings {
   position: relative;
@@ -121,7 +125,7 @@ body:has(.floating-window) {
 .floating-settings summary::-webkit-details-marker {
   display: none;
 }
-.floating-settings label {
+.floating-settings-panel {
   position: absolute;
   left: 0;
   bottom: 38px;
@@ -135,6 +139,10 @@ body:has(.floating-window) {
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
   color: #475569;
 }
+.floating-settings-panel label {
+  display: grid;
+  gap: 6px;
+}
 .floating-settings select {
   height: 30px;
   border: 1px solid #cbd5e1;
@@ -146,6 +154,15 @@ body:has(.floating-window) {
   align-items: center;
   gap: 5px;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.floating-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
 }
 .floating-live-state i {
   width: 7px;

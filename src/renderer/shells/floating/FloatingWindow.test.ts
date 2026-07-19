@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { FloatingWindow } from './FloatingWindow';
+
+beforeAll(() => vi.stubGlobal('window', {}));
+afterAll(() => vi.unstubAllGlobals());
 
 describe('floating window transparency', () => {
   it('keeps a stable surface while the native window controls opacity', () => {
@@ -21,5 +26,42 @@ describe('floating window transparency', () => {
     expect(source).toContain('min="35"');
     expect(source).toContain('max="100"');
     expect(source).toContain('{props.floatingOpacity ?? 84}%');
+  });
+
+  it('prefers the current site note in the top title', () => {
+    const html = renderToStaticMarkup(
+      FloatingWindow({
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '默认站点名',
+          note: '手动备注名',
+          baseUrl: 'https://example.invalid',
+          balance: 5,
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+      }),
+    );
+
+    expect(html).toContain('title="手动备注名"');
+    expect(html).toContain('>手动备注名</strong>');
+  });
+
+  it('keeps the drag handle and bottom-right actions structurally isolated', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./FloatingWindow.tsx', import.meta.url)),
+      'utf8',
+    );
+    const css = readFileSync(fileURLToPath(new URL('./floating.css', import.meta.url)), 'utf8');
+
+    expect(source).toContain('className="floating-actions"');
+    expect(css).toContain('-webkit-app-region: drag');
+    expect(css).toContain('-webkit-app-region: no-drag');
   });
 });

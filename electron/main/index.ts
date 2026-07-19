@@ -33,6 +33,10 @@ import {
   channelViewSchema,
   channelDetailViewSchema,
   apiKeySummarySchema,
+  siteKeyContextsSchema,
+  rateContextsSchema,
+  rateSiteContextSchema,
+  rechargeRatioRequestSchema,
 } from '../shared/contracts.js';
 import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
@@ -42,11 +46,7 @@ import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
 import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
-import {
-  floatingCornerBounds,
-  floatingWindowPolicy,
-  type FloatingCorner,
-} from './domain/window-bounds.js';
+import { floatingWindowPolicy, resolveFloatingBounds } from './domain/window-bounds.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -62,6 +62,7 @@ let scheduler: RefreshScheduler;
 let notificationService: NotificationService;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
+let programmaticFloatingBounds: Electron.Rectangle | undefined;
 
 function secureWindowOptions(): Electron.BrowserWindowConstructorOptions {
   return {
@@ -150,29 +151,41 @@ function registerIpc() {
   });
   ipcMain.handle('sites:refresh', async (_event, input: unknown) => {
     const { siteId } = refreshRequestSchema.parse({ siteId: input });
-    broadcastRefreshState(siteId, 'refreshing');
-    const result = siteSummarySchema.parse(await siteService.refresh(siteId));
-    broadcastRefreshState(
-      siteId,
-      result.status === 'auth-required'
-        ? 'auth-required'
-        : result.status === 'error'
-          ? 'error'
-          : 'success',
-    );
-    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
-    return result;
+    await scheduler.manualRefresh(siteId);
+    const result = siteService.listSites().sites.find((site) => site.id === siteId);
+    if (!result) throw new Error('SITE_NOT_FOUND');
+    return siteSummarySchema.parse(result);
+  });
+  ipcMain.handle('sites:refresh-all', async () => {
+    await scheduler.manualRefreshAll();
+    return dashboardSnapshotSchema.parse(siteService.listSites());
   });
   ipcMain.handle('sites:note:set', (_event, input: unknown) => {
     const value = siteNoteSchema.parse(input);
     return siteSummarySchema.parse(siteService.setSiteNote(value.siteId, value.note));
   });
+  ipcMain.handle('rates:contexts', () => rateContextsSchema.parse(siteService.rateContexts()));
+  ipcMain.handle('rates:refresh', async (_event, input: unknown) => {
+    const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    return rateSiteContextSchema.parse(await siteService.refreshRateGroups(siteId));
+  });
+  ipcMain.handle('rates:refresh-all', async () =>
+    rateContextsSchema.parse(await siteService.refreshAllRateGroups()),
+  );
+  ipcMain.handle('rates:ratio:set', (_event, input: unknown) => {
+    const value = rechargeRatioRequestSchema.parse(input);
+    return rateContextsSchema.parse(siteService.setRechargeRatio(value.siteId, value.ratio));
+  });
   ipcMain.handle('usage:list', async (_event, input: unknown) =>
     usagePayloadSchema.parse(await siteService.usage(usageQuerySchema.parse(input))),
   );
-  ipcMain.handle('usage:filters', async (_event, input: unknown) => {
+  ipcMain.handle('usage:groups', async (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
-    return usageFilterOptionsSchema.parse(await siteService.usageFilters(siteId));
+    return usageFilterOptionsSchema.shape.groups.parse(await siteService.usageGroups(siteId));
+  });
+  ipcMain.handle('usage:models', async (_event, input: unknown) => {
+    const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    return usageFilterOptionsSchema.shape.models.parse(await siteService.usageModels(siteId));
   });
   ipcMain.handle('usage:csv', async (_event, input: unknown) => {
     const csv = await siteService.usageCsv(usageQuerySchema.parse(input));
@@ -219,16 +232,19 @@ function registerIpc() {
       .array()
       .parse(siteService.listKeys(refreshRequestSchema.parse({ siteId: input }).siteId)),
   );
+  ipcMain.handle('keys:contexts', () => siteKeyContextsSchema.parse(siteService.listKeyContexts()));
   ipcMain.handle('keys:preference:get', (_event, input: unknown) =>
     siteService.getKeyPreference(refreshRequestSchema.parse({ siteId: input }).siteId),
   );
   ipcMain.handle('keys:preference:set', (_event, input: unknown) => {
     const value = input as { siteId?: unknown; mode?: unknown; keyId?: unknown };
     const siteId = refreshRequestSchema.parse({ siteId: value.siteId }).siteId;
-    return siteService.setKeyPreference(
+    const result = siteService.setKeyPreference(
       siteId,
       keyPreferenceSchema.parse({ mode: value.mode, keyId: value.keyId }),
     );
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
+    return result;
   });
   ipcMain.handle('notifications:get', () => siteService.getNotificationSettings());
   ipcMain.handle('notifications:set', (_event, input: unknown) =>
@@ -262,7 +278,9 @@ function registerIpc() {
   ipcMain.handle('floating:set', (_event, input: unknown) => {
     const settings = floatingSettingsSchema.parse(input);
     appDatabase.setSetting('floating:settings', settings);
-    floatingWindow?.setBounds(floatingBoundsFor(settings.position));
+    const bounds = floatingBoundsFor(settings);
+    programmaticFloatingBounds = bounds;
+    floatingWindow?.setBounds(bounds);
     floatingWindow?.setOpacity(settings.opacity / 100);
     return settings;
   });
@@ -367,7 +385,7 @@ async function createWindows() {
   const floatingSettings = floatingSettingsSchema.parse(
     appDatabase.getSetting('floating:settings', { position: 'top-right', opacity: 84 }),
   );
-  const floatingBounds = floatingBoundsFor(floatingSettings.position);
+  const floatingBounds = floatingBoundsFor(floatingSettings);
   const floatingPolicy = floatingWindowPolicy(process.platform);
   floatingWindow = new BrowserWindow({
     ...secureWindowOptions(),
@@ -385,10 +403,52 @@ async function createWindows() {
     });
   protectNavigation(floatingWindow);
   await loadRenderer(floatingWindow, 'floating');
+  floatingWindow.on('move', () => {
+    if (!floatingWindow || floatingWindow.isDestroyed()) return;
+    const bounds = floatingWindow.getBounds();
+    if (
+      programmaticFloatingBounds &&
+      bounds.x === programmaticFloatingBounds.x &&
+      bounds.y === programmaticFloatingBounds.y
+    ) {
+      programmaticFloatingBounds = undefined;
+      return;
+    }
+    const previous = boundsSaveTimers.get('floating:placement');
+    if (previous) clearTimeout(previous);
+    const timer = setTimeout(() => {
+      boundsSaveTimers.delete('floating:placement');
+      if (!floatingWindow || floatingWindow.isDestroyed()) return;
+      const current = floatingWindow.getBounds();
+      const area = screen.getDisplayMatching(current).workArea;
+      const safe = resolveFloatingBounds(
+        { position: 'custom', x: current.x, y: current.y },
+        screen.getAllDisplays().map((display) => display.workArea),
+        area,
+      );
+      appDatabase.setSetting('floating:settings', {
+        position: 'custom',
+        x: safe.x,
+        y: safe.y,
+        opacity: Math.round(floatingWindow.getOpacity() * 100),
+      });
+    }, 150);
+    boundsSaveTimers.set('floating:placement', timer);
+  });
 }
 
-function floatingBoundsFor(position: FloatingCorner): Electron.Rectangle {
-  return floatingCornerBounds(position, screen.getPrimaryDisplay().workArea);
+function floatingBoundsFor(
+  settings: import('../shared/contracts.js').FloatingSettings,
+): Electron.Rectangle {
+  const reference = floatingWindow?.getBounds();
+  const target = reference
+    ? screen.getDisplayMatching(reference).workArea
+    : screen.getPrimaryDisplay().workArea;
+  return resolveFloatingBounds(
+    settings,
+    screen.getAllDisplays().map((display) => display.workArea),
+    target,
+  );
 }
 
 app.whenReady().then(async () => {
@@ -417,6 +477,10 @@ app.whenReady().then(async () => {
   siteService.setProgressListener((siteId, phase) =>
     broadcastRefreshState(siteId, 'refreshing', phase),
   );
+  siteService.setKeyContextListener((siteId) => {
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send('keys:changed', { siteId });
+  });
   const notifications = new NotificationService(
     { send: (title, body) => new Notification({ title, body }).show() },
     {
@@ -477,7 +541,6 @@ app.on('before-quit', () => {
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);
   saveBoundsNow('window:main', mainWindow);
-  saveBoundsNow('window:floating', floatingWindow);
 });
 app.on('window-all-closed', () => {
   /* tray keeps the app resident */

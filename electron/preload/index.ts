@@ -5,7 +5,10 @@ import type {
   DashboardSnapshot,
   SiteInput,
   SiteSummary,
+  SiteKeyContexts,
   UsageQuery,
+  RateContexts,
+  RateSiteContext,
 } from '../shared/contracts.js';
 
 export interface DesktopBridge {
@@ -20,12 +23,19 @@ export interface DesktopBridge {
       input: BatchSiteInput,
     ): Promise<{ successes: SiteSummary[]; failures: Array<{ url: string; error: string }> }>;
     refresh(siteId: string): Promise<SiteSummary>;
+    refreshAll(): Promise<DashboardSnapshot>;
+    rateContexts(): Promise<RateContexts>;
+    refreshRateGroups(siteId: string): Promise<RateSiteContext>;
+    refreshAllRateGroups(): Promise<RateContexts>;
+    setRechargeRatio(siteId: string, ratio: number): Promise<RateContexts>;
     usage(query: UsageQuery): Promise<unknown>;
-    usageFilters(siteId: string): Promise<unknown>;
+    usageGroups(siteId: string): Promise<unknown>;
+    usageModels(siteId: string): Promise<unknown>;
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
     channels(siteId: string): Promise<unknown>;
     channelStatus(siteId: string, channelId: string): Promise<unknown>;
     keys(siteId: string): Promise<unknown>;
+    keyContexts(): Promise<SiteKeyContexts>;
     keyPreference(siteId: string): Promise<unknown>;
     setKeyPreference(
       siteId: string,
@@ -46,6 +56,7 @@ export interface DesktopBridge {
     setAppSettings(value: AppSettings): Promise<AppSettings>;
     notificationPermission(): Promise<{ supported: boolean }>;
     onChanged(listener: () => void): () => void;
+    onKeyContextChanged(listener: (siteId: string) => void): () => void;
     onRefreshState(
       listener: (value: {
         siteId: string;

@@ -214,6 +214,67 @@ describe('Sub2ApiAdapter', () => {
     ).resolves.toEqual({ a: 2, b: 7 });
   });
 
+  it('uses bounded concurrency for per-key request counts', async () => {
+    let active = 0;
+    let maximum = 0;
+    const adapter = new Sub2ApiAdapter(
+      {
+        getJson: async (path: string) => {
+          active += 1;
+          maximum = Math.max(maximum, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          active -= 1;
+          return {
+            total_requests: Number(new URL(path, 'https://local').searchParams.get('api_key_id')),
+          };
+        },
+      },
+      async () => undefined,
+    );
+
+    const result = await adapter.readTodayRequestsByKey(
+      'access',
+      Array.from({ length: 8 }, (_, index) => ({ id: String(index + 1) })),
+      'Asia/Shanghai',
+    );
+
+    expect(maximum).toBeGreaterThan(1);
+    expect(maximum).toBeLessThanOrEqual(4);
+    expect(result).toMatchObject({ '1': 1, '8': 8 });
+  });
+
+  it('publishes normalized keys before later core requests finish', async () => {
+    let releaseGroups: (() => void) | undefined;
+    const groupsBlocked = new Promise<void>((resolve) => {
+      releaseGroups = resolve;
+    });
+    const published: Array<Array<{ id: string }>> = [];
+    const adapter = new Sub2ApiAdapter(
+      {
+        getJson: async (path: string) => {
+          if (path === '/user/profile') return { data: { balance: 1 } };
+          if (path === '/keys')
+            return { data: { items: [{ id: 'early', name: 'Early', status: 'active' }] } };
+          if (path === '/groups/available') {
+            await groupsBlocked;
+            return { data: [] };
+          }
+          if (path === '/groups/rates') return { data: {} };
+          return { data: {} };
+        },
+      },
+      async () => undefined,
+      () => undefined,
+      (keys) => published.push(keys),
+    );
+
+    const core = adapter.readCore('access', 'Asia/Shanghai');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(published[0]).toEqual([expect.objectContaining({ id: 'early' })]);
+    releaseGroups?.();
+    await core;
+  });
+
   it('reads channel detail and keeps a missing detail endpoint local to the capability', async () => {
     const supported = new Sub2ApiAdapter({
       getJson: async () => ({
@@ -358,6 +419,106 @@ describe('Sub2ApiAdapter', () => {
       models: ['gpt-5.4', 'claude-sonnet-4'],
       groups: [{ id: '25', name: '高并发通道', rate: 0.2 }],
     });
+  });
+
+  it('normalizes safe available rate groups with timezone without leaking upstream fields', async () => {
+    let requestedPath = '';
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        requestedPath = path;
+        return {
+          data: {
+            data: [
+              {
+                id: 25,
+                name: 'OpenAI 特惠',
+                description: '公开说明',
+                platform: 'openai',
+                status: 'active',
+                rate_multiplier: 0.4,
+                private_note: 'must-not-pass',
+                secret_config: { token: 'must-not-pass' },
+              },
+              {
+                group_id: 26,
+                group_name: 'Claude 免费',
+                platform: 'anthropic',
+                status: 'active',
+                ratio: 0,
+              },
+              {
+                id: 27,
+                name: '停用分组',
+                platform: 'gemini',
+                status: 'disabled',
+                rate_multiplier: 0.2,
+              },
+              { id: 28, name: '负数无效', platform: 'openai', rate_multiplier: -1 },
+              { id: 29, name: '缺少倍率', platform: 'openai' },
+            ],
+          },
+        };
+      },
+    });
+
+    const result = await adapter.readAvailableRateGroups('access', 'Asia/Shanghai');
+
+    expect(requestedPath).toBe('/groups/available?timezone=Asia%2FShanghai');
+    expect(result).toEqual([
+      {
+        id: '25',
+        name: 'OpenAI 特惠',
+        description: '公开说明',
+        platform: 'openai',
+        status: 'active',
+        rate: 0.4,
+      },
+      {
+        id: '26',
+        name: 'Claude 免费',
+        platform: 'anthropic',
+        status: 'active',
+        rate: 0,
+      },
+      {
+        id: '27',
+        name: '停用分组',
+        platform: 'gemini',
+        status: 'disabled',
+        rate: 0.2,
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(/private|secret|token/i);
+  });
+
+  it('publishes groups without waiting for the slower model endpoint', async () => {
+    let releaseModels: (() => void) | undefined;
+    const modelsBlocked = new Promise<void>((resolve) => {
+      releaseModels = resolve;
+    });
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path === '/groups/available') return { data: [{ id: 25, name: '立即分组' }] };
+        if (path.startsWith('/usage/dashboard/models')) {
+          await modelsBlocked;
+          return { data: { models: ['late-model'] } };
+        }
+        return {};
+      },
+    });
+
+    const groups = adapter.readUsageGroups('access');
+    const models = adapter.readUsageModels('access', 'Asia/Shanghai');
+
+    await expect(groups).resolves.toEqual([{ id: '25', name: '立即分组' }]);
+    let modelsSettled = false;
+    void models.then(() => {
+      modelsSettled = true;
+    });
+    await Promise.resolve();
+    expect(modelsSettled).toBe(false);
+    releaseModels?.();
+    await expect(models).resolves.toEqual(['late-model']);
   });
 
   it('keeps absent usage metrics undefined instead of inventing zeroes', async () => {

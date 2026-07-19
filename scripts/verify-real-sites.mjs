@@ -35,6 +35,7 @@ for (const site of sites) {
     core: 'not-run',
     usageList: 'not-run',
     usageFilters: 'not-run',
+    availableRates: 'not-run',
     channels: 'not-run',
     channelDetail: 'not-run',
     channelDetailFields: [],
@@ -61,6 +62,16 @@ for (const site of sites) {
       });
     } catch (error) {
       result.usageFilters = `error:${error?.code ?? 'unknown'}`;
+    }
+    try {
+      const groups = await adapter.readAvailableRateGroups(session.accessToken, 'Asia/Shanghai');
+      result.availableRates = JSON.stringify({
+        supported: true,
+        groupCount: groups.length,
+        platforms: [...new Set(groups.map((group) => group.platform))].sort(),
+      });
+    } catch (error) {
+      result.availableRates = `error:${error?.code ?? 'unknown'}`;
     }
     try {
       await adapter.readUsage(session.accessToken, {

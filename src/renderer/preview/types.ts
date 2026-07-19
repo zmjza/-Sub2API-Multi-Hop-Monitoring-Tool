@@ -21,6 +21,11 @@ export interface PreviewContext {
   highContrast: boolean;
   sitesSection?: 'notifications' | 'settings';
   queryPhase?: string;
+  isRefreshingAll?: boolean;
+  refreshingSiteIds?: string[];
+  rateContexts?: RateContexts;
+  isRefreshingRates?: boolean;
+  refreshingRateSiteIds?: string[];
   dashboard?: DashboardSnapshot;
   selectedSite?: SiteSummary;
   usageData?: unknown;
@@ -35,7 +40,9 @@ export interface PreviewContext {
     groupName?: string;
     quota?: number;
     quotaUsed?: number;
+    rate?: number;
   }>;
+  keyContexts?: SiteKeyContexts;
   usageFilterOptions?: {
     models: string[];
     groups: Array<{ id: string; name: string; rate?: number }>;
@@ -60,11 +67,17 @@ export interface PreviewContext {
     billingMode?: string;
     sort?: 'asc' | 'desc';
   }) => void;
-  onKeyPreferenceChange?: (value: { mode: 'auto' | 'manual'; keyId?: string }) => void;
-  onSiteNoteChange?: (note: string) => Promise<void>;
+  onKeyPreferenceChange?: (
+    siteId: string,
+    value: { mode: 'auto' | 'manual'; keyId?: string },
+  ) => void;
+  onSiteNoteChange?: (siteId: string, note: string) => Promise<void>;
+  onRefreshAllRates?: () => Promise<void>;
+  onRefreshSiteRates?: (siteId: string) => Promise<void>;
+  onRechargeRatioChange?: (siteId: string, ratio: number) => Promise<void>;
   onSelectChannel?: (channelId: string) => void;
   onRefreshChannels?: () => void;
-  floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom';
   floatingOpacity?: number;
   onFloatingPositionChange?: (
     position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
@@ -98,4 +111,9 @@ export function parsePreviewLocation(search: string): PreviewLocation {
     highContrast: params.get('highContrast') === 'true',
   };
 }
-import type { DashboardSnapshot, SiteSummary } from '../../../electron/shared/contracts';
+import type {
+  DashboardSnapshot,
+  RateContexts,
+  SiteKeyContexts,
+  SiteSummary,
+} from '../../../electron/shared/contracts';

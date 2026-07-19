@@ -165,3 +165,135 @@ macOS 真机验收证据、Playwright E2E 和后续 CI 产物归档。
 **适用范围**
 
 所有历史版本恢复、重新打包和 Gitee 发布操作。
+
+## Electron E2E 不得与 Renderer 生产构建并行运行
+
+**现象**
+
+完整 E2E 的预览导航出现 `ERR_FILE_NOT_FOUND`，目标是项目内正常存在的 `dist/index.html`；同一轮生产构建随后成功，其余测试仍通过。
+
+**根因**
+
+Vite 生产构建会清理并重建 `dist/`。若 `npm run build` 与 `npm run test:e2e` 并行，Playwright 可能在输出目录已清理、首页尚未重新写入的窗口期执行 `file://` 导航。
+
+**正确做法**
+
+先完整执行 `npm run build` 并确认成功，再单独执行 `npm run test:e2e`。任何会创建、清理或替换 E2E 输入产物的命令必须与消费方串行。
+
+**验证方式**
+
+构建完成后不再改写 `dist/`，单独重跑 `npm run test:e2e`；6 项全部通过且不再出现 `ERR_FILE_NOT_FOUND`。
+
+**禁止事项**
+
+不要把产物生产命令与依赖该产物的测试放入同一个并行批次；不要把该文件竞态误判为 Renderer 路由缺失并修改业务代码。
+
+**相关文件或命令**
+
+- `package.json`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run build`
+- `npm run test:e2e`
+
+**适用范围**
+
+本项目所有基于 `dist/`、`dist-electron/` 或打包目录的 Electron E2E 与发布验证。
+
+## 全站刷新 E2E 不应把 inflight 复用误判为漏刷新
+
+**现象**
+
+两个站点执行全站刷新时，E2E 偶发只观察到一次新的 `/keys` 请求，按“站点数等于新增请求数”断言会超时，但两个站点最终都完成刷新。
+
+**根因**
+
+应用启动后的错峰自动刷新可能已经为当前站点创建了 inflight。手动全站刷新按设计复用该 Promise，并只为其余站点创建新请求；请求计数无法区分“漏刷新”和“复用正在运行的刷新”。
+
+**正确做法**
+
+调度器单测直接证明全站任务复用当前站点 inflight 后仍访问其余站点。Electron E2E 断言点击后所有站点卡片立即进入刷新态、至少发生一个新请求、按钮等待整批任务完成，并比较每个站点刷新前后的 `fetchedAt`。
+
+**验证方式**
+
+先运行 `npm test -- --run electron/main/services/refresh-scheduler.test.ts`，再串行执行构建和本地集成 Electron E2E；确认调度器访问全部 site ID，且两个站点的 `fetchedAt` 都推进。
+
+**禁止事项**
+
+不要取消 inflight 去重来满足请求计数；不要只把超时时间加长；不要仅断言按钮动画而不验证每站点结果。
+
+**相关文件或命令**
+
+- `electron/main/services/refresh-scheduler.ts`
+- `electron/main/services/refresh-scheduler.test.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run build`
+- `npm run test:e2e`
+
+**适用范围**
+
+启动错峰刷新、手动全站刷新、自动刷新重叠和 Electron 本地集成测试。
+
+## 同站多入口刷新 E2E 必须显式处理手动冷却窗口
+
+**现象**
+
+同一条 E2E 先点击使用记录顶栏刷新，随后很快点击悬浮窗刷新；第二个按钮保持可用且没有新请求，测试误报悬浮窗刷新失效。
+
+**根因**
+
+顶栏和悬浮窗都调用同站 `manualRefresh`，共享 5 秒防连点。第二次操作落在冷却窗口内时按产品规则立即返回，Renderer 的临时刷新态可能短于 Playwright 观察间隔。
+
+**正确做法**
+
+需要分别验证两个入口时记录第一次手动刷新的开始时间，在第二次操作前只等待剩余冷却时间；防连点本身由调度器单测独立验证。
+
+**验证方式**
+
+完整 Electron E2E 中先验证使用记录刷新期间的模型补齐，再跨过 5 秒边界点击悬浮窗刷新，断言按钮禁用、新请求产生和最终恢复。
+
+**禁止事项**
+
+不要删除或缩短生产冷却来迁就 E2E；不要固定无条件长等待；不要把冷却命中写成网络失败。
+
+**相关文件或命令**
+
+- `electron/main/services/refresh-scheduler.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+顶栏、总览、悬浮窗等共享同站手动刷新入口的串行端到端测试。
+
+## 延迟加载控件的 E2E 要先证明请求发生
+
+**现象**
+
+完整 Electron E2E 中，点击使用记录刷新后，模型下拉框偶发未在 3 秒内出现延迟返回的选项；隔离运行同一场景可以通过。
+
+**根因**
+
+本地 mock 明确把模型接口延迟 1.2 秒，完整套件还包含 Electron 调度、刷新和 IPC 往返。只等待 DOM 选项无法区分“请求未触发”“响应被请求世代丢弃”和“已请求但完整套件调度超出过紧等待预算”。
+
+**正确做法**
+
+在本地 E2E 服务端记录目标接口请求次数。操作前保存基线，点击后先轮询确认请求次数增长，再使用覆盖已知网络延迟和 Electron 调度余量的有限超时等待控件更新。
+
+**验证方式**
+
+隔离运行本地集成场景，再运行完整 `npm run test:e2e`；两次都必须先观察到新的模型请求，最终模型下拉框包含延迟返回的选项。本次完整套件 6 项全部通过。
+
+**禁止事项**
+
+不要在没有请求证据时盲目增大 DOM 超时；不要因测试调度余量删除生产请求世代保护；不要用无限等待掩盖真实漏请求。
+
+**相关文件或命令**
+
+- `tests/e2e/electron-smoke.spec.ts`
+- `src/renderer/App.tsx`
+- `npm run test:e2e -- --grep "connects site entry"`
+- `npm run test:e2e`
+
+**适用范围**
+
+Electron IPC 后异步补齐下拉选项、搜索建议或其他已知延迟数据的端到端测试。

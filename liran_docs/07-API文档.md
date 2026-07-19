@@ -119,3 +119,29 @@
 - `https://codexradar.com/current.json`：只作为公开页面数据源，不进入 sub2api 认证、Token、数据库或 CSV 流程。结构字段缺失、非 2xx、网络失败和超时必须有独立测试。
 - 朋友版新增的任何字段若无法从真实上游源码或当前响应证实，必须标记“待确认”，不得写入 API 合同或伪造默认值。
 - refresh 失败后的密码重登由本地 HTTP 集成测试覆盖；不得主动破坏真实站点 Token 来制造失败。
+
+## 1.2.1 IPC 与加载增量
+
+- `sites:refresh-all`：主窗口总览触发全部站点调度刷新；当前站点优先、受控并发、同批去重、单站失败隔离。
+- `keys:contexts`：一次返回按 site ID 分组的脱敏 Key 摘要与偏好，不包含完整 Key。
+- `keys:changed`：站点级 Key context 更新事件；Renderer 仅重载对应 site ID，旧异步结果不得覆盖其他站点。
+- `usage:groups`：按 site ID 独立读取 `/groups/available` 并返回使用记录分组选项，不等待模型接口。
+- `usage:models`：按 site ID 独立读取 `/usage/dashboard/models` 并返回模型选项；失败或延迟不得清空已成功的分组和 Key。
+- `sites:floating:set`：接受四角预设或经 schema 校验的 custom x/y；主进程负责显示器工作区校正与原生窗口移动。
+- `/keys` 结果标准化后立即发布安全摘要，groups、models、rates 和 usage 可分别随后补齐；不得等待逐 Key 今日统计或任一慢筛选接口才显示其他下拉数据。
+
+## 1.3.0 倍率查询与 IPC
+
+- `GET /groups/available?timezone=<IANA>`：单站倍率列表的独立只读来源，不依赖 Key、余额或全站刷新；只标准化 `id/name/description/platform/status/rate_multiplier` 等明确白名单字段。
+- `rates:contexts`：返回各站缓存倍率、状态、抓取时间和充值比例；缓存优先显示。
+- `rates:refresh`：按 site ID 刷新一个站点倍率，同站并发请求复用；不调用 `/keys`。
+- `rates:refresh-all`：最多 3 个站点并发，单站失败隔离并保留旧缓存。
+- `rates:ratio:set`：只更新本地正数充值比例，不发网络请求。
+- 2026-07-19 三站只读结果：walkai 18 个分组/4 个平台，maok 8 个分组/2 个平台，hanhegufei 21 个分组/4 个平台；未记录原始响应、账号、Token、Cookie 或完整 Key。
+
+## 1.3.1 接口复用与请求边界
+
+- 倍率稳定性与快捷渠道弹窗继续复用 `channels:list` 和 `channels:status`，没有新增后端接口或放宽共享契约；列表摘要用于全部渠道卡和分组唯一匹配，详情只在弹窗打开后读取。
+- 弹窗未打开时不会因倍率、站点或全站刷新触发渠道 IPC；页面会话缓存命中时关闭重开不再次请求，主动重试绕过缓存。
+- 悬浮窗复用 `usage:list`，每站请求 `{ period:'30d', page:1, pageSize:1, sort:'desc' }`；只读取标准化 `createdAt` 比较站点，不保存记录内容或新增持久化字段。
+- 2026-07-19 三站只读复测：walkai 18 个倍率分组、maok 8 个、hanhegufei 22 个；三站 usage list、channel list 和 channel detail 均返回 supported。

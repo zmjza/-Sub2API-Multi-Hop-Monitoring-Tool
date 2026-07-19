@@ -3,11 +3,12 @@ import { computeBackoffMs, concurrencyForSiteCount } from '../domain/scheduler.j
 export class RefreshScheduler {
   private sites: string[] = [];
   private currentSite?: string;
-  private running = new Set<string>();
+  private running = new Map<string, Promise<void>>();
   private lastManual = new Map<string, number>();
   private stopped = false;
   private failures = new Map<string, number>();
   private nextAllowed = new Map<string, number>();
+  private allRun?: Promise<void>;
 
   constructor(private readonly refresh: (siteId: string) => Promise<unknown>) {}
 
@@ -33,14 +34,23 @@ export class RefreshScheduler {
     await this.refreshNow(siteId);
   }
 
+  manualRefreshAll(): Promise<void> {
+    for (const siteId of this.sites) this.nextAllowed.delete(siteId);
+    return this.refreshAll();
+  }
+
   async refreshNow(siteId: string): Promise<void> {
-    if (
-      this.stopped ||
-      this.running.has(siteId) ||
-      (this.nextAllowed.get(siteId) ?? 0) > Date.now()
-    )
-      return;
-    this.running.add(siteId);
+    if (this.stopped || (this.nextAllowed.get(siteId) ?? 0) > Date.now()) return;
+    const existing = this.running.get(siteId);
+    if (existing) return existing;
+    const run = this.runSite(siteId).finally(() => {
+      if (this.running.get(siteId) === run) this.running.delete(siteId);
+    });
+    this.running.set(siteId, run);
+    return run;
+  }
+
+  private async runSite(siteId: string): Promise<void> {
     try {
       await this.refresh(siteId);
       this.failures.delete(siteId);
@@ -50,13 +60,20 @@ export class RefreshScheduler {
       this.failures.set(siteId, attempt + 1);
       this.nextAllowed.set(siteId, Date.now() + computeBackoffMs(attempt));
       throw error;
-    } finally {
-      this.running.delete(siteId);
     }
   }
 
-  async refreshAll(): Promise<void> {
-    if (this.stopped) return;
+  refreshAll(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
+    if (this.allRun) return this.allRun;
+    const run = this.runAll().finally(() => {
+      if (this.allRun === run) this.allRun = undefined;
+    });
+    this.allRun = run;
+    return run;
+  }
+
+  private async runAll(): Promise<void> {
     const ordered = [...this.sites].sort((a, b) =>
       a === this.currentSite ? -1 : b === this.currentSite ? 1 : 0,
     );

@@ -344,6 +344,23 @@ test('persists floating placement and general settings across restarts', async (
   expect(placement.bounds?.x).toBe(placement.area.x + 12);
   expect(placement.bounds?.y).toBe(placement.area.y + placement.area.height - 260 - 12);
 
+  const customBounds = {
+    x: placement.area.x + 96,
+    y: placement.area.y + 88,
+    width: 380,
+    height: 260,
+  };
+  await first.evaluate(({ BrowserWindow }, bounds) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width <= 500)
+      ?.setBounds(bounds);
+  }, customBounds);
+  await expect
+    .poll(() => main.evaluate(async () => window.sub2apiDesktop?.sites.floatingSettings()), {
+      timeout: 3_000,
+    })
+    .toEqual({ position: 'custom', x: customBounds.x, y: customBounds.y, opacity: 84 });
+
   await main.getByLabel('自动刷新频率').selectOption('10');
   await main.getByLabel('数据过期提示').selectOption('30');
   await main.getByRole('button', { name: '切换悬浮窗' }).click();
@@ -382,8 +399,19 @@ test('persists floating placement and general settings across restarts', async (
     )
     .toEqual({
       app: { refreshIntervalMinutes: 10, floatingEnabled: false, staleAfterMinutes: 30 },
-      floating: { position: 'bottom-left', opacity: 84 },
+      floating: { position: 'custom', x: customBounds.x, y: customBounds.y, opacity: 84 },
     });
+  expect(
+    await second.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((candidate) => candidate.getBounds().width <= 500)
+        ?.getBounds(),
+    ),
+  ).toEqual(customBounds);
+  await restartedMain.getByLabel('悬浮窗固定位置').selectOption('bottom-left');
+  await expect
+    .poll(() => restartedMain.evaluate(async () => window.sub2apiDesktop?.sites.floatingSettings()))
+    .toEqual({ position: 'bottom-left', opacity: 84 });
   await second.close();
 });
 
@@ -428,6 +456,62 @@ test('restores a visible main-window position from local settings', async () => 
 });
 
 test('connects site entry, overview, usage, channels, and floating shell to a local sub2api server', async () => {
+  let keysRequestCount = 0;
+  let availableRatesRequestCount = 0;
+  let channelRequestCount = 0;
+  let channelDetailRequestCount = 0;
+  let channelDelayMs = 0;
+  let channelListMode: 'success' | 'error' = 'success';
+  let modelsRequestCount = 0;
+  let floatingLatestHost: string | undefined;
+  let floatingLatestSequence = 0;
+  let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
+  const availableRateGroups = [
+    {
+      id: 'rate-openai-a',
+      name: 'OpenAI 便宜 A',
+      description: '便宜稳定',
+      platform: 'openai',
+      status: 'active',
+      rate_multiplier: 0.4,
+    },
+    {
+      id: 'rate-openai-b',
+      name: 'OpenAI 便宜 B',
+      description: '同价备用',
+      platform: 'openai',
+      status: 'active',
+      rate_multiplier: 0.4,
+    },
+    {
+      id: 'rate-claude',
+      name: 'Claude 通道',
+      platform: 'anthropic',
+      status: 'active',
+      rate_multiplier: 0.8,
+    },
+    {
+      id: 'rate-gemini',
+      name: 'Gemini 通道',
+      platform: 'google',
+      status: 'active',
+      rate_multiplier: 0.6,
+    },
+    {
+      id: 'rate-grok',
+      name: 'Grok 通道',
+      platform: 'xai',
+      status: 'active',
+      rate_multiplier: 0.7,
+    },
+    {
+      id: 'rate-local',
+      name: '本地模型通道',
+      platform: 'Local-Lab',
+      status: 'active',
+      rate_multiplier: 0.5,
+    },
+  ];
   const server = createServer((request, response) => {
     response.setHeader('content-type', 'application/json');
     const url = request.url ?? '';
@@ -446,7 +530,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       );
     if (url === '/api/v1/user/profile')
       return response.end(JSON.stringify({ data: { balance: 8.5, status: 'active' } }));
-    if (url === '/api/v1/keys' || url.startsWith('/api/v1/keys?'))
+    if (url === '/api/v1/keys' || url.startsWith('/api/v1/keys?')) {
+      keysRequestCount += 1;
       return response.end(
         JSON.stringify({
           data: [
@@ -458,14 +543,48 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
               quota: 80.88,
               quota_used: 66.5,
             },
+            {
+              id: 'key-e2e-manual',
+              name: 'Manual E2E Key',
+              status: 'active',
+              group_id: 'g2',
+              quota: 20,
+              quota_used: 5,
+            },
           ],
         }),
       );
+    }
+    if (url.startsWith('/api/v1/groups/available?timezone=')) {
+      availableRatesRequestCount += 1;
+      if (availableRatesMode === 'error') {
+        response.statusCode = 503;
+        return response.end(JSON.stringify({ message: 'temporarily unavailable' }));
+      }
+      const body = JSON.stringify({
+        data: availableRatesMode === 'empty' ? [] : availableRateGroups,
+      });
+      if (availableRatesMode === 'delayed') {
+        setTimeout(() => response.end(body), 600);
+        return;
+      }
+      return response.end(body);
+    }
     if (url === '/api/v1/groups/available')
-      return response.end(JSON.stringify({ data: [{ id: 'g1', name: 'E2E 分组', ratio: 1.2 }] }));
+      return response.end(
+        JSON.stringify({
+          data: [
+            { id: 'g1', name: 'E2E 分组', ratio: 1.2 },
+            { id: 'g2', name: '独立分组', ratio: 0.8 },
+          ],
+        }),
+      );
     if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: { g1: 1.4 } }));
-    if (url.startsWith('/api/v1/usage/dashboard/models'))
-      return response.end(JSON.stringify({ data: { models: ['test-model'] } }));
+    if (url.startsWith('/api/v1/usage/dashboard/models')) {
+      modelsRequestCount += 1;
+      setTimeout(() => response.end(JSON.stringify({ data: { models: ['test-model'] } })), 1_200);
+      return;
+    }
     if (url.startsWith('/api/v1/usage/stats'))
       return response.end(
         JSON.stringify({
@@ -481,19 +600,24 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           },
         }),
       );
-    if (url.startsWith('/api/v1/usage?'))
+    if (url.startsWith('/api/v1/usage?')) {
+      const requestHost = String(request.headers.host ?? '').split(':')[0];
+      const latestForHost = floatingLatestHost === requestHost;
+      const seconds = latestForHost ? 38 + floatingLatestSequence * 2 : 38;
       return response.end(
         JSON.stringify({
           data: {
             items: [
               {
-                created_at: '2026-07-13T00:00:00Z',
+                created_at: `2026-07-19T14:54:${String(seconds).padStart(2, '0')}+08:00`,
                 api_key_name: 'E2E Key',
                 model: 'test-model',
                 reasoning_effort: 'high',
                 group_id: 'g1',
                 group_name: 'E2E 分组',
-                total_tokens: 1234,
+                input_tokens: 2008,
+                output_tokens: 1879,
+                cache_read_tokens: 65300,
                 actual_cost: 0.25,
                 first_token_ms: 9999,
                 duration_ms: 15000,
@@ -502,22 +626,47 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           },
         }),
       );
-    if (url === '/api/v1/channel-monitors')
+    }
+    if (url === '/api/v1/channel-monitors') {
+      channelRequestCount += 1;
+      if (channelListMode === 'error') {
+        response.statusCode = 503;
+        return response.end(JSON.stringify({ message: 'temporarily unavailable' }));
+      }
+      const body = JSON.stringify({
+        data: Array.from({ length: 7 }, (_, index) => ({
+          id: `channel-e2e-${index + 1}`,
+          name: `E2E 渠道 ${index + 1}`,
+          platform: index === 0 ? 'openai' : 'Mock',
+          group_name: index === 0 ? 'OpenAI 便宜 A' : `其他分组 ${index + 1}`,
+          primary_model: index === 0 ? 'gpt-e2e' : 'mock-model',
+          primary_status: 'normal',
+          availability_7d: 99.9,
+          timeline: [
+            { status: 'normal', checked_at: '2026-07-19T15:00:00+08:00', latency_ms: 120 },
+          ],
+        })),
+      });
+      if (channelDelayMs) {
+        setTimeout(() => response.end(body), channelDelayMs);
+        return;
+      }
+      return response.end(body);
+    }
+    if (url.startsWith('/api/v1/channel-monitors/channel-e2e-') && url.endsWith('/status')) {
+      channelDetailRequestCount += 1;
       return response.end(
         JSON.stringify({
-          data: Array.from({ length: 7 }, (_, index) => ({
-            id: `channel-e2e-${index + 1}`,
-            name: `E2E 渠道 ${index + 1}`,
-            platform: 'Mock',
-          })),
+          data: {
+            id: 'channel-e2e-1',
+            name: 'E2E 渠道 1',
+            platform: 'openai',
+            group_name: 'OpenAI 便宜 A',
+            models: [{ model: 'gpt-e2e', latest_status: 'normal', availability_7d: 99.9 }],
+          },
         }),
       );
-    if (url.startsWith('/api/v1/channel-monitors/channel-e2e-') && url.endsWith('/status'))
-      return response.end(
-        JSON.stringify({
-          data: { name: 'E2E 渠道 1', average_latency_ms: 120, availability_7d: 99.9 },
-        }),
-      );
+    }
     response.statusCode = 404;
     response.end(JSON.stringify({ message: 'missing' }));
   });
@@ -577,9 +726,208 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     ),
   ).toBe(false);
   await captureEvidence(main, '01-overview');
-  await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e');
-  await expect(main.locator('.quota-summary')).toContainText('总额 $80.88');
-  await expect(main.locator('.quota-summary')).toContainText('已用 $66.50');
+  const firstSiteCard = main.locator('.site-card').filter({ hasText: '本地集成备注' });
+  await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e-manual');
+  await expect(main.locator('.quota-summary')).toContainText('总额 $20.00');
+  await main.getByLabel('本地集成站点 默认 Key').selectOption('auto');
+  await expect(firstSiteCard.locator('.quota-summary')).toHaveCount(0);
+  await expect(firstSiteCard.locator('.site-card-balance')).toContainText('$8.50');
+  await expect(firstSiteCard.locator('.site-card-meta')).toContainText('1.4x');
+  await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e-manual');
+  await expect(main.locator('.quota-summary')).toContainText('总额 $20.00');
+  const secondSiteCard = main.locator('.site-card').filter({ hasText: 'localhost' });
+  const selectedSiteIdBeforeRates = await main.evaluate(async () => {
+    const dashboard = await window.sub2apiDesktop?.sites.list();
+    return dashboard?.currentSiteId;
+  });
+  await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('custom');
+  await firstSiteCard.getByLabel('本地集成站点 自定义充值比例').fill('-1');
+  await firstSiteCard.getByRole('button', { name: '保存充值比例' }).click();
+  await expect(firstSiteCard.getByText('请输入大于 0 的数字')).toBeVisible();
+  await firstSiteCard.getByLabel('本地集成站点 自定义充值比例').fill('2.5');
+  await firstSiteCard.getByRole('button', { name: '保存充值比例' }).click();
+  await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('custom');
+  await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('10');
+  await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('10');
+  await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
+  await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
+  await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
+  expect(
+    await main.locator('.rate-comparison-list').evaluate((list) => {
+      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+      return {
+        order: cards.map((card) => card.dataset.platform),
+        oneRow:
+          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
+        scrollable: list.scrollWidth > list.clientWidth,
+        colors: Object.fromEntries(
+          cards
+            .slice(0, 4)
+            .map((card) => [card.dataset.platform, getComputedStyle(card).backgroundColor]),
+        ),
+      };
+    }),
+  ).toEqual({
+    order: ['openai', 'claude', 'gemini', 'grok', 'local-lab'],
+    oneRow: true,
+    scrollable: true,
+    colors: {
+      openai: 'rgb(241, 251, 244)',
+      claude: 'rgb(255, 248, 239)',
+      gemini: 'rgb(241, 248, 255)',
+      grok: 'rgb(241, 243, 245)',
+    },
+  });
+  await captureEvidence(main, '08-rate-comparison');
+  const ratesBeforePopoverRefresh = availableRatesRequestCount;
+  const keysBeforePopoverRefresh = keysRequestCount;
+  await firstSiteCard.getByRole('button', { name: '查看倍率' }).click();
+  await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toBeVisible();
+  await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toContainText(
+    '并列最低',
+  );
+  await main.getByLabel('搜索分组倍率').fill('便宜');
+  await expect(main.locator('.rate-group-list')).toContainText('OpenAI 便宜 A');
+  await expect(main.locator('.rate-group-list')).not.toContainText('Claude 通道');
+  await main.getByLabel('搜索分组倍率').fill('');
+  await main.getByRole('button', { name: 'Claude', exact: true }).click();
+  await expect(main.locator('.rate-group-list')).toContainText('Claude 通道');
+  await expect(main.locator('.rate-group-list')).not.toContainText('OpenAI 便宜 A');
+  expect(
+    await main.getByRole('dialog', { name: '本地集成站点 分组倍率' }).evaluate((dialog) => {
+      const rect = dialog.getBoundingClientRect();
+      return {
+        insideViewport:
+          rect.left >= 0 &&
+          rect.top >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.bottom <= window.innerHeight,
+        hasScrollableList: getComputedStyle(dialog.querySelector('.rate-group-list')!).overflowY,
+      };
+    }),
+  ).toEqual({ insideViewport: true, hasScrollableList: 'auto' });
+  availableRatesMode = 'delayed';
+  const ratesBeforeLoading = availableRatesRequestCount;
+  await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
+  await expect(main.getByRole('button', { name: '刷新当前站点倍率' })).toBeDisabled();
+  await expect
+    .poll(() => availableRatesRequestCount, { timeout: 15_000 })
+    .toBeGreaterThan(ratesBeforeLoading);
+  availableRatesMode = 'success';
+  await expect(main.getByRole('button', { name: '刷新当前站点倍率' })).toBeEnabled();
+  await expect
+    .poll(() => availableRatesRequestCount, { timeout: 15_000 })
+    .toBeGreaterThan(ratesBeforePopoverRefresh);
+  expect(keysRequestCount).toBe(keysBeforePopoverRefresh);
+
+  availableRatesMode = 'error';
+  await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
+  await expect(main.getByText('倍率更新失败', { exact: true })).toBeVisible();
+  await expect(main.getByText('正在显示上次缓存结果', { exact: true })).toBeVisible();
+  availableRatesMode = 'success';
+  await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
+  await expect(main.getByText('倍率更新失败', { exact: true })).toHaveCount(0);
+
+  availableRatesMode = 'empty';
+  await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
+  await expect(main.getByText('暂无可用分组倍率', { exact: true })).toBeVisible();
+  availableRatesMode = 'success';
+  await main.getByRole('button', { name: '重试', exact: true }).click();
+  await expect(main.locator('.rate-group-list')).toContainText('Claude 通道');
+  await main.getByRole('button', { name: '关闭倍率弹窗' }).click();
+  await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toHaveCount(0);
+
+  const channelsBeforeShortcut = channelRequestCount;
+  const detailsBeforeShortcut = channelDetailRequestCount;
+  channelDelayMs = 300;
+  await firstSiteCard.getByLabel('查看 本地集成站点 渠道状态').click();
+  await expect(main.getByText('正在读取渠道状态…', { exact: true })).toBeVisible();
+  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
+    'E2E 渠道 1',
+  );
+  await expect(
+    main
+      .getByRole('dialog', { name: '本地集成站点 渠道状态' })
+      .locator('.rate-channel-list > button'),
+  ).toHaveCount(7);
+  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
+    'E2E 渠道 7',
+  );
+  await captureEvidence(main, '09-channel-status-popover');
+  expect(channelRequestCount).toBeGreaterThan(channelsBeforeShortcut);
+  expect(channelDetailRequestCount).toBeGreaterThan(detailsBeforeShortcut);
+  await main.keyboard.press('Escape');
+  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toHaveCount(0);
+  const channelsAfterFirstOpen = channelRequestCount;
+  const detailsAfterFirstOpen = channelDetailRequestCount;
+  await firstSiteCard.getByLabel('查看 本地集成站点 渠道状态').click();
+  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
+    'E2E 渠道 1',
+  );
+  expect(channelRequestCount).toBe(channelsAfterFirstOpen);
+  expect(channelDetailRequestCount).toBe(detailsAfterFirstOpen);
+  await main.keyboard.press('Escape');
+  channelListMode = 'error';
+  await secondSiteCard.getByLabel('查看 localhost 渠道状态').click();
+  await expect(main.getByText('渠道状态读取失败', { exact: true })).toBeVisible();
+  channelListMode = 'success';
+  await main
+    .getByRole('dialog', { name: 'localhost 渠道状态' })
+    .getByRole('button', { name: '重试', exact: true })
+    .click();
+  await expect(
+    main.getByRole('dialog', { name: 'localhost 渠道状态' }).locator('.rate-channel-list > button'),
+  ).toHaveCount(7);
+  await main.keyboard.press('Escape');
+
+  await firstSiteCard.getByRole('button', { name: '查看倍率' }).click();
+  await main.keyboard.press('Escape');
+  await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toHaveCount(0);
+  await firstSiteCard.getByRole('button', { name: '查看倍率' }).click();
+  const viewport = await main.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  await main.mouse.click(viewport.width - 4, viewport.height - 4);
+  await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toHaveCount(0);
+  await secondSiteCard.getByRole('button', { name: '查看倍率' }).click();
+  await expect(main.getByRole('dialog', { name: 'localhost 分组倍率' })).toBeVisible();
+  await main.keyboard.press('Escape');
+  await expect(main.getByLabel('站点备注')).toHaveCount(0);
+  expect(
+    await main.evaluate(async () => {
+      const dashboard = await window.sub2apiDesktop?.sites.list();
+      return dashboard?.currentSiteId;
+    }),
+  ).toBe(selectedSiteIdBeforeRates);
+  await expect(main.locator('.quota-summary')).toContainText('已用 $5.00');
+  await secondSiteCard.click();
+  await expect(firstSiteCard.locator('select.overview-key-select')).toHaveValue('key-e2e-manual');
+  await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $20.00');
+  await secondSiteCard.locator('select.overview-key-select').selectOption('key-e2e-manual');
+  await firstSiteCard.click();
+  await expect(secondSiteCard.locator('select.overview-key-select')).toHaveValue('key-e2e-manual');
+  await expect(secondSiteCard.locator('.quota-summary')).toContainText('总额 $20.00');
+  const refreshBefore = await main.evaluate(async () => {
+    const dashboard = await window.sub2apiDesktop?.sites.list();
+    return Object.fromEntries(dashboard?.sites.map((site) => [site.id, site.fetchedAt ?? 0]) ?? []);
+  });
+  const keysBeforeRefreshAll = keysRequestCount;
+  await main.getByRole('button', { name: '刷新站点' }).click();
+  await expect(main.getByRole('button', { name: '刷新站点' })).toBeDisabled();
+  await expect(main.getByText('刷新中', { exact: true })).toHaveCount(2);
+  await expect
+    .poll(() => keysRequestCount, { timeout: 15_000 })
+    .toBeGreaterThan(keysBeforeRefreshAll);
+  await expect(main.getByRole('button', { name: '刷新站点' })).toBeEnabled({ timeout: 15_000 });
+  await expect
+    .poll(() =>
+      main.evaluate(async (before) => {
+        const dashboard = await window.sub2apiDesktop?.sites.list();
+        return Boolean(
+          dashboard?.sites.length &&
+          dashboard.sites.every((site) => (site.fetchedAt ?? 0) > (before[site.id] ?? 0)),
+        );
+      }, refreshBefore),
+    )
+    .toBe(true);
   await captureEvidence(main, '06-overview-quota');
   await expect
     .poll(() =>
@@ -589,17 +937,30 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
         return siteId ? window.sub2apiDesktop?.sites.keyPreference(siteId) : undefined;
       }),
     )
-    .toMatchObject({ mode: 'manual', keyId: 'key-e2e' });
+    .toMatchObject({ mode: 'manual', keyId: 'key-e2e-manual' });
   await main.getByRole('button', { name: '使用记录', exact: true }).click();
   await main.locator('.usage-summary').scrollIntoViewIfNeeded();
   await expect(main.locator('.usage-summary').getByText('1.23K', { exact: true })).toBeVisible();
-  await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model']);
-  await expect(main.getByLabel('分组').locator('option')).toContainText(['全部', 'E2E 分组']);
+  await expect(main.getByLabel('分组').locator('option')).toContainText(
+    ['全部', 'E2E 分组', '独立分组'],
+    { timeout: 1_000 },
+  );
+  await expect(main.getByLabel('模型').locator('option')).not.toContainText('test-model');
+  const usageSiteRefreshStartedAt = Date.now();
+  const modelsBeforeRefresh = modelsRequestCount;
+  await main.locator('.app-toolbar').getByRole('button', { name: '刷新' }).click();
+  await expect.poll(() => modelsRequestCount).toBeGreaterThan(modelsBeforeRefresh);
+  await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model'], {
+    timeout: 5_000,
+  });
   await expect(main.locator('.usage-table-panel').getByText('高', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel').getByText('首字', { exact: true })).toBeVisible();
-  await expect(
-    main.locator('.usage-table-panel').getByText(/\d{2}月 \d{2}日 \d{2}时 \d{2}分 \d{2}秒/),
-  ).toBeVisible();
+  await expect(main.locator('.usage-table-panel')).not.toContainText('缓存 Token');
+  const tokenCell = main.locator('.usage-token-cell').first();
+  await expect(tokenCell).toContainText('2,008');
+  await expect(tokenCell).toContainText('1,879');
+  await expect(tokenCell).toContainText('65.3K');
+  await expect(main.locator('.usage-table-panel').getByText('2026/07/19 14:54:38')).toBeVisible();
   await captureEvidence(main, '02-usage');
   await main.getByRole('button', { name: '导出 CSV' }).click();
   await expect
@@ -645,14 +1006,46 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   for (const candidate of await application.windows())
     if ((await candidate.locator('.floating-window').count()) > 0) floating = candidate;
   if (floating) {
-    await expect(floating.getByText('本地集成站点', { exact: true })).toBeVisible();
+    floatingLatestHost = '127.0.0.1';
+    floatingLatestSequence = 1;
+    await main.getByRole('button', { name: '最小化' }).click();
+    await expect(floating.getByText('本地集成备注', { exact: true })).toBeVisible();
+    floatingLatestHost = 'localhost';
+    floatingLatestSequence = 2;
+    await expect(floating.locator('.floating-header strong')).toContainText('localhost', {
+      timeout: 10_000,
+    });
+    await expect(floating.locator('.floating-actions button')).toHaveCount(2);
     expect(
       await floating.evaluate(() => {
         const metrics = document.querySelector('.floating-metrics')?.getBoundingClientRect();
         const footer = document.querySelector('.floating-window footer')?.getBoundingClientRect();
-        return Boolean(metrics && footer && metrics.bottom <= footer.top);
+        const actions = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('.floating-actions button'),
+        ).map((button) => button.getBoundingClientRect());
+        return {
+          noOverlap: Boolean(metrics && footer && metrics.bottom <= footer.top),
+          adjacent:
+            actions.length === 2 &&
+            actions[1]!.left - actions[0]!.right >= 0 &&
+            actions[1]!.left - actions[0]!.right <= 6,
+          rightAligned:
+            actions.length === 2 && footer ? footer.right - actions[1]!.right <= 24 : false,
+        };
       }),
-    ).toBe(true);
+    ).toEqual({ noOverlap: true, adjacent: true, rightAligned: true });
+    const refreshCooldownRemaining = 5_100 - (Date.now() - usageSiteRefreshStartedAt);
+    if (refreshCooldownRemaining > 0)
+      await new Promise((resolve) => setTimeout(resolve, refreshCooldownRemaining));
+    const keysBeforeFloatingRefresh = keysRequestCount;
+    await floating.getByRole('button', { name: '刷新悬浮窗' }).click();
+    await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeDisabled();
+    await expect
+      .poll(() => keysRequestCount, { timeout: 15_000 })
+      .toBeGreaterThan(keysBeforeFloatingRefresh);
+    await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
+      timeout: 15_000,
+    });
     await captureEvidence(floating, '05-floating');
   }
   await application.close();

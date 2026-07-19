@@ -4,12 +4,12 @@ export interface UsageRecord {
   model: string;
   groupName: string;
   requestType: string;
-  tokens: string;
+  inputTokens: string;
+  outputTokens: string;
+  cacheReadTokens: string;
   actualCost: string;
   keyLabel: string;
   reasoningEffort?: string;
-  cacheReadTokens?: string;
-  cacheCreationTokens?: string;
   firstTokenMs?: string;
   firstTokenValue?: number;
   durationMs?: string;

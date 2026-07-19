@@ -14,6 +14,7 @@
 - [Knowledge-base rules and full index](docs/pitfalls/README.md)
 - [Electron build and renderer loading](docs/pitfalls/electron-build.md)
 - [Dependency and tooling behavior](docs/pitfalls/tooling.md)
+- [Rate comparison and channel stability](docs/pitfalls/rate-comparison.md)
 
 ## Release Rule
 

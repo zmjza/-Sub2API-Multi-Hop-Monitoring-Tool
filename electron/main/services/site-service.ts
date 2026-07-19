@@ -17,8 +17,16 @@ import type {
   KeyPreference,
   NotificationSettings,
   BatchSiteInput,
+  RateContexts,
+  RateSiteContext,
 } from '../../shared/contracts.js';
-import { notificationSettingsSchema } from '../../shared/contracts.js';
+import {
+  apiKeySummarySchema,
+  availableRateGroupSchema,
+  notificationSettingsSchema,
+  rateContextsSchema,
+  rateSiteContextSchema,
+} from '../../shared/contracts.js';
 import type { ApiKeySummary } from '../domain/types.js';
 
 interface StoredSite {
@@ -37,12 +45,19 @@ export class SiteService {
     string,
     { keyId?: string; defaultKeyLabel?: string; rate?: number }
   >();
+  private readonly automaticRuntime = new Map<
+    string,
+    { keyId?: string; defaultKeyLabel?: string; rate?: number }
+  >();
   private readonly keys = new Map<string, ApiKeySummary[]>();
   private readonly inflightRefresh = new Map<string, Promise<SiteSummary>>();
+  private readonly rateStates = new Map<string, RateSiteContext>();
+  private readonly inflightRateRefresh = new Map<string, Promise<RateSiteContext>>();
   private progressListener?: (
     siteId: string,
     phase: 'profile' | 'keys' | 'groups' | 'rates' | 'usage',
   ) => void;
+  private keyContextListener?: (siteId: string) => void;
 
   constructor(
     private readonly db: AppDatabase,
@@ -55,12 +70,55 @@ export class SiteService {
         /* discard corrupt cache */
       }
     }
+    for (const site of db.listSites()) {
+      const rateCache = db.getRateCache(site.id);
+      const cachedGroups = availableRateGroupSchema.array().safeParse(rateCache.groups);
+      if (
+        cachedGroups.success &&
+        typeof rateCache.fetchedAt === 'number' &&
+        Number.isFinite(rateCache.fetchedAt) &&
+        rateCache.fetchedAt >= 0
+      )
+        this.rateStates.set(site.id, {
+          siteId: site.id,
+          groups: cachedGroups.data,
+          fetchedAt: rateCache.fetchedAt,
+          source: 'cache',
+          state: cachedGroups.data.length ? 'success' : 'empty',
+        });
+      const cached = apiKeySummarySchema.array().safeParse(db.getKeyCache(site.id));
+      if (!cached.success) continue;
+      this.keys.set(site.id, cached.data);
+      const preference = db.getKeyPreference(site.id);
+      const automatic = cached.data.find((key) => key.status === 'active');
+      const manual =
+        preference.mode === 'manual'
+          ? cached.data.find((key) => key.id === preference.keyId && key.status === 'active')
+          : undefined;
+      const automaticState = {
+        keyId: automatic?.id,
+        defaultKeyLabel: automatic?.maskedLabel,
+        rate: automatic?.rate,
+      };
+      this.automaticRuntime.set(site.id, automaticState);
+      const selected = manual ?? automatic;
+      if (selected)
+        this.runtime.set(site.id, {
+          keyId: selected.id,
+          defaultKeyLabel: selected.maskedLabel,
+          rate: selected.rate,
+        });
+    }
   }
 
   setProgressListener(
     listener: (siteId: string, phase: 'profile' | 'keys' | 'groups' | 'rates' | 'usage') => void,
   ): void {
     this.progressListener = listener;
+  }
+
+  setKeyContextListener(listener: (siteId: string) => void): void {
+    this.keyContextListener = listener;
   }
 
   listSites(): DashboardSnapshot {
@@ -91,15 +149,150 @@ export class SiteService {
     return this.toSummary(site);
   }
 
+  rateContexts(): RateContexts {
+    const sites = Object.fromEntries(
+      this.db.listSites().map((site) => [
+        site.id,
+        this.rateStates.get(site.id) ?? {
+          siteId: site.id,
+          groups: [],
+          source: 'none' as const,
+          state: 'empty' as const,
+        },
+      ]),
+    );
+    return rateContextsSchema.parse({ sites, ratios: this.db.getRechargeRatios() });
+  }
+
+  setRechargeRatio(siteId: string, ratio: number): RateContexts {
+    if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
+    this.db.setRechargeRatio(siteId, ratio);
+    return this.rateContexts();
+  }
+
+  refreshRateGroups(siteId: string): Promise<RateSiteContext> {
+    const existing = this.inflightRateRefresh.get(siteId);
+    if (existing) return existing;
+    const request = this.fetchRateGroups(siteId).finally(() => {
+      if (this.inflightRateRefresh.get(siteId) === request) this.inflightRateRefresh.delete(siteId);
+    });
+    this.inflightRateRefresh.set(siteId, request);
+    return request;
+  }
+
+  async refreshAllRateGroups(): Promise<RateContexts> {
+    const siteIds = this.db.listSites().map((site) => site.id);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < siteIds.length) {
+        const siteId = siteIds[cursor++];
+        if (siteId) await this.refreshRateGroups(siteId);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, siteIds.length) }, worker));
+    return this.rateContexts();
+  }
+
+  private async fetchRateGroups(siteId: string): Promise<RateSiteContext> {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    const credential = site ? this.vault.read(site.id) : undefined;
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    if (!credential?.accessToken) {
+      const context = this.rateErrorContext(siteId, 'auth-required', '需要重新登录');
+      this.rateStates.set(siteId, context);
+      return context;
+    }
+    try {
+      const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+      const adapter = new Sub2ApiAdapter(client);
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const readGroups = (accessToken: string) =>
+        adapter.readAvailableRateGroups(accessToken, timezone);
+      let groups: Awaited<ReturnType<Sub2ApiAdapter['readAvailableRateGroups']>> | undefined;
+      try {
+        groups = await readGroups(credential.accessToken);
+      } catch (error) {
+        if (!isAuthError(error)) throw error;
+        let recovered = false;
+        if (credential.refreshToken) {
+          try {
+            const renewed = await client.refresh(credential.refreshToken);
+            this.vault.write(siteId, {
+              ...credential,
+              accessToken: renewed.accessToken,
+              refreshToken: renewed.refreshToken,
+            });
+            groups = await readGroups(renewed.accessToken);
+            recovered = true;
+          } catch {
+            /* fall through to password login */
+          }
+        }
+        if (!recovered) {
+          const relogin = await client.login(credential.account, credential.password);
+          this.vault.write(siteId, {
+            ...credential,
+            accessToken: relogin.accessToken,
+            refreshToken: relogin.refreshToken,
+          });
+          groups = await readGroups(relogin.accessToken);
+        }
+      }
+      if (groups === undefined) throw new Error('RATE_SESSION_RECOVERY_FAILED');
+      const fetchedAt = Date.now();
+      const context = rateSiteContextSchema.parse({
+        siteId,
+        groups,
+        fetchedAt,
+        source: 'live',
+        state: groups.length ? 'success' : 'empty',
+      });
+      this.db.setRateCache(siteId, { groups, fetchedAt });
+      this.rateStates.set(siteId, context);
+      return context;
+    } catch (error) {
+      const context = this.rateErrorContext(
+        siteId,
+        isAuthError(error) ? 'auth-required' : 'error',
+        safeMessage(error),
+      );
+      this.rateStates.set(siteId, context);
+      return context;
+    }
+  }
+
+  private rateErrorContext(
+    siteId: string,
+    state: 'error' | 'auth-required',
+    error: string,
+  ): RateSiteContext {
+    const cached = this.rateStates.get(siteId);
+    return rateSiteContextSchema.parse({
+      siteId,
+      groups: cached?.groups ?? [],
+      ...(cached?.fetchedAt === undefined ? {} : { fetchedAt: cached.fetchedAt }),
+      source: cached?.groups.length ? 'cache' : 'none',
+      state,
+      error,
+    });
+  }
+
   deleteSite(siteId: string): DashboardSnapshot {
     if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
     this.vault.remove(siteId);
     this.db.setSiteNote(siteId, '');
+    this.db.deleteSetting(`site:${siteId}:keyPreference`);
+    this.db.deleteSetting(`site:${siteId}:keyCache`);
+    this.db.deleteSetting(`site:${siteId}:rateCache`);
+    this.db.deleteSetting(`site:${siteId}:rechargeRatio`);
     this.db.deleteSite(siteId);
     this.snapshots.delete(siteId);
     this.errors.delete(siteId);
     this.runtime.delete(siteId);
+    this.automaticRuntime.delete(siteId);
     this.keys.delete(siteId);
+    this.rateStates.delete(siteId);
+    this.inflightRateRefresh.delete(siteId);
     return this.listSites();
   }
 
@@ -169,14 +362,8 @@ export class SiteService {
       core.keys,
       Intl.DateTimeFormat().resolvedOptions().timeZone,
     );
-    const selectedKey = selectDefaultKey(core.keys, requestsByKey, undefined);
-    const selected = core.keys.find((key) => key.id === selectedKey);
-    this.runtime.set(id, {
-      keyId: selected?.id,
-      defaultKeyLabel: selected?.maskedLabel,
-      rate: selected?.groupId ? core.rates.get(selected.groupId) : undefined,
-    });
-    this.keys.set(id, core.keys);
+    this.cacheKeys(id, withRates(core.keys, core.rates));
+    this.updateRuntimeKey(id, core.keys, core.rates, requestsByKey);
     return this.toSummary({
       id,
       name: input.name,
@@ -252,12 +439,16 @@ export class SiteService {
       : undefined;
     if (!session || !accessToken)
       session = await client.login(credential.account, credential.password);
-    const adapter = new Sub2ApiAdapter(client, undefined, (phase) =>
-      this.progressListener?.(siteId, phase),
+    const adapter = new Sub2ApiAdapter(
+      client,
+      undefined,
+      (phase) => this.progressListener?.(siteId, phase),
+      (keys) => this.cacheKeys(siteId, keys),
     );
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const core = await adapter.readCore(accessToken ?? session.accessToken, timezone);
+      this.cacheKeys(siteId, withRates(core.keys, core.rates));
       const requestsByKey = await adapter.readTodayRequestsByKey(
         accessToken ?? session.accessToken,
         core.keys,
@@ -271,22 +462,7 @@ export class SiteService {
         snapshot.fetchedAt,
         snapshot.fetchedAt + 120_000,
       );
-      const preference = this.db.getKeyPreference(siteId);
-      const manual =
-        preference.mode === 'manual'
-          ? core.keys.find((key) => key.id === preference.keyId && key.status === 'active')
-          : undefined;
-      const selectedKey =
-        manual?.id ?? selectDefaultKey(core.keys, requestsByKey, this.runtime.get(siteId)?.keyId);
-      if (preference.mode === 'manual' && !manual)
-        this.db.setKeyPreference(siteId, { mode: 'auto' });
-      const selected = core.keys.find((key) => key.id === selectedKey);
-      this.runtime.set(siteId, {
-        keyId: selected?.id,
-        defaultKeyLabel: selected?.maskedLabel,
-        rate: selected?.groupId ? core.rates.get(selected.groupId) : undefined,
-      });
-      this.keys.set(siteId, core.keys);
+      this.updateRuntimeKey(siteId, core.keys, core.rates, requestsByKey);
       this.errors.delete(siteId);
       this.durations.set(
         siteId,
@@ -304,6 +480,7 @@ export class SiteService {
           });
           const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
           const core = await adapter.readCore(renewed.accessToken, timezone);
+          this.cacheKeys(siteId, withRates(core.keys, core.rates));
           const requestsByKey = await adapter.readTodayRequestsByKey(
             renewed.accessToken,
             core.keys,
@@ -317,23 +494,7 @@ export class SiteService {
             snapshot.fetchedAt,
             snapshot.fetchedAt + 120_000,
           );
-          const preference = this.db.getKeyPreference(siteId);
-          const manual =
-            preference.mode === 'manual'
-              ? core.keys.find((key) => key.id === preference.keyId && key.status === 'active')
-              : undefined;
-          const selectedKey =
-            manual?.id ??
-            selectDefaultKey(core.keys, requestsByKey, this.runtime.get(siteId)?.keyId);
-          if (preference.mode === 'manual' && !manual)
-            this.db.setKeyPreference(siteId, { mode: 'auto' });
-          const selected = core.keys.find((key) => key.id === selectedKey);
-          this.runtime.set(siteId, {
-            keyId: selected?.id,
-            defaultKeyLabel: selected?.maskedLabel,
-            rate: selected?.groupId ? core.rates.get(selected.groupId) : undefined,
-          });
-          this.keys.set(siteId, core.keys);
+          this.updateRuntimeKey(siteId, core.keys, core.rates, requestsByKey);
           this.errors.delete(siteId);
           return this.toSummary(site);
         } catch {
@@ -346,6 +507,7 @@ export class SiteService {
             });
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             const core = await adapter.readCore(relogin.accessToken, timezone);
+            this.cacheKeys(siteId, withRates(core.keys, core.rates));
             const requestsByKey = await adapter.readTodayRequestsByKey(
               relogin.accessToken,
               core.keys,
@@ -359,23 +521,7 @@ export class SiteService {
               snapshot.fetchedAt,
               snapshot.fetchedAt + 120_000,
             );
-            const preference = this.db.getKeyPreference(siteId);
-            const manual =
-              preference.mode === 'manual'
-                ? core.keys.find((key) => key.id === preference.keyId && key.status === 'active')
-                : undefined;
-            const selectedKey =
-              manual?.id ??
-              selectDefaultKey(core.keys, requestsByKey, this.runtime.get(siteId)?.keyId);
-            if (preference.mode === 'manual' && !manual)
-              this.db.setKeyPreference(siteId, { mode: 'auto' });
-            const selected = core.keys.find((key) => key.id === selectedKey);
-            this.keys.set(siteId, core.keys);
-            this.runtime.set(siteId, {
-              keyId: selected?.id,
-              defaultKeyLabel: selected?.maskedLabel,
-              rate: selected?.groupId ? core.rates.get(selected.groupId) : undefined,
-            });
+            this.updateRuntimeKey(siteId, core.keys, core.rates, requestsByKey);
             this.errors.delete(siteId);
             return this.toSummary(site);
           } catch {
@@ -430,12 +576,20 @@ export class SiteService {
     );
   }
 
-  async usageFilters(siteId: string) {
+  async usageGroups(siteId: string) {
     const site = this.db.listSites().find((candidate) => candidate.id === siteId);
     const credential = site ? this.vault.read(site.id) : undefined;
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
-    return new Sub2ApiAdapter(client).readUsageFilters(
+    return new Sub2ApiAdapter(client).readUsageGroups(credential.accessToken);
+  }
+
+  async usageModels(siteId: string) {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    const credential = site ? this.vault.read(site.id) : undefined;
+    if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
+    const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+    return new Sub2ApiAdapter(client).readUsageModels(
       credential.accessToken,
       Intl.DateTimeFormat().resolvedOptions().timeZone,
     );
@@ -464,7 +618,7 @@ export class SiteService {
 
   listKeys(siteId: string) {
     return (this.keys.get(siteId) ?? []).map(
-      ({ id, name, maskedLabel, status, groupId, groupName, quota, quotaUsed }) => ({
+      ({ id, name, maskedLabel, status, groupId, groupName, quota, quotaUsed, rate }) => ({
         id,
         name,
         maskedLabel,
@@ -473,6 +627,24 @@ export class SiteService {
         groupName,
         quota,
         quotaUsed,
+        rate,
+      }),
+    );
+  }
+
+  listKeyContexts() {
+    return Object.fromEntries(
+      this.db.listSites().map((site) => {
+        const keys = this.listKeys(site.id);
+        const stored = this.db.getKeyPreference(site.id);
+        const preference =
+          stored.mode === 'manual' &&
+          keys.length > 0 &&
+          !keys.some((key) => key.id === stored.keyId && key.status === 'active')
+            ? ({ mode: 'auto' } as const)
+            : stored;
+        if (preference !== stored) this.db.setKeyPreference(site.id, preference);
+        return [site.id, { keys, preference }];
       }),
     );
   }
@@ -492,6 +664,7 @@ export class SiteService {
     if (!valid) {
       const fallback: KeyPreference = { mode: 'auto' };
       this.db.setKeyPreference(siteId, fallback);
+      this.keyContextListener?.(siteId);
       return { preference: fallback, fallback: true };
     }
     this.db.setKeyPreference(siteId, preference);
@@ -502,8 +675,13 @@ export class SiteService {
           ...this.runtime.get(siteId),
           keyId: selected.id,
           defaultKeyLabel: selected.maskedLabel,
+          rate: selected.rate,
         });
+    } else {
+      const automatic = this.automaticRuntime.get(siteId);
+      if (automatic) this.runtime.set(siteId, automatic);
     }
+    this.keyContextListener?.(siteId);
     return { preference, fallback: false };
   }
 
@@ -513,6 +691,52 @@ export class SiteService {
   setNotificationSettings(settings: NotificationSettings): NotificationSettings {
     this.db.setNotificationSettings(settings);
     return settings;
+  }
+
+  private cacheKeys(siteId: string, keys: ApiKeySummary[]): void {
+    const safeKeys = apiKeySummarySchema.array().parse(keys);
+    this.keys.set(siteId, safeKeys);
+    this.db.setKeyCache(siteId, safeKeys);
+    this.keyContextListener?.(siteId);
+  }
+
+  private resetInvalidKeyPreference(siteId: string): void {
+    this.db.setKeyPreference(siteId, { mode: 'auto' });
+    this.keyContextListener?.(siteId);
+  }
+
+  private updateRuntimeKey(
+    siteId: string,
+    keys: ApiKeySummary[],
+    rates: ReadonlyMap<string, number | undefined>,
+    requestsByKey: Record<string, number>,
+  ): void {
+    const automaticKeyId = selectDefaultKey(
+      keys,
+      requestsByKey,
+      this.automaticRuntime.get(siteId)?.keyId,
+    );
+    const automatic = keys.find((key) => key.id === automaticKeyId);
+    const automaticState = {
+      keyId: automatic?.id,
+      defaultKeyLabel: automatic?.maskedLabel,
+      rate: automatic?.groupId ? rates.get(automatic.groupId) : automatic?.rate,
+    };
+    this.automaticRuntime.set(siteId, automaticState);
+    const preference = this.db.getKeyPreference(siteId);
+    const manual =
+      preference.mode === 'manual'
+        ? keys.find((key) => key.id === preference.keyId && key.status === 'active')
+        : undefined;
+    if (preference.mode === 'manual' && !manual) this.resetInvalidKeyPreference(siteId);
+    const selected = manual
+      ? {
+          keyId: manual.id,
+          defaultKeyLabel: manual.maskedLabel,
+          rate: manual.groupId ? rates.get(manual.groupId) : manual.rate,
+        }
+      : automaticState;
+    this.runtime.set(siteId, selected);
   }
 
   private toSummary(site: StoredSite): SiteSummary {
@@ -558,6 +782,13 @@ export class SiteService {
       note: this.db.getSiteNote(site.id),
     };
   }
+}
+
+function withRates(keys: ApiKeySummary[], rates: Map<string, number | undefined>): ApiKeySummary[] {
+  return keys.map((key) => ({
+    ...key,
+    rate: key.groupId ? rates.get(key.groupId) : undefined,
+  }));
 }
 
 export function usageDateRange(

@@ -20,8 +20,8 @@ describe('electron-builder manifest', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
 
-    expect(manifest.version).toBe('1.2.0');
-    expect(preloadSource).toContain("shellVersion: '1.2.0'");
+    expect(manifest.version).toBe('1.3.3');
+    expect(preloadSource).toContain("shellVersion: '1.3.3'");
   });
 
   it('keeps Electron as a build-time dependency', () => {
@@ -59,5 +59,23 @@ describe('electron-builder manifest', () => {
     expect(manifest.build?.productName).toBe('看看你还有💰吗？');
     expect(manifest.build?.executableName).toBeUndefined();
     expect(manifest.build?.win?.executableName).toBe('Sub2API-Monitor');
+  });
+
+  it('keeps rate context IPC wired through main and preload layers', () => {
+    const mainSource = readFileSync('electron/main/index.ts', 'utf8');
+    const bridgeSource = readFileSync('electron/preload/bridge.cts', 'utf8');
+    const bridgeTypes = readFileSync('electron/preload/index.ts', 'utf8');
+
+    for (const channel of [
+      'rates:contexts',
+      'rates:refresh',
+      'rates:refresh-all',
+      'rates:ratio:set',
+    ]) {
+      expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
+      expect(bridgeSource).toContain(`ipcRenderer.invoke('${channel}'`);
+    }
+    expect(bridgeTypes).toContain('rateContexts(): Promise<RateContexts>');
+    expect(bridgeTypes).toContain('setRechargeRatio(siteId: string, ratio: number)');
   });
 });

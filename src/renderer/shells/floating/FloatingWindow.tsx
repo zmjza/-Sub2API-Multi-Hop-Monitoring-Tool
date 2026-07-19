@@ -35,15 +35,14 @@ export function FloatingWindow(props: FloatingProps) {
       : liveBalance >= 2
         ? '这么有钱，就使劲蹬 Codex，别浪费！💸'
         : '快没钱了，赶紧充钱，别让天才程序员陨落！🥲';
+  const siteTitle = props.selectedSite?.note?.trim() || props.selectedSite?.name || data.siteName;
   return (
     <main className={`floating-window state-${props.state}`}>
       <header className="floating-header">
         <button aria-label="上一个站点" onClick={props.onPreviousSite}>
           <ArrowLeft size={16} />
         </button>
-        <strong title={props.selectedSite?.name ?? data.siteName}>
-          {props.selectedSite?.name ?? data.siteName}
-        </strong>
+        <strong title={siteTitle}>{siteTitle}</strong>
         <button aria-label="下一个站点" onClick={props.onNextSite}>
           <ArrowRight size={16} />
         </button>
@@ -110,35 +109,42 @@ export function FloatingWindow(props: FloatingProps) {
           <summary aria-label="悬浮窗设置">
             <Settings size={15} />
           </summary>
-          <label>
-            固定位置
-            <select
-              value={props.floatingPosition ?? 'top-right'}
-              onChange={(event) =>
-                props.onFloatingPositionChange?.(
-                  event.target.value as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
-                )
-              }
-            >
-              <option value="top-left">左上角</option>
-              <option value="top-right">右上角</option>
-              <option value="bottom-left">左下角</option>
-              <option value="bottom-right">右下角</option>
-            </select>
-          </label>
-          <label>
-            透明度
-            <input
-              aria-label="透明度"
-              type="range"
-              min="35"
-              max="100"
-              step={1}
-              value={props.floatingOpacity ?? 84}
-              onChange={(event) => props.onFloatingOpacityChange?.(Number(event.target.value))}
-            />
-            <output>{props.floatingOpacity ?? 84}%</output>
-          </label>
+          <div className="floating-settings-panel">
+            <label>
+              固定位置
+              <select
+                value={props.floatingPosition ?? 'top-right'}
+                onChange={(event) =>
+                  props.onFloatingPositionChange?.(
+                    event.target.value as 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right',
+                  )
+                }
+              >
+                {props.floatingPosition === 'custom' && (
+                  <option value="custom" disabled>
+                    自定义位置
+                  </option>
+                )}
+                <option value="top-left">左上角</option>
+                <option value="top-right">右上角</option>
+                <option value="bottom-left">左下角</option>
+                <option value="bottom-right">右下角</option>
+              </select>
+            </label>
+            <label>
+              透明度
+              <input
+                aria-label="透明度"
+                type="range"
+                min="35"
+                max="100"
+                step={1}
+                value={props.floatingOpacity ?? 84}
+                onChange={(event) => props.onFloatingOpacityChange?.(Number(event.target.value))}
+              />
+              <output>{props.floatingOpacity ?? 84}%</output>
+            </label>
+          </div>
         </details>
         <span className={`floating-live-state state-${props.state}`}>
           <i />
@@ -155,17 +161,19 @@ export function FloatingWindow(props: FloatingProps) {
             ? ` · ${new Date(props.selectedSite.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : ''}
         </span>
-        <button aria-label="打开主页面" onClick={props.onOpenSite}>
-          <ExternalLink size={15} />
-        </button>
-        <button
-          aria-label="刷新悬浮窗"
-          title="刷新当前站点"
-          onClick={props.onRefreshFloating}
-          disabled={!props.selectedSite || busy}
-        >
-          <RefreshCw size={15} className={busy ? 'spin' : ''} />
-        </button>
+        <div className="floating-actions">
+          <button aria-label="打开主页面" title="返回主页面" onClick={props.onOpenSite}>
+            <ExternalLink size={15} />
+          </button>
+          <button
+            aria-label="刷新悬浮窗"
+            title="刷新当前站点"
+            onClick={props.onRefreshFloating}
+            disabled={!props.selectedSite || busy}
+          >
+            <RefreshCw size={15} className={busy ? 'spin' : ''} />
+          </button>
+        </div>
       </footer>
     </main>
   );

@@ -23,9 +23,17 @@ import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
 import { SitesPage } from './shells/sites/SitesPage';
 import { FloatingWindow } from './shells/floating/FloatingWindow';
+import { selectLatestUsageSite } from './shells/floating/latest-usage-site';
 import { RadarPage } from './shells/radar/RadarPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
+import type {
+  SiteKeyContext,
+  SiteKeyContexts,
+  UsageFilterOptions,
+  FloatingSettings,
+  RateContexts,
+} from '../../electron/shared/contracts';
 const initialLocation = parsePreviewLocation(window.location.search);
 const showPreviewControls =
   import.meta.env.DEV || new URLSearchParams(window.location.search).get('preview') === 'true';
@@ -44,38 +52,45 @@ export function App() {
   const [channelsData, setChannelsData] = useState<unknown>();
   const [channelDetail, setChannelDetail] = useState<unknown>();
   const [selectedChannelId, setSelectedChannelId] = useState<string>();
-  const [keyOptions, setKeyOptions] = useState<
-    Array<{
-      id: string;
-      maskedLabel: string;
-      status: string;
-      groupId?: string;
-      groupName?: string;
-      quota?: number;
-      quotaUsed?: number;
-    }>
-  >([]);
-  const [usageFilterOptions, setUsageFilterOptions] = useState<{
-    models: string[];
-    groups: Array<{ id: string; name: string; rate?: number }>;
-  }>({ models: [], groups: [] });
-  const [floatingPosition, setFloatingPosition] = useState<
-    'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
-  >('top-right');
-  const [floatingOpacity, setFloatingOpacity] = useState(84);
-  const [keyPreference, setKeyPreference] = useState<{ mode: 'auto' | 'manual'; keyId?: string }>({
-    mode: 'auto',
+  const [keyContexts, setKeyContexts] = useState<SiteKeyContexts>({});
+  const [usageFiltersBySite, setUsageFiltersBySite] = useState<Record<string, UsageFilterOptions>>(
+    {},
+  );
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const [refreshingSiteIds, setRefreshingSiteIds] = useState<Set<string>>(() => new Set());
+  const [rateContexts, setRateContexts] = useState<RateContexts>({ sites: {}, ratios: {} });
+  const [isRefreshingRates, setIsRefreshingRates] = useState(false);
+  const [refreshingRateSiteIds, setRefreshingRateSiteIds] = useState<Set<string>>(() => new Set());
+  const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
+    position: 'top-right',
+    opacity: 84,
   });
+  const floatingPosition = floatingSettings.position;
+  const floatingOpacity = floatingSettings.opacity;
   const [currentSiteId, setCurrentSiteId] = useState<string>();
   const [sitesSection, setSitesSection] = useState<'notifications' | 'settings'>();
   const currentSiteRef = useRef<string | undefined>(undefined);
+  const shellRef = useRef(shell);
   const channelLoadCoordinatorRef = useRef(new ChannelLoadCoordinator());
+  const keyContextRequestRef = useRef(new Map<string, number>());
   const siteRequestRef = useRef(0);
   const usageRequestRef = useRef(0);
   const channelDetailRequestRef = useRef(0);
+  const floatingUsageScanRef = useRef({ running: false, latestAt: 0, siteId: '' });
   const selectedSite = dashboard?.sites.find(
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
+  const siteIdsKey = dashboard?.sites
+    .map((site) => site.id)
+    .sort((left, right) => left.localeCompare(right))
+    .join('|');
+  const selectedKeyContext = selectedSite ? keyContexts[selectedSite.id] : undefined;
+  const keyOptions = selectedKeyContext?.keys ?? [];
+  const keyPreference = selectedKeyContext?.preference ?? { mode: 'auto' as const };
+  const usageFilterOptions = selectedSite
+    ? (usageFiltersBySite[selectedSite.id] ?? groupsFromKeys(keyOptions))
+    : { models: [], groups: [] };
+  shellRef.current = shell;
   currentSiteRef.current = selectedSite?.id;
   const runtimeState = selectedSite?.status;
   const effectiveState: PreviewState = showPreviewControls
@@ -95,6 +110,8 @@ export function App() {
     reducedTransparency,
     highContrast,
     queryPhase,
+    isRefreshingAll,
+    refreshingSiteIds: [...refreshingSiteIds],
   };
   context.dashboard = dashboard;
   context.selectedSite = selectedSite;
@@ -103,6 +120,10 @@ export function App() {
   context.channelDetail = channelDetail;
   context.selectedChannelId = selectedChannelId;
   context.keyOptions = keyOptions;
+  context.keyContexts = keyContexts;
+  context.rateContexts = rateContexts;
+  context.isRefreshingRates = isRefreshingRates;
+  context.refreshingRateSiteIds = [...refreshingRateSiteIds];
   context.usageFilterOptions = usageFilterOptions;
   context.keyPreference = keyPreference;
   context.sitesSection = sitesSection;
@@ -113,17 +134,60 @@ export function App() {
   async function loadKeyContext(siteId: string) {
     const desktop = window.sub2apiDesktop?.sites;
     if (!desktop) return;
-    const [keys, filters, preference] = await Promise.all([
-      desktop.keys(siteId).catch(() => []),
-      desktop.usageFilters(siteId).catch(() => ({ models: [], groups: [] })),
-      desktop.keyPreference(siteId).catch(() => ({ mode: 'auto' as const })),
-    ]);
-    if (currentSiteRef.current !== siteId) return;
-    setKeyOptions(Array.isArray(keys) ? (keys as typeof keyOptions) : []);
-    if (filters && typeof filters === 'object' && 'models' in filters && 'groups' in filters)
-      setUsageFilterOptions(filters as typeof usageFilterOptions);
-    if (preference && typeof preference === 'object' && 'mode' in preference)
-      setKeyPreference(preference as typeof keyPreference);
+    const requestId = (keyContextRequestRef.current.get(siteId) ?? 0) + 1;
+    keyContextRequestRef.current.set(siteId, requestId);
+    const isCurrentRequest = () => keyContextRequestRef.current.get(siteId) === requestId;
+    void desktop
+      .keys(siteId)
+      .then((keys) => {
+        if (!isCurrentRequest() || !Array.isArray(keys)) return;
+        setKeyContexts((current) => ({
+          ...current,
+          [siteId]: {
+            keys: keys as SiteKeyContext['keys'],
+            preference: current[siteId]?.preference ?? { mode: 'auto' },
+          },
+        }));
+        setUsageFiltersBySite((current) => ({
+          ...current,
+          [siteId]: mergeUsageFilters(
+            current[siteId],
+            groupsFromKeys(keys as SiteKeyContext['keys']),
+          ),
+        }));
+      })
+      .catch(() => undefined);
+    void desktop
+      .keyPreference(siteId)
+      .then((preference) => {
+        if (!isCurrentRequest() || !isKeyPreference(preference)) return;
+        setKeyContexts((current) => ({
+          ...current,
+          [siteId]: { keys: current[siteId]?.keys ?? [], preference },
+        }));
+      })
+      .catch(() => undefined);
+    if (shellRef.current !== 'usage') return;
+    void desktop
+      .usageGroups(siteId)
+      .then((groups) => {
+        if (!isCurrentRequest() || !isUsageGroups(groups)) return;
+        setUsageFiltersBySite((current) => ({
+          ...current,
+          [siteId]: mergeUsageFilters(current[siteId], { models: [], groups }),
+        }));
+      })
+      .catch(() => undefined);
+    void desktop
+      .usageModels(siteId)
+      .then((models) => {
+        if (!isCurrentRequest() || !isUsageModels(models)) return;
+        setUsageFiltersBySite((current) => ({
+          ...current,
+          [siteId]: mergeUsageFilters(current[siteId], { models, groups: [] }),
+        }));
+      })
+      .catch(() => undefined);
   }
   const selectSite = (siteId: string) => {
     if (siteId === selectedSite?.id) return;
@@ -134,8 +198,6 @@ export function App() {
     setChannelsData(undefined);
     setChannelDetail(undefined);
     setSelectedChannelId(undefined);
-    setKeyOptions([]);
-    setUsageFilterOptions({ models: [], groups: [] });
     setState('loading');
     void window.sub2apiDesktop?.sites
       .select(siteId)
@@ -176,31 +238,47 @@ export function App() {
         if (currentSiteRef.current === siteId) setState('error');
       });
   };
+  const refreshAll = () => {
+    if (isRefreshingAll || !dashboard?.sites.length) return;
+    setIsRefreshingAll(true);
+    setRefreshingSiteIds(new Set(dashboard.sites.map((site) => site.id)));
+    void window.sub2apiDesktop?.sites
+      .refreshAll()
+      .then((value) => {
+        if (value) setDashboard(value);
+      })
+      .finally(() => {
+        setIsRefreshingAll(false);
+        setRefreshingSiteIds(new Set());
+      });
+  };
   context.onSelectSite = selectSite;
-  context.onRefreshSite = refreshSelected;
+  context.onRefreshSite = refreshAll;
   context.onPreviousSite = () => moveSite(-1);
   context.onNextSite = () => moveSite(1);
   context.onOpenSite = () => {
     void window.sub2apiDesktop?.sites.openMainWindow();
   };
-  context.onKeyPreferenceChange = (value) => {
-    if (!selectedSite) return;
+  context.onKeyPreferenceChange = (siteId, value) => {
+    setKeyContexts((current) => ({
+      ...current,
+      [siteId]: { keys: current[siteId]?.keys ?? [], preference: value },
+    }));
     void window.sub2apiDesktop?.sites
-      .setKeyPreference(selectedSite.id, value)
+      .setKeyPreference(siteId, value)
       .then((result) => {
-        if (result && typeof result === 'object' && 'preference' in result)
-          setKeyPreference(result.preference as typeof keyPreference);
-        return window.sub2apiDesktop?.sites.refresh(selectedSite.id);
-      })
-      .then(() => window.sub2apiDesktop?.sites.list())
-      .then((value) => {
-        if (value) setDashboard(value);
+        if (!result || typeof result !== 'object' || !('preference' in result)) return;
+        const preference = result.preference;
+        if (!isKeyPreference(preference)) return;
+        setKeyContexts((current) => ({
+          ...current,
+          [siteId]: { keys: current[siteId]?.keys ?? [], preference },
+        }));
       })
       .catch(() => undefined);
   };
-  context.onSiteNoteChange = async (note) => {
-    if (!selectedSite) return;
-    const updated = await window.sub2apiDesktop?.sites.setNote(selectedSite.id, note);
+  context.onSiteNoteChange = async (siteId, note) => {
+    const updated = await window.sub2apiDesktop?.sites.setNote(siteId, note);
     if (!updated) return;
     setDashboard((current) =>
       current
@@ -210,6 +288,53 @@ export function App() {
           }
         : current,
     );
+  };
+  context.onRefreshAllRates = async () => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop || isRefreshingRates) return;
+    setIsRefreshingRates(true);
+    try {
+      setRateContexts(await desktop.refreshAllRateGroups());
+    } finally {
+      setIsRefreshingRates(false);
+    }
+  };
+  context.onRefreshSiteRates = async (siteId) => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop || refreshingRateSiteIds.has(siteId)) return;
+    setRefreshingRateSiteIds((current) => new Set(current).add(siteId));
+    try {
+      const next = await desktop.refreshRateGroups(siteId);
+      setRateContexts((current) => ({
+        ...current,
+        sites: { ...current.sites, [siteId]: next },
+      }));
+    } finally {
+      setRefreshingRateSiteIds((current) => {
+        const next = new Set(current);
+        next.delete(siteId);
+        return next;
+      });
+    }
+  };
+  context.onRechargeRatioChange = async (siteId, ratio) => {
+    const previous = rateContexts.ratios[siteId];
+    setRateContexts((current) => ({
+      ...current,
+      ratios: { ...current.ratios, [siteId]: ratio },
+    }));
+    try {
+      const next = await window.sub2apiDesktop?.sites.setRechargeRatio(siteId, ratio);
+      if (next) setRateContexts(next);
+    } catch (error) {
+      setRateContexts((current) => {
+        const ratios = { ...current.ratios };
+        if (previous === undefined) delete ratios[siteId];
+        else ratios[siteId] = previous;
+        return { ...current, ratios };
+      });
+      throw error;
+    }
   };
   context.onRefreshFloating = refreshSelected;
   context.onSelectChannel = (channelId) => {
@@ -235,19 +360,14 @@ export function App() {
   context.floatingPosition = floatingPosition;
   context.floatingOpacity = floatingOpacity;
   context.onFloatingPositionChange = (position) => {
-    setFloatingPosition(position);
-    void window.sub2apiDesktop?.sites
-      .setFloatingSettings({ position, opacity: floatingOpacity })
-      .then((value) => {
-        setFloatingPosition(value.position);
-        setFloatingOpacity(value.opacity);
-      });
+    const next = { position, opacity: floatingOpacity } as FloatingSettings;
+    setFloatingSettings(next);
+    void window.sub2apiDesktop?.sites.setFloatingSettings(next).then(setFloatingSettings);
   };
   context.onFloatingOpacityChange = (opacity) => {
-    setFloatingOpacity(opacity);
-    void window.sub2apiDesktop?.sites
-      .setFloatingSettings({ position: floatingPosition, opacity })
-      .catch(() => undefined);
+    const next = { ...floatingSettings, opacity };
+    setFloatingSettings(next);
+    void window.sub2apiDesktop?.sites.setFloatingSettings(next).catch(() => undefined);
   };
   context.onUsageQuery = ({ period, page, ...filters }) => {
     if (!selectedSite) return;
@@ -273,7 +393,11 @@ export function App() {
         .list()
         .then((value) => {
           setDashboard(value);
-          setCurrentSiteId(value.currentSiteId);
+          setCurrentSiteId((current) =>
+            initialLocation.surface === 'floating'
+              ? (current ?? value.currentSiteId)
+              : value.currentSiteId,
+          );
           if (value.sites.length === 0 && initialLocation.surface === 'main' && !hasExplicitShell)
             setShell('sites');
         })
@@ -281,7 +405,16 @@ export function App() {
     refresh();
     window.addEventListener('sub2api:refresh', refresh);
     const unsubscribe = window.sub2apiDesktop?.sites.onChanged(refresh);
+    const unsubscribeKeyContext = window.sub2apiDesktop?.sites.onKeyContextChanged((siteId) => {
+      void loadKeyContext(siteId);
+    });
     const unsubscribeState = window.sub2apiDesktop?.sites.onRefreshState((value) => {
+      setRefreshingSiteIds((current) => {
+        const next = new Set(current);
+        if (value.state === 'refreshing') next.add(value.siteId);
+        else next.delete(value.siteId);
+        return next;
+      });
       if (value.siteId === currentSiteRef.current) {
         setState(value.state);
         setQueryPhase(value.phase);
@@ -290,30 +423,112 @@ export function App() {
     return () => {
       window.removeEventListener('sub2api:refresh', refresh);
       unsubscribe?.();
+      unsubscribeKeyContext?.();
       unsubscribeState?.();
     };
   }, []);
   useEffect(() => {
+    if (initialLocation.surface !== 'floating') return;
+    const desktop = window.sub2apiDesktop?.sites;
+    const sites = dashboard?.sites ?? [];
+    if (!desktop || sites.length === 0) return;
+    let active = true;
+    const scan = async () => {
+      if (!active || document.visibilityState === 'hidden' || floatingUsageScanRef.current.running)
+        return;
+      floatingUsageScanRef.current.running = true;
+      try {
+        const settled = await Promise.allSettled(
+          sites.map(async (site) => ({
+            siteId: site.id,
+            payload: await desktop.usage({
+              siteId: site.id,
+              period: '30d',
+              page: 1,
+              pageSize: 1,
+              sort: 'desc',
+            }),
+          })),
+        );
+        if (!active) return;
+        const latest = selectLatestUsageSite(
+          settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
+        );
+        if (!latest) return;
+        const previous = floatingUsageScanRef.current;
+        if (
+          latest.usedAt > previous.latestAt ||
+          (latest.usedAt === previous.latestAt && latest.siteId !== previous.siteId)
+        ) {
+          floatingUsageScanRef.current.latestAt = latest.usedAt;
+          floatingUsageScanRef.current.siteId = latest.siteId;
+          setCurrentSiteId(latest.siteId);
+        }
+      } finally {
+        floatingUsageScanRef.current.running = false;
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void scan();
+    };
+    void scan();
+    const interval = window.setInterval(() => void scan(), 2_000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [siteIdsKey]);
+  useEffect(() => {
     if (!selectedSite || initialLocation.surface === 'floating') return;
     const siteId = selectedSite.id;
     const requestId = ++usageRequestRef.current;
-    void window.sub2apiDesktop?.sites
-      .usage({ siteId, period: 'today', page: 1, pageSize: 20 })
-      .then((value) => {
-        if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
-          setUsageData(value);
-      })
-      .catch(() => undefined);
-    void loadChannels(selectedSite.id);
     void loadKeyContext(siteId);
-  }, [selectedSite?.id]);
+    if (shell === 'usage')
+      void window.sub2apiDesktop?.sites
+        .usage({ siteId, period: 'today', page: 1, pageSize: 20 })
+        .then((value) => {
+          if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
+            setUsageData(value);
+        })
+        .catch(() => undefined);
+    if (shell === 'channels') void loadChannels(selectedSite.id);
+  }, [selectedSite?.id, shell]);
+  useEffect(() => {
+    void window.sub2apiDesktop?.sites
+      .keyContexts()
+      .then((value) => setKeyContexts(value))
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (initialLocation.surface === 'floating') return;
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop || !siteIdsKey) return;
+    let active = true;
+    void desktop
+      .rateContexts()
+      .then((cached) => {
+        if (active) setRateContexts(cached);
+        if (!active) return undefined;
+        setIsRefreshingRates(true);
+        return desktop.refreshAllRateGroups();
+      })
+      .then((live) => {
+        if (active && live) setRateContexts(live);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (active) setIsRefreshingRates(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [siteIdsKey]);
   useEffect(() => {
     void window.sub2apiDesktop?.sites
       .floatingSettings()
-      .then((value) => {
-        setFloatingPosition(value.position);
-        setFloatingOpacity(value.opacity);
-      })
+      .then(setFloatingSettings)
       .catch(() => undefined);
   }, []);
 
@@ -438,8 +653,10 @@ export function App() {
           <button
             className="icon-button"
             aria-label="刷新"
-            onClick={refreshSelected}
-            disabled={!selectedSite || state === 'refreshing'}
+            onClick={shell === 'overview' ? refreshAll : refreshSelected}
+            disabled={
+              !selectedSite || (shell === 'overview' ? isRefreshingAll : state === 'refreshing')
+            }
           >
             <TimerReset size={18} />
           </button>
@@ -463,10 +680,14 @@ export function App() {
           </button>
         </header>
         <div className="content-scroll">
-          {(state === 'loading' || state === 'refreshing') && (
+          {(state === 'loading' || state === 'refreshing' || isRefreshingAll) && (
             <div className="refresh-progress" role="status">
               <LoaderCircle size={16} className="spin" />
-              {state === 'refreshing' ? '正在刷新最新数据…' : '正在加载站点数据…'}
+              {isRefreshingAll
+                ? '正在刷新全部站点…'
+                : state === 'refreshing'
+                  ? '正在刷新最新数据…'
+                  : '正在加载站点数据…'}
             </div>
           )}
           {pages[shell]}
@@ -484,4 +705,50 @@ export function App() {
       )}
     </main>
   );
+}
+
+function isKeyPreference(value: unknown): value is SiteKeyContext['preference'] {
+  if (!value || typeof value !== 'object' || !('mode' in value)) return false;
+  const mode = (value as { mode?: unknown }).mode;
+  return (
+    mode === 'auto' ||
+    (mode === 'manual' && typeof (value as { keyId?: unknown }).keyId === 'string')
+  );
+}
+
+function isUsageGroups(value: unknown): value is UsageFilterOptions['groups'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (group) =>
+        group &&
+        typeof group === 'object' &&
+        'id' in group &&
+        typeof group.id === 'string' &&
+        'name' in group &&
+        typeof group.name === 'string',
+    )
+  );
+}
+
+function isUsageModels(value: unknown): value is UsageFilterOptions['models'] {
+  return Array.isArray(value) && value.every((model) => typeof model === 'string');
+}
+
+function groupsFromKeys(keys: SiteKeyContext['keys']): UsageFilterOptions {
+  const groups = new Map<string, { id: string; name: string; rate?: number }>();
+  for (const key of keys)
+    if (key.groupId && key.groupName)
+      groups.set(key.groupId, { id: key.groupId, name: key.groupName, rate: key.rate });
+  return { models: [], groups: [...groups.values()] };
+}
+
+function mergeUsageFilters(
+  current: UsageFilterOptions | undefined,
+  incoming: UsageFilterOptions,
+): UsageFilterOptions {
+  return {
+    models: incoming.models.length ? incoming.models : (current?.models ?? []),
+    groups: incoming.groups.length ? incoming.groups : (current?.groups ?? []),
+  };
 }

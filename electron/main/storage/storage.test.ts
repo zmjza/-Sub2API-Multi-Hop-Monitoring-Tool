@@ -68,6 +68,39 @@ describe('AppDatabase', () => {
     );
     raw.close();
   });
+
+  it('persists safe rate caches and positive recharge ratios per site', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    db.saveSite({ id: 'site-a', name: 'A', baseUrl: 'https://a.invalid', apiPrefix: '/api/v1' });
+    const cache = {
+      groups: [
+        {
+          id: '25',
+          name: '特惠分组',
+          description: '公开说明',
+          platform: 'openai',
+          status: 'active',
+          rate: 0.4,
+        },
+      ],
+      fetchedAt: 1_721_000_000_000,
+    };
+
+    db.setRateCache('site-a', cache);
+    db.setRechargeRatio('site-a', 10);
+
+    expect(db.getRateCache('site-a')).toEqual(cache);
+    expect(db.getRechargeRatio('site-a')).toBe(10);
+    expect(db.getRechargeRatios()).toEqual({ 'site-a': 10 });
+    expect(() => db.setRechargeRatio('site-a', 0)).toThrow('INVALID_RECHARGE_RATIO');
+    expect(() => db.setRechargeRatio('site-a', Number.NaN)).toThrow('INVALID_RECHARGE_RATIO');
+    expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
+      /password|access.?token|refresh.?token/i,
+    );
+    raw.close();
+  });
 });
 
 describe('CredentialVault', () => {

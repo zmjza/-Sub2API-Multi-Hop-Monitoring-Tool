@@ -1,5 +1,6 @@
 import { normalizeApiKey } from './schemas.js';
 import type { ApiKeySummary } from '../domain/types.js';
+import type { AvailableRateGroup } from '../../shared/contracts.js';
 
 interface JsonClient {
   getJson(path: string, accessToken: string, capability: string): Promise<unknown>;
@@ -102,6 +103,7 @@ export class Sub2ApiAdapter {
     private readonly onPhase: (
       phase: 'profile' | 'keys' | 'groups' | 'rates' | 'usage',
     ) => void = () => undefined,
+    private readonly onKeys: (keys: ApiKeySummary[]) => void = () => undefined,
   ) {}
 
   async readCore(accessToken: string, timezone: string) {
@@ -110,6 +112,9 @@ export class Sub2ApiAdapter {
     await this.pause();
     this.onPhase('keys');
     const keysRaw = await this.readAllKeys(accessToken, timezone);
+    const keyRecords = asArray(unwrapPayload(keysRaw)).map((item) => asRecord(item));
+    const keys = keyRecords.map((item) => normalizeApiKey(item));
+    this.onKeys(keys);
     await this.pause();
     this.onPhase('groups');
     const groupsRaw = await this.client.getJson('/groups/available', accessToken, 'groups');
@@ -124,8 +129,6 @@ export class Sub2ApiAdapter {
       'usageStats',
     );
     const profile = asRecord(unwrapPayload(profileRaw));
-    const keyRecords = asArray(unwrapPayload(keysRaw)).map((item) => asRecord(item));
-    const keys = keyRecords.map((item) => normalizeApiKey(item));
     const groups = asArray(unwrapPayload(groupsRaw)).map((item) => asRecord(item));
     const rateMap = asRecord(unwrapPayload(ratesRaw));
     const rates = new Map<string, number | undefined>();
@@ -226,24 +229,67 @@ export class Sub2ApiAdapter {
   }
 
   async readUsageFilters(accessToken: string, timezone: string) {
-    const [groupsRaw, modelsRaw, ratesRaw] = await Promise.all([
-      this.client.getJson('/groups/available', accessToken, 'groups'),
-      this.client.getJson(
-        `/usage/dashboard/models?timezone=${encodeURIComponent(timezone)}`,
-        accessToken,
-        'usageModels',
-      ),
+    const [groups, models, ratesRaw] = await Promise.all([
+      this.readUsageGroups(accessToken),
+      this.readUsageModels(accessToken, timezone),
       this.client.getJson('/groups/rates', accessToken, 'groupRates').catch(() => ({})),
     ]);
     const rateMap = asRecord(unwrapPayload(ratesRaw));
-    const groups = asArray(unwrapPayload(groupsRaw)).flatMap((item) => {
+    const groupsWithRates = groups.map((group) => ({
+      ...group,
+      rate: numberOrUndefined(rateMap[group.id] ?? group.rate),
+    }));
+    return { models, groups: groupsWithRates };
+  }
+
+  async readUsageGroups(accessToken: string) {
+    const groupsRaw = await this.client.getJson('/groups/available', accessToken, 'groups');
+    return asArray(unwrapPayload(groupsRaw)).flatMap((item) => {
       const id = stringOrUndefined(item.id ?? item.group_id);
       const name = stringOrUndefined(item.name ?? item.group_name);
-      const rate = id
-        ? numberOrUndefined(rateMap[id] ?? item.rate_multiplier ?? item.ratio ?? item.rate)
-        : undefined;
+      const rate = numberOrUndefined(item.rate_multiplier ?? item.ratio ?? item.rate);
       return id && name ? [{ id, name, rate }] : [];
     });
+  }
+
+  async readAvailableRateGroups(
+    accessToken: string,
+    timezone: string,
+  ): Promise<AvailableRateGroup[]> {
+    const raw = await this.client.getJson(
+      `/groups/available?timezone=${encodeURIComponent(timezone)}`,
+      accessToken,
+      'groups',
+    );
+    return asArray(unwrapPayload(raw)).flatMap((item) => {
+      const id = stringOrUndefined(item.id ?? item.group_id);
+      const name = stringOrUndefined(item.name ?? item.group_name);
+      const rate = numberOrUndefined(
+        item.rate_multiplier ?? item.ratio ?? item.rate ?? item.default_ratio,
+      );
+      if (!id || !name || rate === undefined || rate < 0) return [];
+      const description = stringOrUndefined(item.description);
+      const platform = stringOrUndefined(item.platform) ?? 'unknown';
+      const status = stringOrUndefined(item.status);
+      return [
+        {
+          id,
+          name,
+          ...(description ? { description } : {}),
+          platform,
+          ...(status ? { status } : {}),
+          rate,
+        },
+      ];
+    });
+  }
+
+  async readUsageModels(accessToken: string, timezone: string) {
+    const modelsRaw = await this.client.getJson(
+      `/usage/dashboard/models?timezone=${encodeURIComponent(timezone)}`,
+      accessToken,
+      'usageModels',
+    );
     const modelContainer = unwrapPayload(modelsRaw);
     const rawModels = Array.isArray(modelContainer)
       ? modelContainer
@@ -257,21 +303,27 @@ export class Sub2ApiAdapter {
           return value ? [value] : [];
         })
       : [];
-    return { models: [...new Set(models)], groups };
+    return [...new Set(models)];
   }
 
   async readTodayRequestsByKey(accessToken: string, keys: Array<{ id: string }>, timezone: string) {
     const entries: Array<readonly [string, number]> = [];
-    for (const key of keys) {
-      const raw = await this.client.getJson(
-        `/usage/stats?period=today&timezone=${encodeURIComponent(timezone)}&api_key_id=${encodeURIComponent(key.id)}`,
-        accessToken,
-        'usageStats',
-      );
-      const stats = asRecord(unwrapPayload(raw));
-      entries.push([key.id, numberOrUndefined(stats.total_requests) ?? 0] as const);
-      await this.pause();
-    }
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < keys.length) {
+        const key = keys[cursor++];
+        if (!key) return;
+        const raw = await this.client.getJson(
+          `/usage/stats?period=today&timezone=${encodeURIComponent(timezone)}&api_key_id=${encodeURIComponent(key.id)}`,
+          accessToken,
+          'usageStats',
+        );
+        const stats = asRecord(unwrapPayload(raw));
+        entries.push([key.id, numberOrUndefined(stats.total_requests) ?? 0] as const);
+        await this.pause();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, keys.length) }, worker));
     return Object.fromEntries(entries);
   }
 }

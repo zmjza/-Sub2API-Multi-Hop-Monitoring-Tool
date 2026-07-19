@@ -57,12 +57,23 @@ export const channelStatusRequestSchema = z.object({
   channelId: z.string().min(1).max(128),
 });
 export const startupSettingSchema = z.object({ enabled: z.boolean() });
-export const floatingSettingsSchema = z
-  .object({
-    position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']),
-    opacity: z.number().int().min(35).max(100).default(84),
-  })
-  .strict();
+const floatingOpacitySchema = z.number().int().min(35).max(100).default(84);
+export const floatingSettingsSchema = z.discriminatedUnion('position', [
+  z
+    .object({
+      position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']),
+      opacity: floatingOpacitySchema,
+    })
+    .strict(),
+  z
+    .object({
+      position: z.literal('custom'),
+      x: z.number().int().min(-1_000_000).max(1_000_000),
+      y: z.number().int().min(-1_000_000).max(1_000_000),
+      opacity: floatingOpacitySchema,
+    })
+    .strict(),
+]);
 export const appSettingsSchema = z
   .object({
     refreshIntervalMinutes: z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(15)]),
@@ -91,6 +102,39 @@ export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;
 export type FloatingSettings = z.infer<typeof floatingSettingsSchema>;
 export type AppSettings = z.infer<typeof appSettingsSchema>;
 export type UsageFilterOptions = z.infer<typeof usageFilterOptionsSchema>;
+
+export const availableRateGroupSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    name: z.string().min(1).max(300),
+    description: z.string().max(4_000).optional(),
+    platform: z.string().min(1).max(100),
+    status: z.string().min(1).max(80).optional(),
+    rate: z.number().finite().nonnegative(),
+  })
+  .strict();
+export const rateSiteContextSchema = z
+  .object({
+    siteId: siteIdSchema,
+    groups: availableRateGroupSchema.array().max(1_000),
+    fetchedAt: z.number().int().nonnegative().optional(),
+    source: z.enum(['live', 'cache', 'none']),
+    state: z.enum(['success', 'empty', 'error', 'auth-required']),
+    error: z.string().max(500).optional(),
+  })
+  .strict();
+export const rateContextsSchema = z
+  .object({
+    sites: z.record(z.string(), rateSiteContextSchema),
+    ratios: z.record(z.string(), z.number().finite().positive()),
+  })
+  .strict();
+export const rechargeRatioRequestSchema = z
+  .object({ siteId: siteIdSchema, ratio: z.number().finite().positive() })
+  .strict();
+export type AvailableRateGroup = z.infer<typeof availableRateGroupSchema>;
+export type RateSiteContext = z.infer<typeof rateSiteContextSchema>;
+export type RateContexts = z.infer<typeof rateContextsSchema>;
 
 export interface SiteSummary {
   id: string;
@@ -173,7 +217,18 @@ export const apiKeySummarySchema = z.object({
   groupName: z.string().optional(),
   quota: z.number().finite().optional(),
   quotaUsed: z.number().finite().optional(),
+  rate: z.number().nonnegative().optional(),
 });
+export const siteKeyContextSchema = z
+  .object({
+    keys: apiKeySummarySchema.array().max(500),
+    preference: keyPreferenceSchema,
+  })
+  .strict();
+export const siteKeyContextsSchema = z.record(z.string(), siteKeyContextSchema);
+export type ApiKeySummaryView = z.infer<typeof apiKeySummarySchema>;
+export type SiteKeyContext = z.infer<typeof siteKeyContextSchema>;
+export type SiteKeyContexts = z.infer<typeof siteKeyContextsSchema>;
 const normalizedChannelStatusSchema = z.enum(['normal', 'degraded', 'failed', 'unknown']);
 const channelTimelinePointSchema = z
   .object({
