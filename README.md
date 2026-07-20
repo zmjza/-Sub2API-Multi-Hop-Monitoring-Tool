@@ -146,21 +146,21 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.3.3
+## 当前版本 1.3.4
 
-- `1.3.3` 在倍率评分、四平台固定单行主题卡、整站渠道状态快捷弹窗和悬浮窗最新使用站点自动跟随基础上，修复最近五分钟 `unknown` 误判稳定并补齐倍率横向列表的键盘焦点入口。
+- `1.3.4` 将渠道状态直接内联到倍率卡片，按分组独立匹配渠道并支持加载、无数据、无匹配、失败重试和 7 天时间线；保留完整渠道状态快捷弹窗。四平台顺序与主题保持 OpenAI/Claude/Gemini/Grok，卡片继续单行横向滚动。
 - 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
-本轮 1.3.3 双平台构建产物及校验值：
+本轮 1.3.4 双平台构建产物及校验值：
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.3-mac-arm64.dmg`          | `d2c9f30d04cce12ead017072fde4d691666b3770f1cf774373c473b27db7d7a4` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.3-mac-arm64.dmg.blockmap` | `69f2b4cf7e1c64ce09de8d2b8723b70695c526cc210e45f2544d60b8260c1efe` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.3-win-x64.exe`            | `3487928ba7cff0ed5fc10759974bd8a4c23c2bb3c5ca2c3a43a574f9929b2948` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.3-win-x64.exe.blockmap`   | `2055a31b57a0208979e174897616b9a1e9bf764cffdadc293af06a2f3fbb4b97` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg`          | `76be6fef59edeff6e36897fe080d8ac7b02d0bf55e6c476623c962c25243ed12` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg.blockmap` | `f116a7c223f4f227ffdd808c833efbd68ee334cf330610fbae8f61f236c844ed` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe`            | `cce46d6ebfd54ff28fadf8c7038ed4ad6cf6a6f1ffecd201329c1393a784a1f1` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe.blockmap`   | `a42cfc896ebf4d189e649b2f8211286df8993154c9705ff6d8c9e30cefdcbbda` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 
@@ -179,13 +179,13 @@ npm run dev
 
 ## 验证状态
 
-2026-07-20 `1.3.3` 倍率与悬浮窗优化当前证据：
+2026-07-20 `1.3.4` 倍率与渠道状态优化当前证据：
 
 - Prettier、ESLint、TypeScript：通过。
-- Vitest：27 个文件，147 项通过。
-- 开发 Electron E2E：6 项通过。
+- Vitest：28 个文件，154 项通过。
+- 开发 Electron E2E 与 macOS ARM64 打包应用 E2E：均为 6 项通过。
 - 三站只读验证：倍率分组接口分别返回 18、8、22 个安全标准化分组，使用记录与渠道列表/详情均支持。
-- macOS ARM64 打包应用：五平台单行对比、键盘焦点入口、整站渠道快捷弹窗、悬浮窗最新使用站点跟随和页面样式检查通过；`1.3.3` 打包应用 E2E 6/6 通过，证据位于 `real-test-evidence/macos-1.3.3/`。
+- macOS ARM64 打包应用：内联渠道状态、加载/失败重试、四平台配色、单行横向滚动、完整渠道弹窗和窄窗口页面样式检查通过；证据位于 `real-test-evidence/macos-1.3.4/`。
 - Windows x64：NSIS 交叉构建及 PE32+/asar/版本结构验证通过；未执行 Windows 真机。
 
 详细步骤和证据见 [macOS 真机实测清单](liran_docs/09-%E7%9C%9F%E6%9C%BA%E5%AE%9E%E6%B5%8B.md)。

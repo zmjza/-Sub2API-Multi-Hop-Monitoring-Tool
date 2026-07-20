@@ -1,5 +1,8 @@
 import type { AvailableRateGroup } from '../../../../electron/shared/contracts';
-import { resolveKeyGroupChannel } from '../channels/channel-ranking';
+import {
+  resolveKeyGroupChannel,
+  type AvailableChannelRelationship,
+} from '../channels/channel-ranking';
 
 export interface PlatformMinimum {
   platformKey: string;
@@ -15,6 +18,7 @@ export interface ComparableRateSite {
   ratio?: number;
   groups: AvailableRateGroup[];
   channels?: RateChannelSnapshot[];
+  relationships?: AvailableChannelRelationship[];
   channelState?: 'supported' | 'unsupported' | 'error';
 }
 
@@ -24,6 +28,7 @@ export interface RateChannelSnapshot {
   groupName?: string;
   platform?: string;
   status: 'normal' | 'degraded' | 'failed' | 'unknown';
+  availability7d?: number;
   timeline?: Array<{ status: 'normal' | 'degraded' | 'failed' | 'unknown'; checkedAt?: string }>;
 }
 
@@ -198,24 +203,28 @@ export function comparePlatformRates(sites: ComparableRateSite[]): PlatformRateC
     if (!Number.isFinite(site.ratio) || (site.ratio ?? 0) <= 0) continue;
     const ratio = site.ratio!;
     for (const minimum of findPlatformMinima(site.groups, ratio)) {
-      const rawRate = minimum.groups[0]?.rate;
-      if (rawRate === undefined || minimum.effectiveRate === undefined) continue;
-      const group = minimum.groups[0];
-      const channel = group ? resolveKeyGroupChannel(site.channels ?? [], group.name) : undefined;
-      const stability = channelStability(channel, now, site.channelState);
-      const candidate = {
-        siteId: site.siteId,
-        siteName: site.siteName,
-        ratio,
-        rawRate,
-        effectiveRate: minimum.effectiveRate,
-        groups: minimum.groups,
-        stability,
-        ...(channel?.id ? { channelId: channel.id } : {}),
-      };
-      const current = candidates.get(minimum.platformKey) ?? [];
-      current.push(candidate);
-      candidates.set(minimum.platformKey, current);
+      if (minimum.effectiveRate === undefined) continue;
+      for (const group of minimum.groups) {
+        const channel = resolveKeyGroupChannel(
+          site.channels ?? [],
+          group.name,
+          site.relationships ?? [],
+        );
+        const stability = channelStability(channel, now, site.channelState);
+        const candidate = {
+          siteId: site.siteId,
+          siteName: site.siteName,
+          ratio,
+          rawRate: group.rate,
+          effectiveRate: minimum.effectiveRate,
+          groups: [group],
+          stability,
+          ...(channel?.id ? { channelId: channel.id } : {}),
+        };
+        const current = candidates.get(minimum.platformKey) ?? [];
+        current.push(candidate);
+        candidates.set(minimum.platformKey, current);
+      }
     }
   }
   const order = ['openai', 'claude', 'gemini', 'grok'];

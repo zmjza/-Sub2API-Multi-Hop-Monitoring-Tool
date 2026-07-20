@@ -291,7 +291,14 @@
 }
 @media (max-width: 1000px) {
   .usage-summary {
-    grid-template-columns: repeat(3, 1fr);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .usage-summary > .usage-stat,
+  .usage-summary > .usage-stat.tokens {
+    width: auto;
+    min-width: 0;
   }
   .filter-grid {
     grid-template-columns: repeat(2, 1fr);

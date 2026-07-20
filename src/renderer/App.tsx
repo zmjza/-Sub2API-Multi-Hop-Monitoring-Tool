@@ -572,7 +572,7 @@ export function App() {
     document.documentElement.dataset.highContrast = String(highContrast);
   }, [reducedTransparency, highContrast]);
   useEffect(() => {
-    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0, left: 0 });
+    document.querySelector<HTMLElement>('.content-scroll')?.scrollTo({ top: 0, left: 0 });
   }, [shell]);
   if (initialLocation.surface === 'floating')
     return <FloatingWindow {...context} onStateChange={setState} />;

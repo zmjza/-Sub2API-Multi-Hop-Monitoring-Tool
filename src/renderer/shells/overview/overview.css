@@ -936,7 +936,7 @@
   color: #475569;
   background: #e2e8f0;
 }
-.rate-platform-card p {
+.rate-platform-site {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 8px;
@@ -944,22 +944,22 @@
   padding-top: 10px;
   border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
-.rate-platform-card p b,
-.rate-platform-card p span,
-.rate-platform-card p small {
+.rate-platform-site > b,
+.rate-platform-site > span,
+.rate-platform-site > small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.rate-platform-card p b {
+.rate-platform-site > b {
   display: flex;
   align-items: center;
   gap: 6px;
   color: #1e293b;
   font-size: 12px;
 }
-.rate-platform-card p b i {
+.rate-platform-site > b i {
   display: inline-grid;
   flex: 0 0 18px;
   width: 18px;
@@ -971,24 +971,148 @@
   font-size: 9px;
   font-style: normal;
 }
-.rate-platform-card p span {
+.rate-platform-site > span {
   grid-column: 1 / -1;
   color: #64748b;
   font-size: 10px;
 }
-.rate-platform-card p em {
+.rate-platform-site > em {
   justify-self: end;
 }
-.rate-platform-card p small {
+.rate-platform-site > small {
   grid-column: 1 / -1;
   color: #64748b;
   font-size: 10px;
 }
 .rate-platform-sites {
-  max-height: 214px;
+  max-height: 360px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+
+.rate-inline-channel {
+  grid-column: 1 / -1;
+  min-height: 86px;
+  margin-top: 5px;
+  padding: 10px;
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+.rate-inline-channel-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+}
+.rate-inline-channel-heading > span {
+  color: #047857;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.rate-inline-channel-heading > b {
+  min-width: 0;
+  overflow: hidden;
+  color: #1e293b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rate-inline-channel-heading .rate-channel-status {
+  margin-left: 0;
+  padding: 3px 6px;
+  font-size: 9px;
+}
+.rate-inline-channel-metrics {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 9px;
+}
+.rate-inline-channel-metrics b {
+  color: #1e293b;
+  font-size: 10px;
+}
+.rate-inline-channel-metrics button,
+.rate-inline-channel.is-message button {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(180, 83, 9, 0.24);
+  border-radius: 50%;
+  background: #fff7ed;
+  color: #b45309;
+  cursor: pointer;
+}
+.rate-inline-channel-metrics button:focus-visible,
+.rate-inline-channel.is-message button:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+.rate-inline-channel-timeline {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+.rate-inline-channel-timeline i {
+  min-width: 3px;
+  height: 8px;
+  flex: 1;
+  border-radius: 3px;
+  background: #10b981;
+}
+.rate-inline-channel-timeline i.degraded {
+  background: #f59e0b;
+}
+.rate-inline-channel-timeline i.failed {
+  background: #ef4444;
+}
+.rate-inline-channel-timeline i.unknown {
+  background: #94a3b8;
+}
+.rate-inline-channel-timeline span,
+.rate-inline-channel-error {
+  color: #94a3b8;
+  font-size: 9px;
+}
+.rate-inline-channel-error {
+  display: block;
+}
+.rate-inline-channel.is-loading,
+.rate-inline-channel.is-message {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  color: #64748b;
+  font-size: 10px;
+}
+.rate-inline-channel.is-loading i {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e2e8f0, #f8fafc, #e2e8f0);
+  background-size: 200% 100%;
+  animation: inline-channel-loading 1.2s linear infinite;
+}
+.rate-inline-channel.is-error {
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(254, 242, 242, 0.72);
+  color: #b91c1c;
+}
+@keyframes inline-channel-loading {
+  to {
+    background-position: -200% 0;
+  }
 }
 
 .rate-channel-popover {

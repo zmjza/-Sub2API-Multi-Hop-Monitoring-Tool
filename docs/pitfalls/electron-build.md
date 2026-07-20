@@ -1,5 +1,38 @@
 # Electron 构建避坑
 
+## 总览内容变高后页面切换必须操作真实滚动容器
+
+**现象**
+
+倍率卡片内联渠道状态后总览高度增加，切换到使用记录时顶部统计卡可能仍位于滚动视口之外；DOM 和无障碍树有内容，但 Playwright 判定目标隐藏。
+
+**根因**
+
+页面实际滚动节点是 `.content-scroll`，外层 `.app-content` 不是滚动容器。对外层调用 `scrollTo` 不会复位内部滚动位置。
+
+**正确做法**
+
+页面切换时对 `.content-scroll` 执行 `scrollTo({ top: 0, left: 0 })`。新增高内容量模块后必须在窄窗口验证统计卡和主列表的实际几何位置。
+
+**验证方式**
+
+运行 `npm run test:e2e`，在使用记录断言 Token 统计可见；macOS 窄窗口切换总览/使用记录并检查截图。
+
+**禁止事项**
+
+不要仅延长可见性断言超时；不要把 `.app-content` 当成滚动节点；不要用固定负 margin 掩盖内部滚动位置。
+
+**相关文件或命令**
+
+- `src/renderer/App.tsx`
+- `src/renderer/styles.css`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有会改变总览页面高度的 Renderer 功能和页面切换滚动复位逻辑。
+
 ## macOS 内部目录构建应显式关闭自动签名发现
 
 **现象**

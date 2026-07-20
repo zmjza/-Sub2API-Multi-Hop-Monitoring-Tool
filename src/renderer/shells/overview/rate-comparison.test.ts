@@ -224,6 +224,83 @@ describe('rate comparison rules', () => {
     });
   });
 
+  it('ranks tied minimum groups independently with their own matched channels', () => {
+    const checkedAt = new Date().toISOString();
+    const result = comparePlatformRates([
+      {
+        siteId: 'tied-site',
+        siteName: '并列站点',
+        ratio: 1,
+        groups: [
+          group('fast', 'openai', 0.2, { name: '高速分组' }),
+          group('stable', 'openai', 0.2, { name: '稳定分组' }),
+        ],
+        channels: [
+          {
+            id: 'fast-channel',
+            name: '高速渠道',
+            groupName: '高速分组',
+            status: 'failed',
+            timeline: [{ status: 'failed', checkedAt }],
+          },
+          {
+            id: 'stable-channel',
+            name: '稳定渠道',
+            groupName: '稳定分组',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt }],
+          },
+        ],
+      },
+    ]);
+
+    expect(result[0]?.sites).toHaveLength(2);
+    expect(result[0]?.sites).toEqual([
+      expect.objectContaining({
+        siteId: 'tied-site',
+        groups: [expect.objectContaining({ id: 'stable' })],
+        channelId: 'stable-channel',
+        stabilityScore: 10,
+      }),
+      expect.objectContaining({
+        siteId: 'tied-site',
+        groups: [expect.objectContaining({ id: 'fast' })],
+        channelId: 'fast-channel',
+        stabilityScore: 0,
+      }),
+    ]);
+  });
+
+  it('does not borrow a sibling channel for an unmatched tied group', () => {
+    const result = comparePlatformRates([
+      {
+        siteId: 'partial-match',
+        siteName: '部分匹配站点',
+        ratio: 1,
+        groups: [
+          group('matched', 'openai', 0.2, { name: '已匹配分组' }),
+          group('missing', 'openai', 0.2, { name: '未匹配分组' }),
+        ],
+        channels: [
+          {
+            id: 'matched-channel',
+            name: '已匹配渠道',
+            groupName: '已匹配分组',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
+      },
+    ]);
+
+    const missing = result[0]?.sites.find((site) => site.groups[0]?.id === 'missing');
+    expect(missing).toMatchObject({
+      stabilityLabel: '无渠道状态',
+      stabilityScore: 5,
+    });
+    expect(missing).not.toHaveProperty('channelId');
+  });
+
   it('uses a neutral score for a candidate without channel status', () => {
     const result = comparePlatformRates([
       {

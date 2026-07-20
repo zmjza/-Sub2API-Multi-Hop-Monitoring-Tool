@@ -11,7 +11,11 @@ import {
   BadgePercent,
   Activity,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type {
+  ChannelDetailPayload,
+  ChannelViewPayload,
+} from '../../../../electron/shared/contracts';
 import { formatTokenCount } from '../../lib/format';
 import type { OverviewProps } from './types';
 import { overviewSites } from './data';
@@ -19,6 +23,13 @@ import { RechargeRatioControl } from './RechargeRatioControl';
 import { RatePopover } from './RatePopover';
 import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
+import type { AvailableChannelRelationship } from '../channels/channel-ranking';
+import { RateChannelStatusLoader } from './rate-channel-status-loader';
+import {
+  RateChannelSummary,
+  type InlineChannelDetailState,
+  type InlineChannelListState,
+} from './RateChannelSummary';
 import {
   comparePlatformRates,
   formatRateMultiplier,
@@ -41,9 +52,37 @@ export function OverviewPage(props: OverviewProps) {
   const [rateChannelsBySite, setRateChannelsBySite] = useState<
     Record<string, RateChannelSnapshot[]>
   >({});
+  const [rateChannelRelationshipsBySite, setRateChannelRelationshipsBySite] = useState<
+    Record<string, AvailableChannelRelationship[]>
+  >({});
   const [rateChannelStateBySite, setRateChannelStateBySite] = useState<
     Record<string, 'supported' | 'unsupported' | 'error'>
   >({});
+  const [inlineChannelListStateBySite, setInlineChannelListStateBySite] = useState<
+    Record<string, InlineChannelListState>
+  >({});
+  const [inlineChannelDetailStateByKey, setInlineChannelDetailStateByKey] = useState<
+    Record<string, InlineChannelDetailState>
+  >({});
+  const inlineChannelRequestBySiteRef = useRef(new Map<string, number>());
+  const inlineDetailRequestByKeyRef = useRef(new Map<string, number>());
+  const inlineRequestIdRef = useRef(0);
+  const channelStatusLoaderRef = useRef<RateChannelStatusLoader | null>(null);
+  if (!channelStatusLoaderRef.current)
+    channelStatusLoaderRef.current = new RateChannelStatusLoader({
+      readChannels: async (siteId) => {
+        const value = await window.sub2apiDesktop?.sites.channels(siteId);
+        if (!value || typeof value !== 'object' || !('state' in value))
+          throw new Error('Invalid channel list response');
+        return value as ChannelViewPayload;
+      },
+      readDetail: async (siteId, channelId) => {
+        const value = await window.sub2apiDesktop?.sites.channelStatus(siteId, channelId);
+        if (!value || typeof value !== 'object' || !('state' in value))
+          throw new Error('Invalid channel detail response');
+        return value as ChannelDetailPayload;
+      },
+    });
   const runtime = Boolean(window.sub2apiDesktop);
   const isEmpty =
     props.state === 'empty' || Boolean(props.dashboard && props.dashboard.sites.length === 0);
@@ -72,12 +111,135 @@ export function OverviewPage(props: OverviewProps) {
       ratio: props.rateContexts?.ratios[site.id],
       groups: props.rateContexts?.sites[site.id]?.groups ?? [],
       channels: rateChannelsBySite[site.id],
+      relationships: rateChannelRelationshipsBySite[site.id],
       channelState: rateChannelStateBySite[site.id],
     })),
   );
   const pendingRatioCount = liveSites.filter(
     (site) => props.rateContexts?.ratios[site.id] === undefined,
   ).length;
+  const comparableSiteIdsKey = JSON.stringify(
+    liveSites
+      .filter(
+        (site) =>
+          props.rateContexts?.ratios[site.id] !== undefined &&
+          (props.rateContexts?.sites[site.id]?.groups.length ?? 0) > 0,
+      )
+      .map((site) => site.id)
+      .sort((left, right) => left.localeCompare(right)),
+  );
+  const matchedChannelKeys = JSON.stringify(
+    [
+      ...new Set(
+        rateComparisons.flatMap((comparison) =>
+          comparison.sites.flatMap((site) =>
+            site.channelId ? [`${site.siteId}:${site.channelId}`] : [],
+          ),
+        ),
+      ),
+    ].sort((left, right) => left.localeCompare(right)),
+  );
+
+  const loadInlineChannels = useCallback(async (siteId: string, force = false) => {
+    const requestId = ++inlineRequestIdRef.current;
+    inlineChannelRequestBySiteRef.current.set(siteId, requestId);
+    setInlineChannelListStateBySite((current) => ({ ...current, [siteId]: 'loading' }));
+    try {
+      const envelope = await channelStatusLoaderRef.current!.loadChannels(siteId, force);
+      if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
+      const channels = envelope.state === 'supported' ? envelope.channels : [];
+      setRateChannelsBySite((current) => ({ ...current, [siteId]: channels }));
+      setRateChannelRelationshipsBySite((current) => ({
+        ...current,
+        [siteId]: envelope.availableChannels ?? [],
+      }));
+      setRateChannelStateBySite((current) => ({
+        ...current,
+        [siteId]: envelope.state === 'supported' ? 'supported' : 'unsupported',
+      }));
+      setInlineChannelListStateBySite((current) => ({
+        ...current,
+        [siteId]:
+          envelope.state === 'unsupported'
+            ? 'unsupported'
+            : channels.length === 0
+              ? 'no-data'
+              : 'success',
+      }));
+      setChannelStatusCacheBySite((current) => ({
+        ...current,
+        [siteId]: channelStatusLoaderRef.current!.cacheForSite(siteId),
+      }));
+    } catch {
+      if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
+      setRateChannelStateBySite((current) => ({ ...current, [siteId]: 'error' }));
+      setInlineChannelListStateBySite((current) => ({ ...current, [siteId]: 'error' }));
+    }
+  }, []);
+
+  const loadInlineDetail = useCallback(async (siteId: string, channelId: string, force = false) => {
+    const key = `${siteId}:${channelId}`;
+    const requestId = ++inlineRequestIdRef.current;
+    inlineDetailRequestByKeyRef.current.set(key, requestId);
+    setInlineChannelDetailStateByKey((current) => ({
+      ...current,
+      [key]: { state: 'loading' },
+    }));
+    try {
+      const payload = await channelStatusLoaderRef.current!.loadDetail(siteId, channelId, force);
+      if (inlineDetailRequestByKeyRef.current.get(key) !== requestId) return;
+      setInlineChannelDetailStateByKey((current) => ({
+        ...current,
+        [key]: { state: 'success', payload },
+      }));
+      setChannelStatusCacheBySite((current) => ({
+        ...current,
+        [siteId]: channelStatusLoaderRef.current!.cacheForSite(siteId),
+      }));
+    } catch {
+      if (inlineDetailRequestByKeyRef.current.get(key) !== requestId) return;
+      setInlineChannelDetailStateByKey((current) => ({
+        ...current,
+        [key]: { state: 'error' },
+      }));
+    }
+  }, []);
+
+  const syncChannelStatusCache = useCallback((siteId: string, cache: ChannelStatusCache) => {
+    channelStatusLoaderRef.current?.seed(siteId, cache);
+    setChannelStatusCacheBySite((current) => ({ ...current, [siteId]: cache }));
+    if (cache.channels?.state === 'supported') {
+      setRateChannelRelationshipsBySite((current) => ({
+        ...current,
+        [siteId]: cache.channels?.availableChannels ?? [],
+      }));
+      setInlineChannelListStateBySite((current) => ({
+        ...current,
+        [siteId]: cache.channels?.channels.length ? 'success' : 'no-data',
+      }));
+    }
+    setInlineChannelDetailStateByKey((current) => {
+      const next = { ...current };
+      for (const [channelId, payload] of Object.entries(cache.details))
+        next[`${siteId}:${channelId}`] = { state: 'success', payload };
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!window.sub2apiDesktop) return;
+    const siteIds = JSON.parse(comparableSiteIdsKey) as string[];
+    for (const siteId of siteIds) void loadInlineChannels(siteId);
+  }, [comparableSiteIdsKey, loadInlineChannels]);
+
+  useEffect(() => {
+    if (!window.sub2apiDesktop) return;
+    const keys = JSON.parse(matchedChannelKeys) as string[];
+    for (const key of keys) {
+      const separator = key.indexOf(':');
+      void loadInlineDetail(key.slice(0, separator), key.slice(separator + 1));
+    }
+  }, [loadInlineDetail, matchedChannelKeys]);
   return (
     <section className="overview-page">
       <div className="overview-metrics">
@@ -174,26 +336,52 @@ export function OverviewPage(props: OverviewProps) {
                   {formatRateMultiplier(comparison.effectiveRate)}
                 </div>
                 <div className="rate-platform-sites">
-                  {comparison.sites.map((site, index) => (
-                    <p key={site.siteId}>
-                      <b title={site.siteName}>
-                        <i>{index + 1}</i>
-                        {site.siteName}
-                      </b>
-                      <span title={site.groups.map((group) => group.name).join('、')}>
-                        {site.groups.map((group) => group.name).join('、')}
-                      </span>
-                      <em className={`rate-status-label ${site.stabilityLabel}`}>
-                        {site.stabilityLabel}
-                      </em>
-                      <small>
-                        综合 {site.totalScore.toFixed(1)} · 折算{' '}
-                        {formatRateMultiplier(site.effectiveRate)} · 原始{' '}
-                        {formatRateMultiplier(site.rawRate)} · 1:{site.ratio} · 价格{' '}
-                        {site.priceScore.toFixed(1)} · 稳定 {site.stabilityScore.toFixed(1)}
-                      </small>
-                    </p>
-                  ))}
+                  {comparison.sites.map((site, index) => {
+                    const group = site.groups[0];
+                    const channel = site.channelId
+                      ? rateChannelsBySite[site.siteId]?.find(
+                          (candidate) => candidate.id === site.channelId,
+                        )
+                      : undefined;
+                    const detailKey = site.channelId
+                      ? `${site.siteId}:${site.channelId}`
+                      : undefined;
+                    return (
+                      <article
+                        className="rate-platform-site"
+                        key={`${site.siteId}:${group?.id ?? index}`}
+                      >
+                        <b title={site.siteName}>
+                          <i>{index + 1}</i>
+                          {site.siteName}
+                        </b>
+                        <span title={group?.name}>{group?.name ?? '未命名分组'}</span>
+                        <em className={`rate-status-label ${site.stabilityLabel}`}>
+                          {site.stabilityLabel}
+                        </em>
+                        <small>
+                          综合 {site.totalScore.toFixed(1)} · 折算{' '}
+                          {formatRateMultiplier(site.effectiveRate)} · 原始{' '}
+                          {formatRateMultiplier(site.rawRate)} · 1:{site.ratio} · 价格{' '}
+                          {site.priceScore.toFixed(1)} · 稳定 {site.stabilityScore.toFixed(1)}
+                        </small>
+                        <RateChannelSummary
+                          siteName={site.siteName}
+                          groupName={group?.name ?? '未命名分组'}
+                          listState={inlineChannelListStateBySite[site.siteId] ?? 'loading'}
+                          channel={channel}
+                          detailState={
+                            detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined
+                          }
+                          onRetry={() =>
+                            site.channelId
+                              ? void loadInlineDetail(site.siteId, site.channelId, true)
+                              : void loadInlineChannels(site.siteId, true)
+                          }
+                        />
+                      </article>
+                    );
+                  })}
                 </div>
                 {comparison.sites.filter(
                   (site) => Math.abs(site.totalScore - comparison.sites[0]!.totalScore) < 1e-9,
@@ -486,24 +674,28 @@ export function OverviewPage(props: OverviewProps) {
           siteId={channelPopover.siteId}
           siteName={liveSites.find((site) => site.id === channelPopover.siteId)?.name ?? '当前站点'}
           cache={channelStatusCacheBySite[channelPopover.siteId]}
-          onCacheChange={(cache) =>
-            setChannelStatusCacheBySite((current) => ({
-              ...current,
-              [channelPopover.siteId]: cache,
-            }))
-          }
-          onLoaded={(channels) =>
+          onCacheChange={(cache) => syncChannelStatusCache(channelPopover.siteId, cache)}
+          onLoaded={(channels) => {
             setRateChannelsBySite((current) => ({
               ...current,
               [channelPopover.siteId]: channels,
-            }))
-          }
-          onStateChange={(state) =>
+            }));
+            setInlineChannelListStateBySite((current) => ({
+              ...current,
+              [channelPopover.siteId]: channels.length ? 'success' : 'no-data',
+            }));
+          }}
+          onStateChange={(state) => {
             setRateChannelStateBySite((current) => ({
               ...current,
               [channelPopover.siteId]: state,
-            }))
-          }
+            }));
+            if (state !== 'supported')
+              setInlineChannelListStateBySite((current) => ({
+                ...current,
+                [channelPopover.siteId]: state === 'unsupported' ? 'unsupported' : 'error',
+              }));
+          }}
           onClose={() => setChannelPopover(undefined)}
         />
       )}

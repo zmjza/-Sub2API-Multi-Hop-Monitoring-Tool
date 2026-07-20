@@ -193,7 +193,7 @@ export function ChannelStatusPopover(props: {
         <div className="rate-channel-state" role="status">
           <RefreshCw size={24} className="spin" />
           <strong>正在读取渠道状态…</strong>
-          <span>只在打开快捷查看后加载</span>
+          <span>正在同步当前站点的渠道列表</span>
         </div>
       ) : state === 'error' ? (
         <div className="rate-channel-state" role="alert">

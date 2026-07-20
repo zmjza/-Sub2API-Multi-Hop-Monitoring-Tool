@@ -1,5 +1,29 @@
 # 更新说明
 
+## 1.3.4 - 2026-07-20
+
+### 倍率对比与渠道状态
+
+- 倍率对比卡片改为自动加载并内联显示每个分组匹配到的渠道状态、7 天可用率和时间线；无渠道状态明确显示标签，分组之间不再互借渠道结果。
+- 保留站点级“查看渠道状态”快捷入口，弹窗继续复用既有渠道列表/详情接口和缓存；内联列表与详情请求支持去重、并发上限、失败隔离、局部重试和陈旧响应保护。
+- OpenAI、Claude、Gemini、Grok 固定为前四列并分别使用浅绿、浅橙、浅蓝和黑灰主题；超过四个平台继续单行横向滚动，卡片圆角、加载动画、错误态和无数据态与现有视觉方案对齐。
+- 修复内联状态使总览变高后页面切换未滚动到真实 `.content-scroll` 的问题，并修复窄窗口使用记录统计卡片内容被挤成 0 宽的问题。
+
+### 验证与发布
+
+- Prettier、ESLint、TypeScript、Vitest 28 文件/154 项、开发 Electron E2E 6/6、macOS ARM64 打包应用 E2E 6/6 通过。
+- macOS 真机检查覆盖默认窗口、窄窗口、加载/成功/失败重试、完整渠道弹窗、四平台配色与横向滚动，证据位于 `real-test-evidence/macos-1.3.4/`。
+- Windows x64 仅完成 NSIS 交叉构建与 PE/asar 结构验证，不代表 Windows 真机通过。
+
+### 1.3.4 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg`          | `76be6fef59edeff6e36897fe080d8ac7b02d0bf55e6c476623c962c25243ed12` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg.blockmap` | `f116a7c223f4f227ffdd808c833efbd68ee334cf330610fbae8f61f236c844ed` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe`            | `cce46d6ebfd54ff28fadf8c7038ed4ad6cf6a6f1ffecd201329c1393a784a1f1` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe.blockmap`   | `a42cfc896ebf4d189e649b2f8211286df8993154c9705ff6d8c9e30cefdcbbda` |
+
 ## 1.3.3 - 2026-07-20
 
 ### 可访问性与发布

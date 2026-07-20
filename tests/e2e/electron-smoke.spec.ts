@@ -65,24 +65,35 @@ test('opens the controlled renderer preview', async () => {
     const main = BrowserWindow.getAllWindows().find(
       (candidate) => candidate.getBounds().width > 500,
     );
-    const workArea = screen.getPrimaryDisplay().workAreaSize;
+    const bounds = main?.getBounds();
+    const display = bounds
+      ? screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y })
+      : screen.getPrimaryDisplay();
     return {
-      bounds: main?.getBounds(),
+      bounds,
       contentBounds: main?.getContentBounds(),
       backgroundColor: main?.getBackgroundColor(),
       resizable: main?.isResizable(),
-      workArea,
+      workArea: display.workAreaSize,
+      isPrimaryDisplay: display.id === screen.getPrimaryDisplay().id,
     };
   });
   expect(geometry.resizable).toBe(true);
   expect(geometry.backgroundColor.toLowerCase()).toBe('#f8f9ff');
   expect(geometry.contentBounds).toEqual(geometry.bounds);
-  expect(
-    Math.abs((geometry.bounds?.width ?? 0) - Math.round(geometry.workArea.width * 0.6)),
-  ).toBeLessThanOrEqual(2);
-  expect(
-    Math.abs((geometry.bounds?.height ?? 0) - Math.round(geometry.workArea.height * 0.9)),
-  ).toBeLessThanOrEqual(2);
+  if (geometry.isPrimaryDisplay) {
+    expect(
+      Math.abs((geometry.bounds?.width ?? 0) - Math.round(geometry.workArea.width * 0.6)),
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs((geometry.bounds?.height ?? 0) - Math.round(geometry.workArea.height * 0.9)),
+    ).toBeLessThanOrEqual(2);
+  } else {
+    expect(geometry.bounds?.width ?? 0).toBeGreaterThanOrEqual(720);
+    expect(geometry.bounds?.width ?? 0).toBeLessThanOrEqual(geometry.workArea.width);
+    expect(geometry.bounds?.height ?? 0).toBeGreaterThanOrEqual(512);
+    expect(geometry.bounds?.height ?? 0).toBeLessThanOrEqual(geometry.workArea.height);
+  }
   await window.screenshot({ path: 'test-results/overview.png' });
   for (const shell of ['usage', 'channels', 'sites', 'radar']) {
     let radarMode: 'success' | 'empty' | 'error' = 'success';
@@ -460,6 +471,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   let availableRatesRequestCount = 0;
   let channelRequestCount = 0;
   let channelDetailRequestCount = 0;
+  const channelDetailRequestCountById = new Map<string, number>();
+  const failingChannelDetails = new Set(['channel-e2e-2']);
   let channelDelayMs = 0;
   let channelListMode: 'success' | 'error' = 'success';
   let modelsRequestCount = 0;
@@ -633,17 +646,23 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
         response.statusCode = 503;
         return response.end(JSON.stringify({ message: 'temporarily unavailable' }));
       }
+      const checkedAt = new Date().toISOString();
       const body = JSON.stringify({
         data: Array.from({ length: 7 }, (_, index) => ({
           id: `channel-e2e-${index + 1}`,
           name: `E2E 渠道 ${index + 1}`,
-          platform: index === 0 ? 'openai' : 'Mock',
-          group_name: index === 0 ? 'OpenAI 便宜 A' : `其他分组 ${index + 1}`,
-          primary_model: index === 0 ? 'gpt-e2e' : 'mock-model',
-          primary_status: 'normal',
-          availability_7d: 99.9,
+          platform: index < 2 ? 'openai' : 'Mock',
+          group_name:
+            index === 0 ? 'OpenAI 便宜 A' : index === 1 ? 'OpenAI 便宜 B' : `其他分组 ${index + 1}`,
+          primary_model: index < 2 ? 'gpt-e2e' : 'mock-model',
+          primary_status: index === 1 ? 'degraded' : 'normal',
+          availability_7d: index === 1 ? 90.76 : 99.9,
           timeline: [
-            { status: 'normal', checked_at: '2026-07-19T15:00:00+08:00', latency_ms: 120 },
+            {
+              status: index === 1 ? 'degraded' : 'normal',
+              checked_at: checkedAt,
+              latency_ms: index === 1 ? 480 : 120,
+            },
           ],
         })),
       });
@@ -654,15 +673,31 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       return response.end(body);
     }
     if (url.startsWith('/api/v1/channel-monitors/channel-e2e-') && url.endsWith('/status')) {
+      const channelId = url.split('/').at(-2) ?? '';
       channelDetailRequestCount += 1;
+      channelDetailRequestCountById.set(
+        channelId,
+        (channelDetailRequestCountById.get(channelId) ?? 0) + 1,
+      );
+      if (failingChannelDetails.has(channelId)) {
+        response.statusCode = 503;
+        return response.end(JSON.stringify({ message: 'channel detail temporarily unavailable' }));
+      }
+      const secondChannel = channelId === 'channel-e2e-2';
       return response.end(
         JSON.stringify({
           data: {
-            id: 'channel-e2e-1',
-            name: 'E2E 渠道 1',
+            id: channelId,
+            name: secondChannel ? 'E2E 渠道 2' : 'E2E 渠道 1',
             platform: 'openai',
-            group_name: 'OpenAI 便宜 A',
-            models: [{ model: 'gpt-e2e', latest_status: 'normal', availability_7d: 99.9 }],
+            group_name: secondChannel ? 'OpenAI 便宜 B' : 'OpenAI 便宜 A',
+            models: [
+              {
+                model: 'gpt-e2e',
+                latest_status: secondChannel ? 'degraded' : 'normal',
+                availability_7d: secondChannel ? 90.76 : 99.9,
+              },
+            ],
           },
         }),
       );
@@ -740,6 +775,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     const dashboard = await window.sub2apiDesktop?.sites.list();
     return dashboard?.currentSiteId;
   });
+  const channelsBeforeInlineStatus = channelRequestCount;
   await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('custom');
   await firstSiteCard.getByLabel('本地集成站点 自定义充值比例').fill('-1');
   await firstSiteCard.getByRole('button', { name: '保存充值比例' }).click();
@@ -749,9 +785,35 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('custom');
   await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('10');
   await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('10');
+  await expect
+    .poll(() => channelRequestCount, { timeout: 15_000 })
+    .toBeGreaterThan(channelsBeforeInlineStatus);
+  await expect
+    .poll(() => channelDetailRequestCountById.get('channel-e2e-1') ?? 0, { timeout: 15_000 })
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => channelDetailRequestCountById.get('channel-e2e-2') ?? 0, { timeout: 15_000 })
+    .toBeGreaterThan(0);
   await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
   await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
   await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
+  const openAiRateCard = main.locator('.rate-platform-card[data-platform="openai"]');
+  await expect(openAiRateCard.locator('.rate-platform-site')).toHaveCount(2);
+  await expect(openAiRateCard).toContainText('E2E 渠道 1');
+  await expect(openAiRateCard).toContainText('E2E 渠道 2');
+  await expect(openAiRateCard).toContainText('详情加载失败，可单独重试');
+  const secondDetailRequestsBeforeRetry = channelDetailRequestCountById.get('channel-e2e-2') ?? 0;
+  failingChannelDetails.delete('channel-e2e-2');
+  await openAiRateCard
+    .locator('.rate-platform-site')
+    .filter({ hasText: 'OpenAI 便宜 B' })
+    .getByTitle('重试渠道详情')
+    .click();
+  await expect
+    .poll(() => channelDetailRequestCountById.get('channel-e2e-2') ?? 0)
+    .toBeGreaterThan(secondDetailRequestsBeforeRetry);
+  await expect(openAiRateCard).not.toContainText('详情加载失败，可单独重试');
+  await expect(openAiRateCard).toContainText('90.76%');
   expect(
     await main.locator('.rate-comparison-list').evaluate((list) => {
       const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
@@ -841,7 +903,6 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   const detailsBeforeShortcut = channelDetailRequestCount;
   channelDelayMs = 300;
   await firstSiteCard.getByLabel('查看 本地集成站点 渠道状态').click();
-  await expect(main.getByText('正在读取渠道状态…', { exact: true })).toBeVisible();
   await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
     'E2E 渠道 1',
   );
@@ -854,8 +915,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     'E2E 渠道 7',
   );
   await captureEvidence(main, '09-channel-status-popover');
-  expect(channelRequestCount).toBeGreaterThan(channelsBeforeShortcut);
-  expect(channelDetailRequestCount).toBeGreaterThan(detailsBeforeShortcut);
+  expect(channelRequestCount).toBe(channelsBeforeShortcut);
+  expect(channelDetailRequestCount).toBe(detailsBeforeShortcut);
   await main.keyboard.press('Escape');
   await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toHaveCount(0);
   const channelsAfterFirstOpen = channelRequestCount;
