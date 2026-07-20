@@ -16,20 +16,64 @@ export type AvailableChannelRelationship = {
   }>;
 };
 
-function normalized(value?: string): string {
-  return (value ?? '').replace(/[\s【】[\]（）()_-]/g, '').toLocaleLowerCase();
+export function normalizeChannelIdentity(value?: string): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/【|\[/g, '(')
+    .replace(/】|\]/g, ')')
+    .replace(/[\s._‐‑‒–—-]/g, '');
 }
 
-function semanticCore(value?: string): string {
-  return normalized(value).replace(/限时|专用|分组|通道|池|监控/g, '');
+function normalized(value?: string): string {
+  return normalizeChannelIdentity(value);
+}
+
+export type ChannelMatchResult<T extends RankableChannel> =
+  | { status: 'matched'; channel: T; basis: 'name' | 'relationship' }
+  | { status: 'unmatched' }
+  | { status: 'ambiguous'; candidates: T[] };
+
+export function matchGroupToChannel<T extends RankableChannel>(
+  channels: T[],
+  groupName?: string,
+  relationships: AvailableChannelRelationship[] = [],
+): ChannelMatchResult<T> {
+  const group = normalized(groupName);
+  if (!group) return { status: 'unmatched' };
+
+  const exact = channels.filter((channel) => normalized(channel.name) === group);
+  if (exact.length === 1) return { status: 'matched', channel: exact[0]!, basis: 'name' };
+  if (exact.length > 1) return { status: 'ambiguous', candidates: exact };
+
+  const relatedSections = relationships.flatMap((relationship) =>
+    relationship.platforms.flatMap((section) =>
+      section.groupNames.some((name) => normalized(name) === group)
+        ? [{ relationshipName: relationship.name, section }]
+        : [],
+    ),
+  );
+  if (!relatedSections.length) return { status: 'unmatched' };
+
+  const related = channels.filter((channel) =>
+    relatedSections.some(({ relationshipName, section }) => {
+      if (normalized(channel.name) === normalized(relationshipName)) return true;
+      if (normalized(channel.platform) !== normalized(section.platform)) return false;
+      const channelModels = [channel.primaryModel, ...(channel.extraModels ?? [])]
+        .map((model) => normalized(model))
+        .filter(Boolean);
+      return section.modelNames.some((model) => channelModels.includes(normalized(model)));
+    }),
+  );
+  if (related.length === 1)
+    return { status: 'matched', channel: related[0]!, basis: 'relationship' };
+  if (related.length > 1) return { status: 'ambiguous', candidates: related };
+  return { status: 'unmatched' };
 }
 
 export function matchesKeyGroup(channel: RankableChannel, groupName?: string): boolean {
-  const group = normalized(groupName);
-  if (!group) return false;
-  const channelGroup = normalized(channel.groupName);
-  const channelName = normalized(channel.name);
-  return Boolean(channelGroup && channelGroup === group) || channelName.includes(group);
+  return matchGroupToChannel([channel], groupName).status === 'matched';
 }
 
 export function resolveKeyGroupChannel<T extends RankableChannel>(
@@ -38,66 +82,9 @@ export function resolveKeyGroupChannel<T extends RankableChannel>(
   relationships: AvailableChannelRelationship[] = [],
   usageModels: string[] = [],
 ): T | undefined {
-  const group = normalized(groupName);
-  if (!group) return undefined;
-
-  const exact = channels.filter((channel) => {
-    const channelGroup = normalized(channel.groupName);
-    const channelName = normalized(channel.name);
-    return channelGroup === group || channelName === group || channelName.includes(group);
-  });
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return undefined;
-
-  const groupCore = semanticCore(groupName);
-  if (groupCore.length < 2) return undefined;
-  const semantic = channels.filter((channel) => {
-    const candidates = [semanticCore(channel.groupName), semanticCore(channel.name)].filter(
-      (value) => value.length >= 2,
-    );
-    return candidates.some(
-      (candidate) => candidate.includes(groupCore) || groupCore.includes(candidate),
-    );
-  });
-  if (semantic.length === 1) return semantic[0];
-  if (semantic.length > 1) return undefined;
-
-  const relatedChannels = relationships.filter((relationship) =>
-    relationship.platforms.some((section) =>
-      section.groupNames.some((name) => normalized(name) === group),
-    ),
-  );
-  const relatedCandidates = channels.filter((channel) =>
-    relatedChannels.some((relationship) =>
-      relationship.platforms.some((section) => {
-        const relationshipName = normalized(relationship.name);
-        const channelName = normalized(channel.name);
-        const nameMatches =
-          channelName === relationshipName ||
-          channelName.includes(relationshipName) ||
-          relationshipName.includes(channelName);
-        const channelModels = [channel.primaryModel, ...(channel.extraModels ?? [])]
-          .map((model) => normalized(model))
-          .filter(Boolean);
-        const modelMatches = section.modelNames.some((model) =>
-          channelModels.includes(normalized(model)),
-        );
-        const platformMatches = normalized(channel.platform) === normalized(section.platform);
-        return nameMatches || (platformMatches && modelMatches);
-      }),
-    ),
-  );
-  if (relatedCandidates.length === 1) return relatedCandidates[0];
-  if (relatedCandidates.length > 1 && usageModels.length) {
-    const normalizedUsageModels = new Set(usageModels.map((model) => normalized(model)));
-    const usageCandidates = relatedCandidates.filter((channel) =>
-      [channel.primaryModel, ...(channel.extraModels ?? [])].some((model) =>
-        normalizedUsageModels.has(normalized(model)),
-      ),
-    );
-    if (usageCandidates.length === 1) return usageCandidates[0];
-  }
-  return undefined;
+  void usageModels;
+  const result = matchGroupToChannel(channels, groupName, relationships);
+  return result.status === 'matched' ? result.channel : undefined;
 }
 
 export function rankChannels<T extends RankableChannel>(
@@ -136,7 +123,8 @@ export function detailForDisplayedChannel<T extends { name: string }>(
 }
 
 export function formatRateLabel(rate?: number): string | undefined {
-  return rate === undefined ? undefined : `${Number(rate.toFixed(4))}x`;
+  if (rate === undefined || !Number.isFinite(rate) || rate < 0) return undefined;
+  return `${Number(rate.toFixed(6))}x`;
 }
 
 export function groupRateForChannel(
@@ -146,9 +134,69 @@ export function groupRateForChannel(
   relationships: AvailableChannelRelationship[] = [],
   usageModels: string[] = [],
 ): number | undefined {
-  return groups.find(
-    (group) => resolveKeyGroupChannel(channels, group.name, relationships, usageModels) === channel,
-  )?.rate;
+  void usageModels;
+  const matchedGroups = groups.filter((group) => {
+    const result = matchGroupToChannel(channels, group.name, relationships);
+    return result.status === 'matched' && result.channel === channel;
+  });
+  return matchedGroups.length === 1 ? matchedGroups[0]?.rate : undefined;
+}
+
+export type ChannelRatePresentation =
+  | { state: 'loading'; label: '读取倍率中'; title: string }
+  | { state: 'unset'; label: '未设置倍率'; title: string }
+  | { state: 'unavailable'; label: '倍率不可用'; title: string }
+  | {
+      state: 'ready';
+      label: string;
+      title: string;
+      rawRate: number;
+      effectiveRate: number;
+    };
+
+export function channelRatePresentation<T extends RankableChannel>(
+  channel: T,
+  groups: Array<{ id?: string; name: string; rate?: number }> | undefined,
+  ratio: number | undefined,
+  channels: T[],
+  relationships: AvailableChannelRelationship[] = [],
+): ChannelRatePresentation {
+  if (groups === undefined)
+    return { state: 'loading', label: '读取倍率中', title: '正在读取当前站点倍率' };
+  if (ratio === undefined)
+    return { state: 'unset', label: '未设置倍率', title: '请在全部站点设置充值比例' };
+  if (!Number.isFinite(ratio) || ratio <= 0)
+    return { state: 'unavailable', label: '倍率不可用', title: '当前站点充值比例无效' };
+
+  const mappings = groups.flatMap((group) => {
+    const result = matchGroupToChannel(channels, group.name, relationships);
+    if (result.status === 'ambiguous' && result.candidates.includes(channel))
+      return [{ group, ambiguous: true }];
+    if (result.status === 'matched' && result.channel === channel)
+      return [{ group, ambiguous: false }];
+    return [];
+  });
+  if (mappings.some((mapping) => mapping.ambiguous))
+    return { state: 'unavailable', label: '倍率不可用', title: '渠道与分组关系存在歧义' };
+  if (mappings.length !== 1)
+    return {
+      state: 'unavailable',
+      label: '倍率不可用',
+      title: mappings.length ? '渠道对应多个分组' : '未找到渠道对应的唯一分组',
+    };
+  const rawRate = mappings[0]?.group.rate;
+  if (rawRate === undefined || !Number.isFinite(rawRate) || rawRate <= 0)
+    return { state: 'unavailable', label: '倍率不可用', title: '分组倍率缺失或无效' };
+  const effectiveRate = rawRate / ratio;
+  const rawLabel = formatRateLabel(rawRate)!;
+  const effectiveLabel = formatRateLabel(effectiveRate)!;
+  return {
+    state: 'ready',
+    label: `折算 ${effectiveLabel}`,
+    title: `原始倍率 ${rawLabel} · 充值比例 1:${ratio} · 折算结果 ${effectiveLabel}`,
+    rawRate,
+    effectiveRate,
+  };
 }
 
 export function usageModelsForGroup(value: unknown, groupName?: string): string[] {
@@ -227,9 +275,15 @@ export function currentKeyGroupName(
   preference: { mode: 'auto' | 'manual'; keyId?: string } | undefined,
   defaultKeyLabel?: string,
 ): string | undefined {
-  const key =
-    preference?.mode === 'manual'
-      ? keys.find((item) => item.id === preference.keyId)
-      : (keys.find((item) => item.maskedLabel === defaultKeyLabel) ?? keys[0]);
+  const key = resolveCurrentKey(keys, preference, defaultKeyLabel);
   return key?.groupName ?? groups.find((group) => group.id === key?.groupId)?.name;
+}
+
+export function resolveCurrentKey<T extends { id: string; maskedLabel: string }>(
+  keys: T[],
+  preference: { mode: 'auto' | 'manual'; keyId?: string } | undefined,
+  defaultKeyLabel?: string,
+): T | undefined {
+  if (preference?.mode === 'manual') return keys.find((item) => item.id === preference.keyId);
+  return defaultKeyLabel ? keys.find((item) => item.maskedLabel === defaultKeyLabel) : undefined;
 }

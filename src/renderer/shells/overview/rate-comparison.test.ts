@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AvailableRateGroup } from '../../../../electron/shared/contracts';
 import {
+  channelEligibility,
   comparePlatformRates,
   channelStability,
   effectiveRate,
@@ -8,7 +9,10 @@ import {
   findPlatformMinima,
   formatRateMultiplier,
   normalizePlatform,
+  normalizedPriceScore,
   parseRechargeRatio,
+  rateRefreshIntervalMs,
+  resolveActualPlatform,
 } from './rate-comparison';
 
 const group = (
@@ -26,9 +30,142 @@ const group = (
 });
 
 describe('rate comparison rules', () => {
+  it('requires a wholly normal current five-minute window', () => {
+    const now = Date.parse('2026-07-20T10:00:00Z');
+    const stable = {
+      id: 'stable',
+      name: '稳定分组',
+      status: 'normal' as const,
+      timeline: [
+        { status: 'normal' as const, checkedAt: '2026-07-20T09:56:00Z' },
+        { status: 'normal' as const, checkedAt: '2026-07-20T09:59:30Z' },
+      ],
+    };
+    expect(channelEligibility(stable, now, 'supported')).toMatchObject({
+      eligible: true,
+      score: 10,
+      label: '稳定',
+    });
+    expect(
+      channelEligibility(
+        {
+          ...stable,
+          timeline: [...stable.timeline, { status: 'degraded', checkedAt: '2026-07-20T09:58:00Z' }],
+        },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: false, reason: 'recent-issue' });
+    expect(
+      channelEligibility(
+        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:54:59Z' }] },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: false, reason: 'no-recent-record' });
+    expect(
+      channelEligibility(
+        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T10:00:01Z' }] },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: false, reason: 'future-record' });
+    expect(channelEligibility(undefined, now, 'unsupported')).toMatchObject({
+      eligible: false,
+      reason: 'unsupported',
+    });
+  });
+
+  it('classifies a misleading OpenAI group as Grok from stronger evidence', () => {
+    expect(
+      resolveActualPlatform(group('grok-free', 'openai', 0.3, { name: 'Grok Free 高速组' })),
+    ).toEqual({ key: 'grok', label: 'Grok' });
+    expect(
+      resolveActualPlatform(group('opaque', 'openai', 0.3, { name: '高速组' }), {
+        id: 'monitor',
+        name: '高速组',
+        status: 'normal',
+        primaryModel: 'claude-opus-4',
+      }),
+    ).toEqual({ key: 'claude', label: 'Claude' });
+  });
+
+  it('uses min-max price normalization only across eligible candidates', () => {
+    expect(normalizedPriceScore(0.1, 0.1, 0.3)).toBe(10);
+    expect(normalizedPriceScore(0.2, 0.1, 0.3)).toBeCloseTo(5, 12);
+    expect(normalizedPriceScore(0.3, 0.1, 0.3)).toBe(0);
+    expect(normalizedPriceScore(0.2, 0.2, 0.2)).toBe(10);
+    const checkedAt = new Date().toISOString();
+    const stableSite = (id: string, rate: number) => ({
+      siteId: id,
+      siteName: id,
+      ratio: 1,
+      groups: [group(id, 'openai', rate, { name: `${id} 分组` })],
+      channels: [
+        {
+          id: `${id}-channel`,
+          name: `${id} 分组`,
+          status: 'normal' as const,
+          availability7d: 99,
+          timeline: [{ status: 'normal' as const, checkedAt }],
+        },
+      ],
+      channelState: 'supported' as const,
+    });
+    const result = comparePlatformRates([
+      stableSite('cheap', 0.1),
+      stableSite('middle', 0.2),
+      stableSite('expensive', 0.3),
+      {
+        ...stableSite('failed-cheaper', 0.01),
+        channels: [
+          {
+            id: 'failed',
+            name: 'failed-cheaper 分组',
+            status: 'failed' as const,
+            timeline: [{ status: 'failed' as const, checkedAt }],
+          },
+        ],
+      },
+    ]);
+    expect(result[0]?.sites.map((site) => [site.siteId, site.priceScore])).toEqual([['cheap', 10]]);
+    expect(result[0]).toMatchObject({
+      platformKey: 'openai',
+      priceScore: 10,
+      stabilityScore: 10,
+      effectiveRate: 0.1,
+    });
+  });
+
+  it('returns checking and empty platform states instead of unsafe fallback recommendations', () => {
+    const pending = comparePlatformRates([
+      { siteId: 'pending', siteName: '待核验', ratio: 1, groups: [group('p', 'openai', 0.2)] },
+    ]);
+    expect(pending[0]).toMatchObject({ platformKey: 'openai', state: 'checking', sites: [] });
+
+    const unsupported = comparePlatformRates([
+      {
+        siteId: 'unsupported',
+        siteName: '不支持',
+        ratio: 1,
+        groups: [group('u', 'openai', 0.2)],
+        channelState: 'unsupported',
+        channels: [],
+      },
+    ]);
+    expect(unsupported[0]).toMatchObject({ platformKey: 'openai', state: 'empty', sites: [] });
+  });
+
+  it('maps only the supported automatic refresh periods', () => {
+    expect(rateRefreshIntervalMs(1)).toBe(60_000);
+    expect(rateRefreshIntervalMs(3)).toBe(180_000);
+    expect(rateRefreshIntervalMs(5)).toBe(300_000);
+    expect(rateRefreshIntervalMs(10)).toBe(600_000);
+    expect(rateRefreshIntervalMs(2)).toBe(300_000);
+  });
   it('normalizes recharge value and formats without meaningless zeroes', () => {
     expect(effectiveRate(0.4, 10)).toBeCloseTo(0.04, 12);
-    expect(effectiveRate(0, 8)).toBe(0);
+    expect(effectiveRate(0, 8)).toBeUndefined();
     expect(effectiveRate(0.4, undefined)).toBeUndefined();
     expect(effectiveRate(0.4, 0)).toBeUndefined();
     expect(formatRateMultiplier(0.0150001)).toBe('0.015x');
@@ -62,6 +199,25 @@ describe('rate comparison rules', () => {
     expect(filterRateGroups(groups, 'all', '不存在')).toEqual([]);
   });
 
+  it('uses matched channel model evidence in rate-popover filtering and minima', () => {
+    const misleading = group('misleading', 'openai', 0.4, { name: '高速专线' });
+    const channels = [
+      {
+        id: 'grok-channel',
+        name: '高速专线',
+        primaryModel: 'grok-4',
+        status: 'normal' as const,
+      },
+    ];
+
+    expect(filterRateGroups([misleading], 'grok', '', channels)).toEqual([misleading]);
+    expect(filterRateGroups([misleading], 'openai', '', channels)).toEqual([]);
+    expect(findPlatformMinima([misleading], 10, channels)[0]).toMatchObject({
+      platformKey: 'grok',
+      platformLabel: 'Grok',
+    });
+  });
+
   it('finds every tied minimum per platform and excludes unusable groups', () => {
     const minima = findPlatformMinima(
       [
@@ -86,7 +242,7 @@ describe('rate comparison rules', () => {
     });
   });
 
-  it('uses raw rates for one site without a ratio but excludes it cross-site', () => {
+  it('uses raw rates for one-site display but excludes missing ratios cross-site', () => {
     expect(findPlatformMinima([group('raw', 'openai', 0.4)], undefined)[0]).toMatchObject({
       comparisonRate: 0.4,
       effectiveRate: undefined,
@@ -103,26 +259,40 @@ describe('rate comparison rules', () => {
         siteName: 'maok',
         ratio: 10,
         groups: [group('maok-cheap', 'openai', 0.4)],
+        channelState: 'supported',
+        channels: [
+          {
+            id: 'maok-channel',
+            name: '分组 maok-cheap',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
       },
       {
         siteId: 'shark',
         siteName: '鲨鱼',
         ratio: 1,
         groups: [group('shark-cheap', 'openai', 0.04)],
+        channelState: 'supported',
+        channels: [
+          {
+            id: 'shark-channel',
+            name: '分组 shark-cheap',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
       },
     ]);
 
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(4);
     expect(result[0]).toMatchObject({ platformKey: 'openai', effectiveRate: 0.04 });
-    expect(result[0]?.sites).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ siteId: 'maok' }),
-        expect.objectContaining({ siteId: 'shark' }),
-      ]),
-    );
+    expect(result[0]?.sites).toHaveLength(1);
+    expect(['maok', 'shark']).toContain(result[0]?.sites[0]?.siteId);
   });
 
-  it('scores price relative to the cheapest candidate and stability at 40 percent', () => {
+  it('excludes an unstable cheaper candidate before scoring', () => {
     const result = comparePlatformRates([
       {
         siteId: 'cheap-unstable',
@@ -132,12 +302,13 @@ describe('rate comparison rules', () => {
         channels: [
           {
             id: 'cheap-channel',
-            name: '便宜分组',
+            name: '分组 cheap',
             groupName: '分组 cheap',
             status: 'failed',
             timeline: [{ status: 'failed', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelState: 'supported',
       },
       {
         siteId: 'stable',
@@ -153,43 +324,56 @@ describe('rate comparison rules', () => {
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelState: 'supported',
       },
     ]);
-    expect(result[0]).toMatchObject({ platformKey: 'openai', priceScore: 8 });
+    expect(result[0]).toMatchObject({ platformKey: 'openai', priceScore: 10 });
     expect(result[0]?.sites[0]).toMatchObject({
       siteId: 'stable',
       effectiveRate: 0.25,
-      priceScore: 8,
+      priceScore: 10,
       stabilityScore: 10,
-      totalScore: 8.8,
+      totalScore: 10,
       stabilityLabel: '稳定',
     });
-    expect(result[0]?.sites[1]).toMatchObject({
-      siteId: 'cheap-unstable',
-      effectiveRate: 0.2,
-      priceScore: 10,
-      stabilityScore: 0,
-      totalScore: 6,
-    });
+    expect(result[0]?.sites).toHaveLength(1);
   });
 
-  it('keeps every candidate and applies all stable tie breakers', () => {
+  it('returns only the winner after applying stable tie breakers', () => {
     const result = comparePlatformRates([
       {
         siteId: 'z-site',
         siteName: '同名站点',
         ratio: 1,
         groups: [group('z-group', 'openai', 0.2, { name: '乙分组' })],
+        channelState: 'supported',
+        channels: [
+          {
+            id: 'z',
+            name: '乙分组',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
       },
       {
         siteId: 'a-site',
         siteName: '同名站点',
         ratio: 1,
         groups: [group('a-group', 'openai', 0.2, { name: '甲分组' })],
+        channelState: 'supported',
+        channels: [
+          {
+            id: 'a',
+            name: '甲分组',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
       },
     ]);
 
-    expect(result[0]?.sites.map((site) => site.siteId)).toEqual(['a-site', 'z-site']);
+    expect(result[0]?.sites.map((site) => site.siteId)).toEqual(['a-site']);
   });
 
   it('does not borrow a channel status when a group has multiple matches', () => {
@@ -202,26 +386,24 @@ describe('rate comparison rules', () => {
         channels: [
           {
             id: 'one',
-            name: '共享分组线路一',
+            name: '共享分组',
             groupName: '共享分组',
             status: 'normal',
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
           {
             id: 'two',
-            name: '共享分组线路二',
+            name: '共享分组',
             groupName: '共享分组',
             status: 'normal',
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelState: 'supported',
       },
     ]);
 
-    expect(result[0]?.sites[0]).toMatchObject({
-      stabilityScore: 5,
-      stabilityLabel: '无渠道状态',
-    });
+    expect(result[0]).toMatchObject({ state: 'empty', sites: [] });
   });
 
   it('ranks tied minimum groups independently with their own matched channels', () => {
@@ -238,35 +420,30 @@ describe('rate comparison rules', () => {
         channels: [
           {
             id: 'fast-channel',
-            name: '高速渠道',
+            name: '高速分组',
             groupName: '高速分组',
             status: 'failed',
             timeline: [{ status: 'failed', checkedAt }],
           },
           {
             id: 'stable-channel',
-            name: '稳定渠道',
+            name: '稳定分组',
             groupName: '稳定分组',
             status: 'normal',
             timeline: [{ status: 'normal', checkedAt }],
           },
         ],
+        channelState: 'supported',
       },
     ]);
 
-    expect(result[0]?.sites).toHaveLength(2);
+    expect(result[0]?.sites).toHaveLength(1);
     expect(result[0]?.sites).toEqual([
       expect.objectContaining({
         siteId: 'tied-site',
         groups: [expect.objectContaining({ id: 'stable' })],
         channelId: 'stable-channel',
         stabilityScore: 10,
-      }),
-      expect.objectContaining({
-        siteId: 'tied-site',
-        groups: [expect.objectContaining({ id: 'fast' })],
-        channelId: 'fast-channel',
-        stabilityScore: 0,
       }),
     ]);
   });
@@ -284,24 +461,22 @@ describe('rate comparison rules', () => {
         channels: [
           {
             id: 'matched-channel',
-            name: '已匹配渠道',
+            name: '已匹配分组',
             groupName: '已匹配分组',
             status: 'normal',
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelState: 'supported',
       },
     ]);
 
-    const missing = result[0]?.sites.find((site) => site.groups[0]?.id === 'missing');
-    expect(missing).toMatchObject({
-      stabilityLabel: '无渠道状态',
-      stabilityScore: 5,
-    });
-    expect(missing).not.toHaveProperty('channelId');
+    expect(result[0]?.sites).toEqual([
+      expect.objectContaining({ groups: [expect.objectContaining({ id: 'matched' })] }),
+    ]);
   });
 
-  it('uses a neutral score for a candidate without channel status', () => {
+  it('keeps a candidate pending while channel status is unavailable', () => {
     const result = comparePlatformRates([
       {
         siteId: 'no-status',
@@ -310,19 +485,19 @@ describe('rate comparison rules', () => {
         groups: [group('no-status', 'claude', 0.4)],
       },
     ]);
-    expect(result[0]?.sites[0]).toMatchObject({
-      stabilityScore: 5,
-      stabilityLabel: '无渠道状态',
+    expect(result.find((item) => item.platformKey === 'claude')).toMatchObject({
+      state: 'checking',
+      sites: [],
     });
   });
 
   it('distinguishes a channel request failure from unsupported or missing status', () => {
     expect(channelStability(undefined, Date.now(), 'error')).toEqual({
-      score: 3,
+      score: 0,
       label: '状态未知',
     });
     expect(channelStability(undefined, Date.now(), 'unsupported')).toEqual({
-      score: 5,
+      score: 0,
       label: '无渠道状态',
     });
   });
@@ -330,48 +505,68 @@ describe('rate comparison rules', () => {
   it('classifies only recent channel timeline points', () => {
     const old = new Date(Date.now() - 6 * 60_000).toISOString();
     expect(
-      channelStability({
-        id: 'old',
-        name: '旧记录',
-        status: 'failed',
-        timeline: [{ status: 'failed', checkedAt: old }],
-      }),
-    ).toEqual({ score: 3, label: '状态未知' });
+      channelStability(
+        {
+          id: 'old',
+          name: '旧记录',
+          status: 'failed',
+          timeline: [{ status: 'failed', checkedAt: old }],
+        },
+        Date.now(),
+        'supported',
+      ),
+    ).toEqual({ score: 0, label: '存在异常' });
     expect(
-      channelStability({
-        id: 'fresh',
-        name: '新记录',
-        status: 'normal',
-        timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
-      }),
+      channelStability(
+        {
+          id: 'fresh',
+          name: '新记录',
+          status: 'normal',
+          timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+        },
+        Date.now(),
+        'supported',
+      ),
     ).toEqual({ score: 10, label: '稳定' });
   });
 
   it('never marks a recent unknown or contradictory current status as stable', () => {
     const checkedAt = new Date().toISOString();
     expect(
-      channelStability({
-        id: 'unknown',
-        name: '未知记录',
-        status: 'normal',
-        timeline: [{ status: 'unknown', checkedAt }],
-      }),
-    ).toEqual({ score: 3, label: '状态未知' });
+      channelStability(
+        {
+          id: 'unknown',
+          name: '未知记录',
+          status: 'normal',
+          timeline: [{ status: 'unknown', checkedAt }],
+        },
+        Date.now(),
+        'supported',
+      ),
+    ).toEqual({ score: 0, label: '存在异常' });
     expect(
-      channelStability({
-        id: 'degraded',
-        name: '当前降级',
-        status: 'degraded',
-        timeline: [{ status: 'normal', checkedAt }],
-      }),
-    ).toEqual({ score: 5, label: '存在异常' });
+      channelStability(
+        {
+          id: 'degraded',
+          name: '当前降级',
+          status: 'degraded',
+          timeline: [{ status: 'normal', checkedAt }],
+        },
+        Date.now(),
+        'supported',
+      ),
+    ).toEqual({ score: 0, label: '存在异常' });
     expect(
-      channelStability({
-        id: 'failed',
-        name: '当前失败',
-        status: 'failed',
-        timeline: [{ status: 'normal', checkedAt }],
-      }),
+      channelStability(
+        {
+          id: 'failed',
+          name: '当前失败',
+          status: 'failed',
+          timeline: [{ status: 'normal', checkedAt }],
+        },
+        Date.now(),
+        'supported',
+      ),
     ).toEqual({ score: 0, label: '存在异常' });
   });
 
@@ -383,5 +578,15 @@ describe('rate comparison rules', () => {
       { siteId: 'm', siteName: 'M', ratio: 1, groups: [group('m', 'gemini', 1)] },
     ]);
     expect(result.map((item) => item.platformKey)).toEqual(['openai', 'claude', 'gemini', 'grok']);
+  });
+
+  it('keeps the first four platform columns fixed when data is missing', () => {
+    const result = comparePlatformRates([]);
+    expect(result.map((item) => [item.platformKey, item.state])).toEqual([
+      ['openai', 'empty'],
+      ['claude', 'empty'],
+      ['gemini', 'empty'],
+      ['grok', 'empty'],
+    ]);
   });
 });

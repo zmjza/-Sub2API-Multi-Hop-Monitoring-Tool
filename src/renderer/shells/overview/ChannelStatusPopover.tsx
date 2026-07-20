@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  BadgePercent,
   CheckCircle2,
   Clock3,
   Globe2,
@@ -11,10 +12,12 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
+  AvailableRateGroup,
   ChannelDetailPayload,
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
+import { channelRatePresentation } from '../channels/channel-ranking';
 
 type Channel = ChannelViewPayload['channels'][number];
 
@@ -28,6 +31,10 @@ export function ChannelStatusPopover(props: {
   siteId: string;
   siteName: string;
   cache?: ChannelStatusCache;
+  rateGroups?: AvailableRateGroup[];
+  ratio?: number;
+  loadChannels?: (force?: boolean) => Promise<ChannelViewPayload>;
+  loadDetail?: (channelId: string, force?: boolean) => Promise<ChannelDetailPayload>;
   onCacheChange?: (cache: ChannelStatusCache) => void;
   onLoaded?: (channels: RateChannelSnapshot[]) => void;
   onStateChange?: (state: 'supported' | 'unsupported' | 'error') => void;
@@ -37,10 +44,16 @@ export function ChannelStatusPopover(props: {
   const onLoadedRef = useRef(props.onLoaded);
   const onCacheChangeRef = useRef(props.onCacheChange);
   const onStateChangeRef = useRef(props.onStateChange);
+  const loadChannelsRef = useRef(props.loadChannels);
+  const loadDetailRef = useRef(props.loadDetail);
+  const siteIdRef = useRef(props.siteId);
   const cacheRef = useRef(props.cache);
   onLoadedRef.current = props.onLoaded;
   onCacheChangeRef.current = props.onCacheChange;
   onStateChangeRef.current = props.onStateChange;
+  loadChannelsRef.current = props.loadChannels;
+  loadDetailRef.current = props.loadDetail;
+  siteIdRef.current = props.siteId;
   cacheRef.current = props.cache;
   const [style, setStyle] = useState<React.CSSProperties>({});
   const [state, setState] = useState<'loading' | 'success' | 'unsupported' | 'no-data' | 'error'>(
@@ -67,7 +80,10 @@ export function ChannelStatusPopover(props: {
       try {
         const cached = force ? undefined : cacheRef.current?.details[channel.id];
         const value =
-          cached ?? (await window.sub2apiDesktop?.sites.channelStatus(props.siteId, channel.id));
+          cached ??
+          (loadDetailRef.current
+            ? await loadDetailRef.current(channel.id, force)
+            : await window.sub2apiDesktop?.sites.channelStatus(siteIdRef.current, channel.id));
         if (requestId !== detailRequestRef.current) return;
         if (!value || typeof value !== 'object' || !('state' in value)) {
           setDetailError(true);
@@ -85,7 +101,7 @@ export function ChannelStatusPopover(props: {
         if (requestId === detailRequestRef.current) setDetailLoading(false);
       }
     },
-    [props.siteId, publishCache],
+    [publishCache],
   );
 
   const load = useCallback(
@@ -96,7 +112,10 @@ export function ChannelStatusPopover(props: {
         setSelected(undefined);
         const cached = force ? undefined : cacheRef.current;
         const value =
-          cached?.channels ?? (await window.sub2apiDesktop?.sites.channels(props.siteId));
+          cached?.channels ??
+          (loadChannelsRef.current
+            ? await loadChannelsRef.current(force)
+            : await window.sub2apiDesktop?.sites.channels(siteIdRef.current));
         if (!value || typeof value !== 'object' || !('state' in value)) {
           onStateChangeRef.current?.('error');
           setState('error');
@@ -127,7 +146,7 @@ export function ChannelStatusPopover(props: {
         setState('error');
       }
     },
-    [loadDetail, props.siteId, publishCache],
+    [loadDetail, publishCache],
   );
 
   useEffect(() => {
@@ -172,6 +191,10 @@ export function ChannelStatusPopover(props: {
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
   const model = detail?.models[0];
   const checkedAt = selected?.timeline.at(-1)?.checkedAt;
+  const relationships = cacheRef.current?.channels?.availableChannels ?? [];
+  const selectedRate = selected
+    ? channelRatePresentation(selected, props.rateGroups, props.ratio, channels, relationships)
+    : undefined;
   return createPortal(
     <div
       ref={panelRef}
@@ -185,9 +208,20 @@ export function ChannelStatusPopover(props: {
           <span>渠道状态</span>
           <strong>{props.siteName}</strong>
         </div>
-        <button type="button" aria-label="关闭渠道状态弹窗" title="关闭" onClick={props.onClose}>
-          <X size={17} />
-        </button>
+        <div>
+          <button
+            type="button"
+            aria-label="刷新渠道状态"
+            title="刷新渠道状态"
+            disabled={state === 'loading'}
+            onClick={() => void load(true)}
+          >
+            <RefreshCw size={16} className={state === 'loading' ? 'spin' : undefined} />
+          </button>
+          <button type="button" aria-label="关闭渠道状态弹窗" title="关闭" onClick={props.onClose}>
+            <X size={17} />
+          </button>
+        </div>
       </header>
       {state === 'loading' ? (
         <div className="rate-channel-state" role="status">
@@ -234,7 +268,18 @@ export function ChannelStatusPopover(props: {
                 {(detail?.platform ?? selected.platform) || '平台待查询'}
               </p>
             </div>
-            <span className={`rate-channel-status ${status}`}>{statusLabel(status)}</span>
+            <div className="rate-channel-hero-status">
+              <span className={`rate-channel-status ${status}`}>{statusLabel(status)}</span>
+              {selectedRate && (
+                <span
+                  className={`channel-rate-badge is-${selectedRate.state}`}
+                  title={selectedRate.title}
+                >
+                  <BadgePercent size={12} />
+                  {selectedRate.label}
+                </span>
+              )}
+            </div>
           </div>
           {detailLoading ? (
             <div className="rate-channel-detail-progress" role="status">
@@ -293,44 +338,58 @@ export function ChannelStatusPopover(props: {
             </div>
           </div>
           <div className="rate-channel-list" aria-label="全部渠道状态">
-            {channels.map((channel) => (
-              <button
-                type="button"
-                className={channel.id === selected.id ? 'selected' : ''}
-                key={channel.id}
-                onClick={() =>
-                  cacheRef.current?.channels && void loadDetail(channel, cacheRef.current.channels)
-                }
-              >
-                <span className="rate-channel-list-head">
-                  <b title={channel.name}>{channel.name}</b>
-                  <em className={`rate-channel-status ${channel.status}`}>
-                    {statusLabel(channel.status)}
-                  </em>
-                </span>
-                <small>
-                  {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
-                </small>
-                <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
-                  {[channel.primaryModel, ...channel.extraModels].filter(Boolean).join('、') ||
-                    '模型待查询'}
-                </small>
-                <span className="rate-channel-list-metrics">
-                  <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
-                  <small>Ping {formatMilliseconds(channel.pingMs)}</small>
-                  <small>可用率 {formatAvailability(channel.availability7d)}</small>
-                </span>
-                <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
-                  {channel.timeline.length ? (
-                    channel.timeline.map((point, index) => (
-                      <i className={point.status} key={`${point.checkedAt}-${index}`} />
-                    ))
-                  ) : (
-                    <small>暂无状态记录</small>
-                  )}
-                </span>
-              </button>
-            ))}
+            {channels.map((channel) => {
+              const rate = channelRatePresentation(
+                channel,
+                props.rateGroups,
+                props.ratio,
+                channels,
+                relationships,
+              );
+              return (
+                <button
+                  type="button"
+                  className={channel.id === selected.id ? 'selected' : ''}
+                  key={channel.id}
+                  onClick={() =>
+                    cacheRef.current?.channels &&
+                    void loadDetail(channel, cacheRef.current.channels)
+                  }
+                >
+                  <span className="rate-channel-list-head">
+                    <b title={channel.name}>{channel.name}</b>
+                    <em className={`rate-channel-status ${channel.status}`}>
+                      {statusLabel(channel.status)}
+                    </em>
+                  </span>
+                  <span className={`channel-rate-badge is-${rate.state}`} title={rate.title}>
+                    <BadgePercent size={11} />
+                    {rate.label}
+                  </span>
+                  <small>
+                    {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
+                  </small>
+                  <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
+                    {[channel.primaryModel, ...channel.extraModels].filter(Boolean).join('、') ||
+                      '模型待查询'}
+                  </small>
+                  <span className="rate-channel-list-metrics">
+                    <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
+                    <small>Ping {formatMilliseconds(channel.pingMs)}</small>
+                    <small>可用率 {formatAvailability(channel.availability7d)}</small>
+                  </span>
+                  <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
+                    {channel.timeline.length ? (
+                      channel.timeline.map((point, index) => (
+                        <i className={point.status} key={`${point.checkedAt}-${index}`} />
+                      ))
+                    ) : (
+                      <small>暂无状态记录</small>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

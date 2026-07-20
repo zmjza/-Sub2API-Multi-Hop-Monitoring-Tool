@@ -12,10 +12,6 @@ import {
   Activity,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  ChannelDetailPayload,
-  ChannelViewPayload,
-} from '../../../../electron/shared/contracts';
 import { formatTokenCount } from '../../lib/format';
 import type { OverviewProps } from './types';
 import { overviewSites } from './data';
@@ -23,8 +19,15 @@ import { RechargeRatioControl } from './RechargeRatioControl';
 import { RatePopover } from './RatePopover';
 import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
-import type { AvailableChannelRelationship } from '../channels/channel-ranking';
-import { RateChannelStatusLoader } from './rate-channel-status-loader';
+import {
+  matchGroupToChannel,
+  resolveCurrentKey,
+  type AvailableChannelRelationship,
+} from '../channels/channel-ranking';
+import {
+  desktopRateChannelStatusLoader,
+  type RateChannelStatusLoader,
+} from './rate-channel-status-loader';
 import {
   RateChannelSummary,
   type InlineChannelDetailState,
@@ -33,6 +36,8 @@ import {
 import {
   comparePlatformRates,
   formatRateMultiplier,
+  rateRefreshIntervalMs,
+  type RateRefreshMinutes,
   type RateChannelSnapshot,
 } from './rate-comparison';
 import './overview.css';
@@ -64,25 +69,16 @@ export function OverviewPage(props: OverviewProps) {
   const [inlineChannelDetailStateByKey, setInlineChannelDetailStateByKey] = useState<
     Record<string, InlineChannelDetailState>
   >({});
+  const [rateRefreshMinutes, setRateRefreshMinutes] = useState<RateRefreshMinutes>(5);
   const inlineChannelRequestBySiteRef = useRef(new Map<string, number>());
   const inlineDetailRequestByKeyRef = useRef(new Map<string, number>());
   const inlineRequestIdRef = useRef(0);
   const channelStatusLoaderRef = useRef<RateChannelStatusLoader | null>(null);
+  const comparisonRefreshPromiseRef = useRef<Promise<void> | undefined>(undefined);
+  const refreshAllRatesRef = useRef(props.onRefreshAllRates);
+  refreshAllRatesRef.current = props.onRefreshAllRates;
   if (!channelStatusLoaderRef.current)
-    channelStatusLoaderRef.current = new RateChannelStatusLoader({
-      readChannels: async (siteId) => {
-        const value = await window.sub2apiDesktop?.sites.channels(siteId);
-        if (!value || typeof value !== 'object' || !('state' in value))
-          throw new Error('Invalid channel list response');
-        return value as ChannelViewPayload;
-      },
-      readDetail: async (siteId, channelId) => {
-        const value = await window.sub2apiDesktop?.sites.channelStatus(siteId, channelId);
-        if (!value || typeof value !== 'object' || !('state' in value))
-          throw new Error('Invalid channel detail response');
-        return value as ChannelDetailPayload;
-      },
-    });
+    channelStatusLoaderRef.current = desktopRateChannelStatusLoader();
   const runtime = Boolean(window.sub2apiDesktop);
   const isEmpty =
     props.state === 'empty' || Boolean(props.dashboard && props.dashboard.sites.length === 0);
@@ -128,14 +124,44 @@ export function OverviewPage(props: OverviewProps) {
       .map((site) => site.id)
       .sort((left, right) => left.localeCompare(right)),
   );
-  const matchedChannelKeys = JSON.stringify(
+  const currentChannelContextBySite = Object.fromEntries(
+    liveSites.map((site) => {
+      const keyContext = keyContextForSite(site.id, props);
+      const currentKey = resolveCurrentKey(
+        keyContext.keys,
+        keyContext.preference,
+        'defaultKeyLabel' in site ? site.defaultKeyLabel : undefined,
+      );
+      const groups = props.rateContexts?.sites[site.id]?.groups ?? [];
+      const groupName =
+        currentKey?.groupName ?? groups.find((group) => group.id === currentKey?.groupId)?.name;
+      const match = groupName
+        ? matchGroupToChannel(
+            rateChannelsBySite[site.id] ?? [],
+            groupName,
+            rateChannelRelationshipsBySite[site.id] ?? [],
+          )
+        : undefined;
+      return [site.id, { currentKey, groupName, match }] as const;
+    }),
+  );
+  const channelSiteIdsKey = JSON.stringify(
+    [
+      ...new Set([
+        ...(JSON.parse(comparableSiteIdsKey) as string[]),
+        ...liveSites.flatMap((site) =>
+          currentChannelContextBySite[site.id]?.groupName ? [site.id] : [],
+        ),
+      ]),
+    ].sort((left, right) => left.localeCompare(right)),
+  );
+  const currentChannelDetailKeys = JSON.stringify(
     [
       ...new Set(
-        rateComparisons.flatMap((comparison) =>
-          comparison.sites.flatMap((site) =>
-            site.channelId ? [`${site.siteId}:${site.channelId}`] : [],
-          ),
-        ),
+        liveSites.flatMap((site) => {
+          const match = currentChannelContextBySite[site.id]?.match;
+          return match?.status === 'matched' ? [`${site.id}:${match.channel.id}`] : [];
+        }),
       ),
     ].sort((left, right) => left.localeCompare(right)),
   );
@@ -228,18 +254,41 @@ export function OverviewPage(props: OverviewProps) {
 
   useEffect(() => {
     if (!window.sub2apiDesktop) return;
-    const siteIds = JSON.parse(comparableSiteIdsKey) as string[];
+    const siteIds = JSON.parse(channelSiteIdsKey) as string[];
     for (const siteId of siteIds) void loadInlineChannels(siteId);
-  }, [comparableSiteIdsKey, loadInlineChannels]);
+  }, [channelSiteIdsKey, loadInlineChannels]);
 
   useEffect(() => {
     if (!window.sub2apiDesktop) return;
-    const keys = JSON.parse(matchedChannelKeys) as string[];
+    const keys = JSON.parse(currentChannelDetailKeys) as string[];
     for (const key of keys) {
       const separator = key.indexOf(':');
       void loadInlineDetail(key.slice(0, separator), key.slice(separator + 1));
     }
-  }, [loadInlineDetail, matchedChannelKeys]);
+  }, [currentChannelDetailKeys, loadInlineDetail]);
+
+  const refreshRateComparison = useCallback(() => {
+    if (comparisonRefreshPromiseRef.current) return comparisonRefreshPromiseRef.current;
+    const siteIds = JSON.parse(comparableSiteIdsKey) as string[];
+    const request = (async () => {
+      await refreshAllRatesRef.current?.();
+      await Promise.all(siteIds.map((siteId) => loadInlineChannels(siteId, true)));
+    })().finally(() => {
+      if (comparisonRefreshPromiseRef.current === request)
+        comparisonRefreshPromiseRef.current = undefined;
+    });
+    comparisonRefreshPromiseRef.current = request;
+    return request;
+  }, [comparableSiteIdsKey, loadInlineChannels]);
+
+  useEffect(() => {
+    if (!window.sub2apiDesktop || liveSites.length === 0) return;
+    const interval = window.setInterval(
+      () => void refreshRateComparison(),
+      rateRefreshIntervalMs(rateRefreshMinutes),
+    );
+    return () => window.clearInterval(interval);
+  }, [liveSites.length, rateRefreshMinutes, refreshRateComparison]);
   return (
     <section className="overview-page">
       <div className="overview-metrics">
@@ -292,15 +341,31 @@ export function OverviewPage(props: OverviewProps) {
             <h2>倍率对比</h2>
             <span>按充值比例折算后，比较各平台最低分组</span>
           </div>
-          <button
-            type="button"
-            aria-label="刷新全部站点倍率"
-            title="刷新全部站点倍率"
-            onClick={() => void props.onRefreshAllRates?.()}
-            disabled={props.isRefreshingRates || liveSites.length === 0}
-          >
-            <RefreshCw size={16} className={props.isRefreshingRates ? 'spin' : ''} />
-          </button>
+          <div className="rate-comparison-controls">
+            <label>
+              <select
+                aria-label="倍率对比自动刷新周期"
+                value={rateRefreshMinutes}
+                onChange={(event) =>
+                  setRateRefreshMinutes(Number(event.target.value) as RateRefreshMinutes)
+                }
+              >
+                <option value={1}>1 分钟</option>
+                <option value={3}>3 分钟</option>
+                <option value={5}>5 分钟</option>
+                <option value={10}>10 分钟</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              aria-label="刷新全部站点倍率"
+              title="刷新全部站点倍率"
+              onClick={() => void refreshRateComparison()}
+              disabled={props.isRefreshingRates || liveSites.length === 0}
+            >
+              <RefreshCw size={16} className={props.isRefreshingRates ? 'spin' : ''} />
+            </button>
+          </div>
         </div>
         {rateComparisons.length > 0 ? (
           <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">
@@ -309,83 +374,59 @@ export function OverviewPage(props: OverviewProps) {
                 key={comparison.platformKey}
                 className={`rate-platform-card rate-platform-${comparison.platformKey}`}
                 data-platform={comparison.platformKey}
+                tabIndex={0}
+                aria-label={`${comparison.platformLabel} 倍率推荐`}
               >
                 <header>
                   <div>
                     <span>{comparison.platformLabel}</span>
-                    <small>综合推荐</small>
+                    <small>{comparison.state === 'ready' ? '综合推荐' : '稳定性核验'}</small>
                   </div>
                   <strong>
-                    {comparison.stabilityScore * 0.4 + comparison.priceScore * 0.6 >= 0
-                      ? `${(comparison.stabilityScore * 0.4 + comparison.priceScore * 0.6).toFixed(1)} 分`
+                    {comparison.state === 'ready' && comparison.sites[0]
+                      ? `${comparison.sites[0].totalScore.toFixed(1)} 分`
                       : '—'}
                   </strong>
                 </header>
-                <div className="rate-platform-score-row">
-                  <span>
-                    价格 <b>{comparison.priceScore.toFixed(1)}</b>
-                  </span>
-                  <span>
-                    稳定 <b>{comparison.stabilityScore.toFixed(1)}</b>
-                  </span>
-                  <span className={`rate-status-label ${comparison.stabilityLabel}`}>
-                    {comparison.stabilityLabel}
-                  </span>
-                </div>
-                <div className="rate-platform-rate">
-                  {formatRateMultiplier(comparison.effectiveRate)}
-                </div>
-                <div className="rate-platform-sites">
-                  {comparison.sites.map((site, index) => {
-                    const group = site.groups[0];
-                    const channel = site.channelId
-                      ? rateChannelsBySite[site.siteId]?.find(
-                          (candidate) => candidate.id === site.channelId,
-                        )
-                      : undefined;
-                    const detailKey = site.channelId
-                      ? `${site.siteId}:${site.channelId}`
-                      : undefined;
-                    return (
-                      <article
-                        className="rate-platform-site"
-                        key={`${site.siteId}:${group?.id ?? index}`}
-                      >
-                        <b title={site.siteName}>
-                          <i>{index + 1}</i>
-                          {site.siteName}
-                        </b>
-                        <span title={group?.name}>{group?.name ?? '未命名分组'}</span>
-                        <em className={`rate-status-label ${site.stabilityLabel}`}>
-                          {site.stabilityLabel}
-                        </em>
-                        <small>
-                          综合 {site.totalScore.toFixed(1)} · 折算{' '}
-                          {formatRateMultiplier(site.effectiveRate)} · 原始{' '}
-                          {formatRateMultiplier(site.rawRate)} · 1:{site.ratio} · 价格{' '}
-                          {site.priceScore.toFixed(1)} · 稳定 {site.stabilityScore.toFixed(1)}
-                        </small>
-                        <RateChannelSummary
-                          siteName={site.siteName}
-                          groupName={group?.name ?? '未命名分组'}
-                          listState={inlineChannelListStateBySite[site.siteId] ?? 'loading'}
-                          channel={channel}
-                          detailState={
-                            detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined
-                          }
-                          onRetry={() =>
-                            site.channelId
-                              ? void loadInlineDetail(site.siteId, site.channelId, true)
-                              : void loadInlineChannels(site.siteId, true)
-                          }
-                        />
-                      </article>
-                    );
-                  })}
-                </div>
-                {comparison.sites.filter(
-                  (site) => Math.abs(site.totalScore - comparison.sites[0]!.totalScore) < 1e-9,
-                ).length > 1 && <i>并列推荐</i>}
+                {comparison.state === 'ready' && comparison.sites[0] ? (
+                  <>
+                    <div className="rate-platform-score-row">
+                      <span>
+                        价格 <b>{comparison.sites[0].priceScore.toFixed(1)}</b>
+                      </span>
+                      <span>
+                        稳定 <b>10.0</b>
+                      </span>
+                      <span className="rate-status-label 稳定">5 分钟稳定</span>
+                    </div>
+                    <div className="rate-platform-rate">
+                      {formatRateMultiplier(comparison.sites[0].effectiveRate)}
+                    </div>
+                    <article className="rate-platform-site">
+                      <b title={comparison.sites[0].siteName}>{comparison.sites[0].siteName}</b>
+                      <span title={comparison.sites[0].groups[0]?.name}>
+                        {comparison.sites[0].groups[0]?.name ?? '未命名分组'}
+                      </span>
+                      <small>
+                        原始 {formatRateMultiplier(comparison.sites[0].rawRate)} · 充值比例 1:
+                        {comparison.sites[0].ratio}
+                      </small>
+                    </article>
+                  </>
+                ) : (
+                  <div className={`rate-platform-state is-${comparison.state}`} role="status">
+                    {comparison.state === 'checking' ? (
+                      <RefreshCw size={17} className="spin" />
+                    ) : (
+                      <Activity size={17} />
+                    )}
+                    <span>
+                      {comparison.state === 'checking'
+                        ? '正在核验渠道稳定性'
+                        : '暂无稳定渠道可推荐'}
+                    </span>
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -432,227 +473,254 @@ export function OverviewPage(props: OverviewProps) {
             </div>
           ) : (
             <div className="site-card-grid">
-              {liveSites.map((site, index) => (
-                <div
-                  className={`site-card ${('id' in site && site.id === props.selectedSite?.id) || (index === 0 && props.state === 'selected') ? 'selected' : ''}`}
-                  key={site.id}
-                  onClick={() =>
-                    'id' in site && typeof site.id === 'string'
-                      ? props.onSelectSite?.(site.id)
-                      : undefined
-                  }
-                  onDoubleClick={() => {
-                    if (!('id' in site) || typeof site.id !== 'string') return;
-                    setEditingId(site.id);
-                    setDraftNote(siteNote(site));
-                    setNoteError('');
-                  }}
-                >
-                  <div className="site-card-header">
-                    <span className="site-name">
-                      <i
-                        className={
-                          site.status === 'success' || site.status === '正常'
-                            ? 'status-dot good'
-                            : 'status-dot warn'
-                        }
-                      />
-                      {site.name}
-                    </span>
-                    <span
-                      className={`status-pill ${props.refreshingSiteIds?.includes(site.id) ? 'refreshing' : statusTone(site.status)}`}
-                    >
-                      {props.refreshingSiteIds?.includes(site.id)
-                        ? '刷新中'
-                        : statusLabel(site.status)}
-                    </span>
-                  </div>
-                  <div className="site-card-key">
-                    {'id' in site && shouldShowKeySelect(site.id, props) ? (
-                      <select
-                        className="overview-key-select"
-                        aria-label={`${site.name} 默认 Key`}
-                        value={
-                          keyContextForSite(site.id, props).preference.mode === 'manual'
-                            ? keyContextForSite(site.id, props).preference.keyId
-                            : 'auto'
-                        }
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => {
-                          const keyId = event.target.value;
-                          props.onKeyPreferenceChange?.(
-                            site.id,
-                            keyId === 'auto' ? { mode: 'auto' } : { mode: 'manual', keyId },
-                          );
-                        }}
-                      >
-                        <option value="auto">自动选择</option>
-                        {keyContextForSite(site.id, props)
-                          .keys.filter((key) => key.status === 'active')
-                          .map((key) => (
-                            <option value={key.id} key={key.id}>
-                              {key.maskedLabel}
-                            </option>
-                          ))}
-                      </select>
-                    ) : 'defaultKeyLabel' in site && typeof site.defaultKeyLabel === 'string' ? (
-                      site.defaultKeyLabel
-                    ) : (
-                      '默认 Key · 已脱敏'
-                    )}
-                  </div>
-                  <div className="site-card-meta">
-                    <span>
-                      {'rate' in site && typeof site.rate === 'number'
-                        ? `${site.rate}x`
-                        : '倍率不可用'}
-                    </span>
-                    <span className="site-card-balance">
-                      <b>{formatSiteBalance(site, props)}</b>
-                      {quotaForSite(site, props) ? (
-                        <span className="quota-summary">
-                          <span>
-                            已用 ${quotaForSite(site, props)!.used.toFixed(2)} / 总额 $
-                            {quotaForSite(site, props)!.total.toFixed(2)}
-                          </span>
-                          <span
-                            className={`quota-progress ${quotaForSite(site, props)!.remaining <= 0 ? 'exhausted' : ''}`}
-                            aria-label={`额度使用 ${quotaForSite(site, props)!.percent}%`}
-                          >
-                            <i style={{ width: `${quotaForSite(site, props)!.percent}%` }} />
-                          </span>
-                          <small>
-                            {quotaForSite(site, props)!.remaining <= 0
-                              ? '额度已用尽'
-                              : `剩余 $${quotaForSite(site, props)!.remaining.toFixed(2)}`}
-                          </small>
-                        </span>
-                      ) : (
-                        <small>
-                          {typeof site.todayActualCost === 'number'
-                            ? `$${site.todayActualCost.toFixed(2)} 今日`
-                            : '$0.45 今日'}
-                        </small>
-                      )}
-                    </span>
-                    <span className="muted">
-                      {'fetchedAt' in site && typeof site.fetchedAt === 'number'
-                        ? new Date(site.fetchedAt).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : '尚未更新'}
-                    </span>
-                  </div>
-                  <div className="site-card-stats" aria-label={`${site.name} 今日统计`}>
-                    <span>
-                      <small>今日请求</small>
-                      <b>
-                        {'todayRequests' in site && typeof site.todayRequests === 'number'
-                          ? site.todayRequests
-                          : '—'}
-                      </b>
-                    </span>
-                    <span>
-                      <small>今日 Token</small>
-                      <b>
-                        {'todayTokens' in site && typeof site.todayTokens === 'number'
-                          ? formatTokenCount(site.todayTokens)
-                          : '—'}
-                      </b>
-                    </span>
-                    <span>
-                      <small>今日消费</small>
-                      <b>
-                        {'todayActualCost' in site && typeof site.todayActualCost === 'number'
-                          ? `$${site.todayActualCost.toFixed(4)}`
-                          : '—'}
-                      </b>
-                    </span>
-                  </div>
-                  <div className="site-card-note">
-                    {editingId === ('id' in site ? site.id : '') ? (
-                      <form
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          setSavingNote(true);
-                          const siteId = 'id' in site ? site.id : '';
-                          const request = props.onSiteNoteChange?.(siteId, draftNote);
-                          if (request)
-                            void request
-                              .then(() => setEditingId(undefined))
-                              .catch(() => setNoteError('备注保存失败，请重试'))
-                              .finally(() => setSavingNote(false));
-                          else setSavingNote(false);
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          maxLength={500}
-                          value={draftNote}
-                          onChange={(event) => setDraftNote(event.target.value)}
-                          aria-label="站点备注"
+              {liveSites.map((site, index) => {
+                const channelContext = currentChannelContextBySite[site.id];
+                const matchedChannel =
+                  channelContext?.match?.status === 'matched'
+                    ? channelContext.match.channel
+                    : undefined;
+                const detailKey = matchedChannel ? `${site.id}:${matchedChannel.id}` : undefined;
+                const matchState = !channelContext?.currentKey
+                  ? 'no-key'
+                  : !channelContext.groupName
+                    ? 'no-group'
+                    : (channelContext.match?.status ?? 'unmatched');
+                return (
+                  <div
+                    className={`site-card ${('id' in site && site.id === props.selectedSite?.id) || (index === 0 && props.state === 'selected') ? 'selected' : ''}`}
+                    key={site.id}
+                    onClick={() =>
+                      'id' in site && typeof site.id === 'string'
+                        ? props.onSelectSite?.(site.id)
+                        : undefined
+                    }
+                    onDoubleClick={() => {
+                      if (!('id' in site) || typeof site.id !== 'string') return;
+                      setEditingId(site.id);
+                      setDraftNote(siteNote(site));
+                      setNoteError('');
+                    }}
+                  >
+                    <div className="site-card-header">
+                      <span className="site-name">
+                        <i
+                          className={
+                            site.status === 'success' || site.status === '正常'
+                              ? 'status-dot good'
+                              : 'status-dot warn'
+                          }
                         />
-                        <button type="submit" aria-label="保存备注" disabled={savingNote}>
-                          <Check size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="取消备注"
-                          onClick={() => setEditingId(undefined)}
-                        >
-                          <X size={14} />
-                        </button>
-                        {noteError && <small className="note-error">{noteError}</small>}
-                      </form>
-                    ) : (
-                      <span>
-                        {siteNote(site) || '双击添加备注'} <Edit3 size={13} />
+                        {site.name}
                       </span>
-                    )}
-                  </div>
-                  <div className="site-card-actions">
-                    <RechargeRatioControl
+                      <span
+                        className={`status-pill ${props.refreshingSiteIds?.includes(site.id) ? 'refreshing' : statusTone(site.status)}`}
+                      >
+                        {props.refreshingSiteIds?.includes(site.id)
+                          ? '刷新中'
+                          : statusLabel(site.status)}
+                      </span>
+                    </div>
+                    <div className="site-card-key">
+                      {'id' in site && shouldShowKeySelect(site.id, props) ? (
+                        <select
+                          className="overview-key-select"
+                          aria-label={`${site.name} 默认 Key`}
+                          value={
+                            keyContextForSite(site.id, props).preference.mode === 'manual'
+                              ? keyContextForSite(site.id, props).preference.keyId
+                              : 'auto'
+                          }
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            const keyId = event.target.value;
+                            props.onKeyPreferenceChange?.(
+                              site.id,
+                              keyId === 'auto' ? { mode: 'auto' } : { mode: 'manual', keyId },
+                            );
+                          }}
+                        >
+                          <option value="auto">自动选择</option>
+                          {keyContextForSite(site.id, props)
+                            .keys.filter((key) => key.status === 'active')
+                            .map((key) => (
+                              <option value={key.id} key={key.id}>
+                                {key.maskedLabel}
+                              </option>
+                            ))}
+                        </select>
+                      ) : 'defaultKeyLabel' in site && typeof site.defaultKeyLabel === 'string' ? (
+                        site.defaultKeyLabel
+                      ) : (
+                        '默认 Key · 已脱敏'
+                      )}
+                    </div>
+                    <div className="site-card-meta">
+                      <span className="site-rate-badge" title="当前 Key 倍率">
+                        <BadgePercent size={13} />
+                        {'rate' in site && typeof site.rate === 'number'
+                          ? formatRateMultiplier(site.rate)
+                          : '—'}
+                      </span>
+                      <span className="site-card-balance">
+                        <b>{formatSiteBalance(site, props)}</b>
+                        {quotaForSite(site, props) ? (
+                          <span className="quota-summary">
+                            <span>
+                              已用 ${quotaForSite(site, props)!.used.toFixed(2)} / 总额 $
+                              {quotaForSite(site, props)!.total.toFixed(2)}
+                            </span>
+                            <span
+                              className={`quota-progress ${quotaForSite(site, props)!.remaining <= 0 ? 'exhausted' : ''}`}
+                              aria-label={`额度使用 ${quotaForSite(site, props)!.percent}%`}
+                            >
+                              <i style={{ width: `${quotaForSite(site, props)!.percent}%` }} />
+                            </span>
+                            <small>
+                              {quotaForSite(site, props)!.remaining <= 0
+                                ? '额度已用尽'
+                                : `剩余 $${quotaForSite(site, props)!.remaining.toFixed(2)}`}
+                            </small>
+                          </span>
+                        ) : (
+                          <small>
+                            {typeof site.todayActualCost === 'number'
+                              ? `$${site.todayActualCost.toFixed(2)} 今日`
+                              : '$0.45 今日'}
+                          </small>
+                        )}
+                      </span>
+                      <span className="muted">
+                        {'fetchedAt' in site && typeof site.fetchedAt === 'number'
+                          ? new Date(site.fetchedAt).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '尚未更新'}
+                      </span>
+                    </div>
+                    <div className="site-card-stats" aria-label={`${site.name} 今日统计`}>
+                      <span>
+                        <small>今日请求</small>
+                        <b>
+                          {'todayRequests' in site && typeof site.todayRequests === 'number'
+                            ? site.todayRequests
+                            : '—'}
+                        </b>
+                      </span>
+                      <span>
+                        <small>今日 Token</small>
+                        <b>
+                          {'todayTokens' in site && typeof site.todayTokens === 'number'
+                            ? formatTokenCount(site.todayTokens)
+                            : '—'}
+                        </b>
+                      </span>
+                      <span>
+                        <small>今日消费</small>
+                        <b>
+                          {'todayActualCost' in site && typeof site.todayActualCost === 'number'
+                            ? `$${site.todayActualCost.toFixed(4)}`
+                            : '—'}
+                        </b>
+                      </span>
+                    </div>
+                    <div className="site-card-note">
+                      {editingId === ('id' in site ? site.id : '') ? (
+                        <form
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            setSavingNote(true);
+                            const siteId = 'id' in site ? site.id : '';
+                            const request = props.onSiteNoteChange?.(siteId, draftNote);
+                            if (request)
+                              void request
+                                .then(() => setEditingId(undefined))
+                                .catch(() => setNoteError('备注保存失败，请重试'))
+                                .finally(() => setSavingNote(false));
+                            else setSavingNote(false);
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            maxLength={500}
+                            value={draftNote}
+                            onChange={(event) => setDraftNote(event.target.value)}
+                            aria-label="站点备注"
+                          />
+                          <button type="submit" aria-label="保存备注" disabled={savingNote}>
+                            <Check size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="取消备注"
+                            onClick={() => setEditingId(undefined)}
+                          >
+                            <X size={14} />
+                          </button>
+                          {noteError && <small className="note-error">{noteError}</small>}
+                        </form>
+                      ) : (
+                        <span>
+                          {siteNote(site) || '双击添加备注'} <Edit3 size={13} />
+                        </span>
+                      )}
+                    </div>
+                    <RateChannelSummary
                       siteName={site.name}
-                      ratio={props.rateContexts?.ratios[site.id]}
-                      onChange={(ratio) =>
-                        props.onRechargeRatioChange?.(site.id, ratio) ?? Promise.resolve()
+                      groupName={channelContext?.groupName ?? '当前分组'}
+                      listState={inlineChannelListStateBySite[site.id] ?? 'loading'}
+                      matchState={matchState}
+                      channel={matchedChannel}
+                      detailState={detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined}
+                      onRetry={() =>
+                        matchedChannel
+                          ? void loadInlineDetail(site.id, matchedChannel.id, true)
+                          : void loadInlineChannels(site.id, true)
                       }
                     />
-                    <button
-                      type="button"
-                      className="view-rates-button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setRatePopover({ siteId: site.id, anchor: event.currentTarget });
-                        const context = props.rateContexts?.sites[site.id];
-                        if ((!context || context.source === 'none') && props.onRefreshSiteRates)
-                          void props.onRefreshSiteRates(site.id);
-                      }}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                    >
-                      <BadgePercent size={14} />
-                      查看倍率
-                    </button>
-                    <button
-                      type="button"
-                      className="view-channel-status-button"
-                      aria-label={`查看 ${site.name} 渠道状态`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setChannelPopover({
-                          siteId: site.id,
-                          anchor: event.currentTarget,
-                        });
-                      }}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                    >
-                      <Activity size={14} />
-                      查看渠道状态
-                    </button>
+                    <div className="site-card-actions">
+                      <RechargeRatioControl
+                        siteName={site.name}
+                        ratio={props.rateContexts?.ratios[site.id]}
+                        onChange={(ratio) =>
+                          props.onRechargeRatioChange?.(site.id, ratio) ?? Promise.resolve()
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="view-rates-button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setRatePopover({ siteId: site.id, anchor: event.currentTarget });
+                          const context = props.rateContexts?.sites[site.id];
+                          if ((!context || context.source === 'none') && props.onRefreshSiteRates)
+                            void props.onRefreshSiteRates(site.id);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <BadgePercent size={14} />
+                        查看倍率
+                      </button>
+                      <button
+                        type="button"
+                        className="view-channel-status-button"
+                        aria-label={`查看 ${site.name} 渠道状态`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setChannelPopover({
+                            siteId: site.id,
+                            anchor: event.currentTarget,
+                          });
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <Activity size={14} />
+                        查看渠道状态
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -663,6 +731,8 @@ export function OverviewPage(props: OverviewProps) {
           siteName={liveSites.find((site) => site.id === ratePopover.siteId)?.name ?? '当前站点'}
           context={props.rateContexts?.sites[ratePopover.siteId]}
           ratio={props.rateContexts?.ratios[ratePopover.siteId]}
+          channels={rateChannelsBySite[ratePopover.siteId]}
+          relationships={rateChannelRelationshipsBySite[ratePopover.siteId]}
           refreshing={Boolean(props.refreshingRateSiteIds?.includes(ratePopover.siteId))}
           onRefresh={() => props.onRefreshSiteRates?.(ratePopover.siteId) ?? Promise.resolve()}
           onClose={() => setRatePopover(undefined)}
@@ -674,6 +744,14 @@ export function OverviewPage(props: OverviewProps) {
           siteId={channelPopover.siteId}
           siteName={liveSites.find((site) => site.id === channelPopover.siteId)?.name ?? '当前站点'}
           cache={channelStatusCacheBySite[channelPopover.siteId]}
+          rateGroups={props.rateContexts?.sites[channelPopover.siteId]?.groups}
+          ratio={props.rateContexts?.ratios[channelPopover.siteId]}
+          loadChannels={(force) =>
+            channelStatusLoaderRef.current!.loadChannels(channelPopover.siteId, force)
+          }
+          loadDetail={(channelId, force) =>
+            channelStatusLoaderRef.current!.loadDetail(channelPopover.siteId, channelId, force)
+          }
           onCacheChange={(cache) => syncChannelStatusCache(channelPopover.siteId, cache)}
           onLoaded={(channels) => {
             setRateChannelsBySite((current) => ({

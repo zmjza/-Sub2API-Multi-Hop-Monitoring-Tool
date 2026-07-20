@@ -689,3 +689,37 @@ Electron E2E 批量提交一个成功 URL 和一个非法 URL，断言面板最�
 **适用范围**
 
 所有通过 Electron IPC 同时使用逐项事件和最终 Promise 返回值的批处理、导入、刷新与验证流程。
+
+## 悬浮窗自动切站不能继承旧站点的刷新状态
+
+**现象**
+
+macOS 打包应用中，悬浮窗根据最近使用记录自动切到另一个站点后，刷新按钮可能持续禁用并一直显示更新中；相同 E2E 在开发环境因时序不同可能通过。
+
+**根因**
+
+Renderer 使用一个全局 `state` 表示当前站点状态。自动用量扫描只更新 `currentSiteId`，没有同步更新 `currentSiteRef` 和目标站点的刷新状态。若切换发生在旧站点 `refreshing` 期间，新站点会继承旧状态；旧站点终态随后因 siteId 不匹配被正确忽略，但全局状态因此无法收口。
+
+**正确做法**
+
+维护按 siteId 记录的刷新集合。自动切站时先同步 `currentSiteRef`，再根据目标 siteId 是否正在刷新及其运行状态设置 Renderer 状态，并清除旧站点查询阶段。目标站点未刷新时必须退出 busy；目标站点自身正在刷新时仍保持 busy。后续 IPC 终态必须能命中新站点引用。
+
+**验证方式**
+
+先用纯函数 RED/Green 测试覆盖旧站刷新、新站刷新、鉴权状态和未知状态回退；再用修复后的生产构建运行开发主链路，并对 macOS 打包应用执行完整 Electron E2E 6/6，确认“刷新悬浮窗”在自动切站后恢复可用且手动刷新仍会正确禁用再恢复。
+
+**禁止事项**
+
+不要在自动切站时只调用 `setCurrentSiteId`；不要无条件把新站点设为 success；不要仅延长 E2E 超时掩盖跨站状态泄漏；不要让旧站点终态覆盖新站点。
+
+**相关文件或命令**
+
+- `src/renderer/App.tsx`
+- `src/renderer/shells/floating/latest-usage-site.ts`
+- `src/renderer/shells/floating/latest-usage-site.test.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有由后台轮询、最近活动、通知或路由自动切换当前实体，同时复用全局 loading/refreshing 状态的 Renderer。

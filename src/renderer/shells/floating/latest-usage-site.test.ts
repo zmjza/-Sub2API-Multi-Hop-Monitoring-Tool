@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { PreviewState } from '../../preview/types';
+import * as latestUsageSite from './latest-usage-site';
 import { latestUsageTimestamp, selectLatestUsageSite } from './latest-usage-site';
 
 describe('latest usage site selection', () => {
@@ -34,5 +36,23 @@ describe('latest usage site selection', () => {
         { siteId: 'invalid', payload: { items: [{ createdAt: 'not-a-date' }] } },
       ]),
     ).toEqual({ siteId: 'site-a', usedAt: Date.parse('2026-07-19T10:00:03Z') });
+  });
+
+  it('resolves refresh state for the site selected by the floating usage scan', () => {
+    const resolve = (
+      latestUsageSite as typeof latestUsageSite & {
+        stateForSelectedUsageSite?: (
+          siteId: string,
+          runtimeState: string | undefined,
+          refreshingSiteIds: ReadonlySet<string>,
+        ) => PreviewState;
+      }
+    ).stateForSelectedUsageSite;
+
+    expect(resolve).toBeTypeOf('function');
+    expect(resolve?.('site-b', 'success', new Set(['site-a']))).toBe('success');
+    expect(resolve?.('site-b', 'success', new Set(['site-b']))).toBe('refreshing');
+    expect(resolve?.('site-b', 'auth-required', new Set())).toBe('auth-required');
+    expect(resolve?.('site-b', 'unexpected', new Set())).toBe('success');
   });
 });

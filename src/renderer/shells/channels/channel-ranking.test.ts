@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  channelRatePresentation,
   channelSyncPresentation,
   currentKeyGroupName,
   detailForDisplayedChannel,
@@ -8,6 +9,8 @@ import {
   isChannelDataStale,
   latestChannelCheckedAt,
   latestTimelinePoint,
+  matchGroupToChannel,
+  normalizeChannelIdentity,
   resolveKeyGroupChannel,
   rankChannels,
   selectDisplayedChannel,
@@ -26,6 +29,113 @@ const channels = [
 ];
 
 describe('rankChannels', () => {
+  it('normalizes monitor identities without weakening full-name equality', () => {
+    expect(normalizeChannelIdentity('  ChatGPT.Plus【高并发_特惠-通道】 ')).toBe(
+      normalizeChannelIdentity('chatgpt plus（高并发特惠通道）'),
+    );
+  });
+
+  it('returns a discriminated strict match result', () => {
+    expect(
+      matchGroupToChannel(
+        [
+          { id: 'exact', name: 'ChatGPT Plus【高并发-特惠通道】' },
+          { id: 'contains', name: 'ChatGPT Plus【高并发-特惠通道】备用' },
+        ],
+        'chatgpt.plus（高并发 特惠通道）',
+      ),
+    ).toMatchObject({ status: 'matched', channel: { id: 'exact' }, basis: 'name' });
+    expect(matchGroupToChannel([{ id: 'contains', name: '高速目标分组备用' }], '目标分组')).toEqual(
+      { status: 'unmatched' },
+    );
+  });
+
+  it('reports duplicate exact and structural matches as ambiguous', () => {
+    expect(
+      matchGroupToChannel(
+        [
+          { id: 'one', name: '共享分组' },
+          { id: 'two', name: '共享 分组' },
+        ],
+        '共享分组',
+      ),
+    ).toMatchObject({ status: 'ambiguous', candidates: [{ id: 'one' }, { id: 'two' }] });
+
+    const relationships = [
+      {
+        name: 'codex',
+        platforms: [{ platform: 'openai', groupNames: ['新站分组'], modelNames: ['gpt-5.4'] }],
+      },
+    ];
+    expect(
+      matchGroupToChannel(
+        [
+          { id: 'one', name: 'one', platform: 'openai', primaryModel: 'gpt-5.4' },
+          { id: 'two', name: 'two', platform: 'openai', primaryModel: 'gpt-5.4' },
+        ],
+        '新站分组',
+        relationships,
+      ),
+    ).toMatchObject({ status: 'ambiguous' });
+  });
+
+  it('uses a unique available-channel relationship only after name matching fails', () => {
+    expect(
+      matchGroupToChannel(
+        [
+          { id: 'codex', name: 'codex', platform: 'openai', primaryModel: 'gpt-5.4' },
+          { id: 'claude', name: 'claude', platform: 'anthropic', primaryModel: 'claude-opus-4' },
+        ],
+        '新站专属组',
+        [
+          {
+            name: 'codex',
+            platforms: [
+              { platform: 'openai', groupNames: ['新站专属组'], modelNames: ['gpt-5.4'] },
+            ],
+          },
+        ],
+      ),
+    ).toMatchObject({ status: 'matched', channel: { id: 'codex' }, basis: 'relationship' });
+  });
+
+  it('does not invent an automatic current key when the default label is absent', () => {
+    expect(
+      currentKeyGroupName(
+        [{ id: 'first', maskedLabel: '第一把 Key', groupId: 'group-1' }],
+        [{ id: 'group-1', name: '第一分组' }],
+        { mode: 'auto' },
+      ),
+    ).toBeUndefined();
+  });
+
+  it('builds rate badge states from the channel own unique group and site ratio', () => {
+    const channel = { id: 'channel', name: '独立分组' };
+    expect(
+      channelRatePresentation(channel, [{ id: 'group', name: '独立分组', rate: 0.5 }], 10, [
+        channel,
+      ]),
+    ).toEqual({
+      state: 'ready',
+      label: '折算 0.05x',
+      title: '原始倍率 0.5x · 充值比例 1:10 · 折算结果 0.05x',
+      rawRate: 0.5,
+      effectiveRate: 0.05,
+    });
+    expect(channelRatePresentation(channel, undefined, 10, [channel])).toMatchObject({
+      state: 'loading',
+    });
+    expect(
+      channelRatePresentation(channel, [{ id: 'group', name: '独立分组', rate: 0.5 }], undefined, [
+        channel,
+      ]),
+    ).toMatchObject({ state: 'unset', label: '未设置倍率' });
+    expect(
+      channelRatePresentation(channel, [{ id: 'group', name: '其他分组', rate: 0.5 }], 10, [
+        channel,
+      ]),
+    ).toMatchObject({ state: 'unavailable', label: '倍率不可用' });
+  });
   it('reports app synchronization success even when the relay reports a failed channel', () => {
     const payload = {
       state: 'supported',
@@ -77,8 +187,8 @@ describe('rankChannels', () => {
     ).toBeUndefined();
   });
 
-  it('matches a group embedded in the channel name', () => {
-    expect(rankChannels(channels, '高并发-特惠通道')[0]?.id).toBe('b');
+  it('does not treat a group embedded in a longer monitor name as an exact match', () => {
+    expect(resolveKeyGroupChannel(channels, '高并发-特惠通道')).toBeUndefined();
   });
 
   it('resolves exact monitor names used by compatible stations', () => {
@@ -91,15 +201,15 @@ describe('rankChannels', () => {
     ).toBe('maok');
   });
 
-  it('resolves a uniquely related monitor name without a station-specific map', () => {
+  it('does not use semantic word removal without structured relationship evidence', () => {
     const stationChannels = [
       { id: 'sale', name: '特价分组监控' },
       { id: 'plus', name: 'plus池监控' },
       { id: 'domestic', name: '国模' },
     ];
 
-    expect(resolveKeyGroupChannel(stationChannels, '限时特价')?.id).toBe('sale');
-    expect(selectDisplayedChannel(stationChannels, 'domestic', '限时特价')?.id).toBe('sale');
+    expect(resolveKeyGroupChannel(stationChannels, '限时特价')).toBeUndefined();
+    expect(selectDisplayedChannel(stationChannels, 'domestic', '限时特价')?.id).toBe('domestic');
   });
 
   it('does not guess when semantic evidence matches multiple monitors', () => {
@@ -135,7 +245,7 @@ describe('rankChannels', () => {
     expect(resolveKeyGroupChannel(stationChannels, '新站专属组', relationships)?.id).toBe('codex');
   });
 
-  it('uses matching usage records to disambiguate monitors in one available channel', () => {
+  it('does not use usage records to guess between structurally ambiguous monitors', () => {
     const stationChannels = [
       { id: 'fast', name: 'codex-fast', platform: 'openai', primaryModel: 'gpt-5.4' },
       { id: 'mini', name: 'codex-mini', platform: 'openai', primaryModel: 'gpt-5-mini' },
@@ -162,8 +272,8 @@ describe('rankChannels', () => {
 
     expect(usageModels).toEqual(['gpt-5.4']);
     expect(
-      resolveKeyGroupChannel(stationChannels, '新站专属组', relationships, usageModels)?.id,
-    ).toBe('fast');
+      resolveKeyGroupChannel(stationChannels, '新站专属组', relationships, usageModels),
+    ).toBeUndefined();
   });
 
   it('resolves the automatic current key to its group name', () => {
@@ -208,14 +318,14 @@ describe('rankChannels', () => {
     ).toBe(0.2);
   });
 
-  it('maps the active group multiplier only to its uniquely related monitor', () => {
+  it('does not infer a group multiplier from semantic monitor words', () => {
     const stationChannels = [
       { id: 'sale', name: '特价分组监控' },
       { id: 'plus', name: 'plus池监控' },
     ];
     const groups = [{ id: 'sale-group', name: '限时特价', rate: 0.025 }];
 
-    expect(groupRateForChannel(stationChannels[0], groups, stationChannels)).toBe(0.025);
+    expect(groupRateForChannel(stationChannels[0], groups, stationChannels)).toBeUndefined();
     expect(groupRateForChannel(stationChannels[1], groups, stationChannels)).toBeUndefined();
   });
 

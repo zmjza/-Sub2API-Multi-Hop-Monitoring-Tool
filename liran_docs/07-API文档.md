@@ -53,6 +53,8 @@
 
 详情标准化字段：每模型 `latestStatus`、`latestLatencyMs`、`availability7d/15d/30d`、`avgLatency7dMs`。
 
+Key 与渠道监控关联口径：`/keys` 的 `group_id/group.id` 只用于确定 Key 所属分组，不能与监控 `id` 比较。主匹配使用 `key.group.name` 与 `/channel-monitors` 的 `name` 规范化完整相等；`monitor.group_name` 允许为空。只有精确名称零结果时，才使用 `/channels/available` 的渠道名称、平台、分组成员和 `supported_models` 做唯一结构化回退；零个或多个结果均保持未匹配/歧义。
+
 2026-07-14 两个真实站点的详情端点均返回 supported，但本次脱敏字段盘点只确认 `id`、`name`、`provider`、`group_name`、`models`。7/15/30 日可用率、Ping、平均延迟和时间线属于上游源码已确认、当前两个真实响应未出现的字段；UI 必须显示“待查询/不可用”，不得用静态样例冒充。
 
 ## 错误标准化

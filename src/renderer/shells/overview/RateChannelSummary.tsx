@@ -5,6 +5,7 @@ import type { RateChannelSnapshot } from './rate-comparison';
 type Channel = RateChannelSnapshot;
 
 export type InlineChannelListState = 'loading' | 'success' | 'no-data' | 'unsupported' | 'error';
+export type InlineChannelMatchState = 'matched' | 'unmatched' | 'ambiguous' | 'no-key' | 'no-group';
 
 export type InlineChannelDetailState =
   { state: 'loading' } | { state: 'success'; payload: ChannelDetailPayload } | { state: 'error' };
@@ -13,10 +14,13 @@ export function RateChannelSummary(props: {
   siteName: string;
   groupName: string;
   listState: InlineChannelListState;
+  matchState: InlineChannelMatchState;
   channel?: Channel;
   detailState?: InlineChannelDetailState;
   onRetry: () => void;
 }) {
+  if (props.matchState === 'no-key') return <InlineMessage text="未确定当前生效 Key" />;
+  if (props.matchState === 'no-group') return <InlineMessage text="当前 Key 未关联分组" />;
   if (props.listState === 'loading')
     return (
       <div className="rate-inline-channel is-loading" role="status">
@@ -37,7 +41,9 @@ export function RateChannelSummary(props: {
         onRetry={props.onRetry}
       />
     );
-  if (!props.channel) return <InlineMessage text="未关联到具体渠道" />;
+  if (props.matchState === 'ambiguous') return <InlineMessage text="当前分组匹配到多个渠道" />;
+  if (props.matchState === 'unmatched' || !props.channel)
+    return <InlineMessage text="当前分组未关联到具体渠道" />;
 
   const detail =
     props.detailState?.state === 'success' && props.detailState.payload.state === 'supported'

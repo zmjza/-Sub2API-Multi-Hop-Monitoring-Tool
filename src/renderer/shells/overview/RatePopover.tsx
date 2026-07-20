@@ -2,12 +2,14 @@ import { BadgePercent, RefreshCw, Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { RateSiteContext } from '../../../../electron/shared/contracts';
+import type { AvailableChannelRelationship } from '../channels/channel-ranking';
 import {
   effectiveRate,
   filterRateGroups,
   findPlatformMinima,
   formatRateMultiplier,
-  normalizePlatform,
+  resolveGroupPlatform,
+  type RateChannelSnapshot,
 } from './rate-comparison';
 
 export function RatePopover(props: {
@@ -15,6 +17,8 @@ export function RatePopover(props: {
   siteName: string;
   context?: RateSiteContext;
   ratio?: number;
+  channels?: RateChannelSnapshot[];
+  relationships?: AvailableChannelRelationship[];
   refreshing: boolean;
   onRefresh: () => Promise<void>;
   onClose: () => void;
@@ -24,29 +28,34 @@ export function RatePopover(props: {
   const [platform, setPlatform] = useState('all');
   const [style, setStyle] = useState<React.CSSProperties>({});
   const groups = props.context?.groups ?? [];
-  const minima = useMemo(() => findPlatformMinima(groups, props.ratio), [groups, props.ratio]);
+  const channels = props.channels ?? [];
+  const relationships = props.relationships ?? [];
+  const minima = useMemo(
+    () => findPlatformMinima(groups, props.ratio, channels, relationships),
+    [channels, groups, props.ratio, relationships],
+  );
   const platforms = useMemo(
     () =>
       [
         ...new Map(
           groups.map((group) => {
-            const value = normalizePlatform(group.platform);
+            const value = resolveGroupPlatform(group, channels, relationships);
             return [value.key, value] as const;
           }),
         ).values(),
       ].sort((left, right) => left.label.localeCompare(right.label, 'zh-CN')),
-    [groups],
+    [channels, groups, relationships],
   );
   const filtered = useMemo(
     () =>
-      filterRateGroups(groups, platform, search)
+      filterRateGroups(groups, platform, search, channels, relationships)
         .filter((group) => !group.status || group.status === 'active')
         .sort((left, right) => {
           const leftRate = effectiveRate(left.rate, props.ratio) ?? left.rate;
           const rightRate = effectiveRate(right.rate, props.ratio) ?? right.rate;
           return leftRate - rightRate || left.name.localeCompare(right.name, 'zh-CN');
         }),
-    [groups, platform, props.ratio, search],
+    [channels, groups, platform, props.ratio, relationships, search],
   );
 
   useLayoutEffect(() => {
@@ -189,10 +198,11 @@ export function RatePopover(props: {
             ) : (
               filtered.map((group) => {
                 const normalized = effectiveRate(group.rate, props.ratio);
+                const resolvedPlatform = resolveGroupPlatform(group, channels, relationships);
                 return (
                   <article key={`${group.platform}:${group.id}`}>
                     <div>
-                      <span>{normalizePlatform(group.platform).label}</span>
+                      <span>{resolvedPlatform.label}</span>
                       <strong>{group.name}</strong>
                       {group.description && <p>{group.description}</p>}
                     </div>

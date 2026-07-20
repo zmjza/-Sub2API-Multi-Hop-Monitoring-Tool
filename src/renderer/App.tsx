@@ -18,12 +18,16 @@ import {
   type PreviewState,
 } from './preview/types';
 import { OverviewPage } from './shells/overview/OverviewPage';
+import { desktopRateChannelStatusLoader } from './shells/overview/rate-channel-status-loader';
 import { UsagePage } from './shells/usage/UsagePage';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
 import { SitesPage } from './shells/sites/SitesPage';
 import { FloatingWindow } from './shells/floating/FloatingWindow';
-import { selectLatestUsageSite } from './shells/floating/latest-usage-site';
+import {
+  selectLatestUsageSite,
+  stateForSelectedUsageSite,
+} from './shells/floating/latest-usage-site';
 import { RadarPage } from './shells/radar/RadarPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
@@ -70,8 +74,10 @@ export function App() {
   const [currentSiteId, setCurrentSiteId] = useState<string>();
   const [sitesSection, setSitesSection] = useState<'notifications' | 'settings'>();
   const currentSiteRef = useRef<string | undefined>(undefined);
+  const refreshingSiteIdsRef = useRef<Set<string>>(new Set());
   const shellRef = useRef(shell);
   const channelLoadCoordinatorRef = useRef(new ChannelLoadCoordinator());
+  const channelStatusLoaderRef = useRef(desktopRateChannelStatusLoader());
   const keyContextRequestRef = useRef(new Map<string, number>());
   const siteRequestRef = useRef(0);
   const usageRequestRef = useRef(0);
@@ -342,8 +348,8 @@ export function App() {
     const siteId = selectedSite.id;
     const requestId = ++channelDetailRequestRef.current;
     setSelectedChannelId(channelId);
-    void window.sub2apiDesktop?.sites
-      .channelStatus(siteId, channelId)
+    void channelStatusLoaderRef.current
+      .loadDetail(siteId, channelId)
       .then((value) => {
         if (currentSiteRef.current === siteId && channelDetailRequestRef.current === requestId)
           setChannelDetail(value);
@@ -355,7 +361,7 @@ export function App() {
   };
   context.onRefreshChannels = () => {
     if (!selectedSite) return;
-    void loadChannels(selectedSite.id);
+    void loadChannels(selectedSite.id, true);
   };
   context.floatingPosition = floatingPosition;
   context.floatingOpacity = floatingOpacity;
@@ -413,6 +419,7 @@ export function App() {
         const next = new Set(current);
         if (value.state === 'refreshing') next.add(value.siteId);
         else next.delete(value.siteId);
+        refreshingSiteIdsRef.current = next;
         return next;
       });
       if (value.siteId === currentSiteRef.current) {
@@ -462,7 +469,16 @@ export function App() {
         ) {
           floatingUsageScanRef.current.latestAt = latest.usedAt;
           floatingUsageScanRef.current.siteId = latest.siteId;
+          currentSiteRef.current = latest.siteId;
           setCurrentSiteId(latest.siteId);
+          setState(
+            stateForSelectedUsageSite(
+              latest.siteId,
+              sites.find((site) => site.id === latest.siteId)?.status,
+              refreshingSiteIdsRef.current,
+            ),
+          );
+          setQueryPhase(undefined);
         }
       } finally {
         floatingUsageScanRef.current.running = false;
@@ -532,7 +548,7 @@ export function App() {
       .catch(() => undefined);
   }, []);
 
-  async function loadChannels(siteId: string) {
+  async function loadChannels(siteId: string, force = false) {
     const request = channelLoadCoordinatorRef.current.begin(siteId);
     const isCurrent = () =>
       channelLoadCoordinatorRef.current.isCurrent(request, currentSiteRef.current);
@@ -541,7 +557,7 @@ export function App() {
       setState('refreshing');
     }
     try {
-      const value = await window.sub2apiDesktop?.sites.channels(siteId);
+      const value = await channelStatusLoaderRef.current.loadChannels(siteId, force);
       if (!isCurrent()) return;
       setChannelsData(value);
       const rawChannels =
@@ -556,7 +572,7 @@ export function App() {
         return;
       }
       const detailRequestId = ++channelDetailRequestRef.current;
-      const detail = await window.sub2apiDesktop?.sites.channelStatus(siteId, id);
+      const detail = await channelStatusLoaderRef.current.loadDetail(siteId, id, force);
       if (isCurrent() && channelDetailRequestRef.current === detailRequestId)
         setChannelDetail(detail);
       if (isCurrent()) setState('success');

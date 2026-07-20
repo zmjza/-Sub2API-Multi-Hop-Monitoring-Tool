@@ -158,6 +158,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
+  align-items: stretch;
 }
 .site-card {
   min-width: 0;
@@ -165,6 +166,9 @@
   border: 1px solid #e8e4f2;
   border-radius: 16px;
   background: #fff;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
   cursor: pointer;
   transition:
     border-color 0.15s,
@@ -563,6 +567,22 @@
   color: #777587;
   font-size: 12px;
 }
+.rate-comparison-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+.rate-comparison-controls select {
+  height: 36px;
+  border: 1px solid #e4e1ee;
+  border-radius: 10px;
+  padding: 0 30px 0 10px;
+  background: #fff;
+  color: #464555;
+  font-size: 11px;
+  font-weight: 700;
+}
 .rate-comparison-heading button,
 .rate-popover-header button {
   width: 36px;
@@ -672,7 +692,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid #f0ecf9;
 }
@@ -791,6 +811,23 @@
   transform: translateY(-1px);
   box-shadow: 0 5px 12px rgba(79, 70, 229, 0.12);
   outline: none;
+}
+
+.site-rate-badge {
+  min-width: 58px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 .view-channel-status-button {
   border: 1px solid #bbf7d0;
@@ -990,15 +1027,32 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.rate-platform-state {
+  min-height: 126px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+}
+.rate-platform-state.is-checking svg {
+  color: #4f46e5;
+}
 
 .rate-inline-channel {
   grid-column: 1 / -1;
   min-height: 86px;
-  margin-top: 5px;
+  margin-top: 12px;
   padding: 10px;
   border: 1px solid rgba(16, 185, 129, 0.18);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.58);
+}
+.site-card > .rate-inline-channel {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
 }
 .rate-inline-channel-heading {
   display: grid;
@@ -1190,6 +1244,18 @@
   border-radius: 18px;
   background: #f8fafc;
 }
+.rate-channel-hero-status {
+  margin-left: auto;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.rate-channel-hero-status .rate-channel-status {
+  margin-left: 0;
+}
+.rate-channel-popover .channel-rate-badge {
+  justify-self: start;
+}
 .rate-channel-icon {
   width: 40px;
   height: 40px;
@@ -1228,6 +1294,33 @@
 .rate-channel-status.failed {
   background: #fee2e2;
   color: #b91c1c;
+}
+.rate-channel-popover .channel-rate-badge {
+  min-width: 104px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.rate-channel-popover .channel-rate-badge.is-unset,
+.rate-channel-popover .channel-rate-badge.is-loading {
+  border-color: #d8dce3;
+  background: #f3f4f6;
+  color: #64748b;
+}
+.rate-channel-popover .channel-rate-badge.is-unavailable {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
 }
 .rate-channel-metrics {
   display: grid;
@@ -1622,7 +1715,14 @@
 
 @media (max-width: 760px) {
   .rate-comparison-list {
-    grid-template-columns: minmax(220px, 1fr);
+    flex-wrap: nowrap;
+  }
+  .rate-comparison-heading {
+    align-items: flex-start;
+  }
+  .rate-comparison-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
   .rate-minimum-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

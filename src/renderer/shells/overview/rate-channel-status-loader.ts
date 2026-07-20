@@ -119,3 +119,23 @@ export class RateChannelStatusLoader {
     return revision;
   }
 }
+
+let desktopLoader: RateChannelStatusLoader | undefined;
+
+export function desktopRateChannelStatusLoader(): RateChannelStatusLoader {
+  desktopLoader ??= new RateChannelStatusLoader({
+    readChannels: async (siteId) => {
+      const value = await window.sub2apiDesktop?.sites.channels(siteId);
+      if (!value || typeof value !== 'object' || !('state' in value))
+        throw new Error('Invalid channel list response');
+      return value as ChannelViewPayload;
+    },
+    readDetail: async (siteId, channelId) => {
+      const value = await window.sub2apiDesktop?.sites.channelStatus(siteId, channelId);
+      if (!value || typeof value !== 'object' || !('state' in value))
+        throw new Error('Invalid channel detail response');
+      return value as ChannelDetailPayload;
+    },
+  });
+  return desktopLoader;
+}

@@ -20,8 +20,8 @@ describe('electron-builder manifest', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
 
-    expect(manifest.version).toBe('1.3.4');
-    expect(preloadSource).toContain("shellVersion: '1.3.4'");
+    expect(manifest.version).toBe('1.3.5');
+    expect(preloadSource).toContain("shellVersion: '1.3.5'");
   });
 
   it('keeps Electron as a build-time dependency', () => {

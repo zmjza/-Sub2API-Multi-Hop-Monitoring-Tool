@@ -1,6 +1,7 @@
 import type { AvailableRateGroup } from '../../../../electron/shared/contracts';
 import {
-  resolveKeyGroupChannel,
+  matchGroupToChannel,
+  normalizeChannelIdentity,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
 
@@ -27,6 +28,8 @@ export interface RateChannelSnapshot {
   name: string;
   groupName?: string;
   platform?: string;
+  primaryModel?: string;
+  extraModels?: string[];
   status: 'normal' | 'degraded' | 'failed' | 'unknown';
   availability7d?: number;
   timeline?: Array<{ status: 'normal' | 'degraded' | 'failed' | 'unknown'; checkedAt?: string }>;
@@ -35,10 +38,11 @@ export interface RateChannelSnapshot {
 export interface PlatformRateComparison {
   platformKey: string;
   platformLabel: string;
-  effectiveRate: number;
-  priceScore: number;
-  stabilityScore: number;
-  stabilityLabel: '稳定' | '存在异常' | '状态未知' | '无渠道状态';
+  state: 'ready' | 'checking' | 'empty';
+  effectiveRate?: number;
+  priceScore?: number;
+  stabilityScore?: number;
+  stabilityLabel: '稳定' | '正在核验' | '暂无稳定渠道';
   sites: Array<{
     siteId: string;
     siteName: string;
@@ -49,7 +53,7 @@ export interface PlatformRateComparison {
     priceScore: number;
     stabilityScore: number;
     totalScore: number;
-    stabilityLabel: '稳定' | '存在异常' | '状态未知' | '无渠道状态';
+    stabilityLabel: '稳定';
     channelId?: string;
   }>;
 }
@@ -57,7 +61,7 @@ export interface PlatformRateComparison {
 const RATE_EPSILON = 1e-9;
 
 export function effectiveRate(rate: number, ratio?: number): number | undefined {
-  if (!Number.isFinite(rate) || rate < 0 || !Number.isFinite(ratio) || (ratio ?? 0) <= 0)
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(ratio) || (ratio ?? 0) <= 0)
     return undefined;
   return rate / ratio!;
 }
@@ -78,6 +82,67 @@ export function normalizePlatform(platform: string): { key: string; label: strin
   return { key, label: value };
 }
 
+type PlatformChannelEvidence = Pick<
+  RateChannelSnapshot,
+  'id' | 'name' | 'platform' | 'primaryModel' | 'extraModels' | 'status'
+>;
+
+function platformFromText(value?: string): { key: string; label: string } | undefined {
+  const text = (value ?? '').normalize('NFKC').toLocaleLowerCase();
+  const detected = new Set<string>();
+  if (/(^|[^a-z0-9])(openai|chatgpt|codex|gpt(?:[-_. ]?\d+)?)(?=$|[^a-z0-9])/.test(text))
+    detected.add('openai');
+  if (/(^|[^a-z0-9])(claude|anthropic)(?=$|[^a-z0-9])/.test(text)) detected.add('claude');
+  if (/(^|[^a-z0-9])(gemini|google[ ._-]*gemini)(?=$|[^a-z0-9])/.test(text)) detected.add('gemini');
+  if (/(^|[^a-z0-9])(grok|xai|x\.ai)(?=$|[^a-z0-9])/.test(text)) detected.add('grok');
+  return detected.size === 1 ? normalizePlatform([...detected][0]!) : undefined;
+}
+
+export function resolveActualPlatform(
+  group: AvailableRateGroup,
+  channel?: PlatformChannelEvidence,
+  relationships: AvailableChannelRelationship[] = [],
+): { key: string; label: string } {
+  const evidence = [
+    platformFromText(group.name),
+    platformFromText([channel?.primaryModel, ...(channel?.extraModels ?? [])].join(' ')),
+    platformFromText(group.description),
+  ];
+  for (const result of evidence) if (result) return result;
+
+  const normalizedGroup = normalizeChannelIdentity(group.name);
+  const relatedPlatforms = new Set(
+    relationships.flatMap((relationship) =>
+      relationship.platforms.flatMap((section) =>
+        section.groupNames.some((name) => normalizeChannelIdentity(name) === normalizedGroup)
+          ? [normalizePlatform(section.platform).key]
+          : [],
+      ),
+    ),
+  );
+  if (relatedPlatforms.size === 1) return normalizePlatform([...relatedPlatforms][0]!);
+  return normalizePlatform(channel?.platform || group.platform);
+}
+
+export function resolveGroupPlatform(
+  group: AvailableRateGroup,
+  channels: RateChannelSnapshot[] = [],
+  relationships: AvailableChannelRelationship[] = [],
+): { key: string; label: string } {
+  const match = matchGroupToChannel(channels, group.name, relationships);
+  return resolveActualPlatform(
+    group,
+    match.status === 'matched' ? match.channel : undefined,
+    relationships,
+  );
+}
+
+export type RateRefreshMinutes = 1 | 3 | 5 | 10;
+
+export function rateRefreshIntervalMs(value: number): number {
+  return ([1, 3, 5, 10].includes(value) ? value : 5) * 60_000;
+}
+
 export function parseRechargeRatio(value: string): number | undefined {
   const ratio = Number(value.trim());
   return value.trim() && Number.isFinite(ratio) && ratio > 0 ? ratio : undefined;
@@ -87,10 +152,15 @@ export function filterRateGroups(
   groups: AvailableRateGroup[],
   platformKey: string,
   search: string,
+  channels: RateChannelSnapshot[] = [],
+  relationships: AvailableChannelRelationship[] = [],
 ): AvailableRateGroup[] {
   const query = search.trim().toLocaleLowerCase();
   return groups.filter((group) => {
-    if (platformKey !== 'all' && normalizePlatform(group.platform).key !== platformKey)
+    if (
+      platformKey !== 'all' &&
+      resolveGroupPlatform(group, channels, relationships).key !== platformKey
+    )
       return false;
     if (!query) return true;
     return `${group.name}\n${group.description ?? ''}`.toLocaleLowerCase().includes(query);
@@ -100,13 +170,15 @@ export function filterRateGroups(
 export function findPlatformMinima(
   groups: AvailableRateGroup[],
   ratio?: number,
+  channels: RateChannelSnapshot[] = [],
+  relationships: AvailableChannelRelationship[] = [],
 ): PlatformMinimum[] {
   const results = new Map<string, PlatformMinimum>();
   const hasRatio = Number.isFinite(ratio) && (ratio ?? 0) > 0;
   for (const group of groups) {
     if (group.status && group.status !== 'active') continue;
-    if (!Number.isFinite(group.rate) || group.rate < 0) continue;
-    const platform = normalizePlatform(group.platform);
+    if (!Number.isFinite(group.rate) || group.rate <= 0) continue;
+    const platform = resolveGroupPlatform(group, channels, relationships);
     const normalized = effectiveRate(group.rate, ratio);
     const comparisonRate = normalized ?? group.rate;
     const current = results.get(platform.key);
@@ -133,138 +205,187 @@ export function findPlatformMinima(
     .sort((left, right) => left.platformLabel.localeCompare(right.platformLabel, 'zh-CN'));
 }
 
-const STABILITY_SCORES = {
-  normal: 10,
-  degraded: 5,
-  failed: 0,
-  unknown: 3,
-  none: 5,
-} as const;
+export type ChannelEligibility =
+  | { eligible: true; score: 10; label: '稳定' }
+  | {
+      eligible: false;
+      reason:
+        | 'pending'
+        | 'unsupported'
+        | 'request-error'
+        | 'unmatched'
+        | 'current-issue'
+        | 'invalid-record'
+        | 'future-record'
+        | 'no-recent-record'
+        | 'recent-issue';
+    };
+
+export function channelEligibility(
+  channel: RateChannelSnapshot | undefined,
+  now = Date.now(),
+  channelState?: ComparableRateSite['channelState'],
+): ChannelEligibility {
+  if (channelState === undefined) return { eligible: false, reason: 'pending' };
+  if (channelState === 'unsupported') return { eligible: false, reason: 'unsupported' };
+  if (channelState === 'error') return { eligible: false, reason: 'request-error' };
+  if (!channel) return { eligible: false, reason: 'unmatched' };
+  if (channel.status !== 'normal') return { eligible: false, reason: 'current-issue' };
+
+  const parsed = (channel.timeline ?? []).map((point) => ({
+    point,
+    checkedAt: Date.parse(point.checkedAt ?? ''),
+  }));
+  if (parsed.some((item) => !Number.isFinite(item.checkedAt)))
+    return { eligible: false, reason: 'invalid-record' };
+  if (parsed.some((item) => item.checkedAt > now))
+    return { eligible: false, reason: 'future-record' };
+  const windowStart = now - 5 * 60_000;
+  const recent = parsed.filter((item) => item.checkedAt >= windowStart && item.checkedAt <= now);
+  if (!recent.length) return { eligible: false, reason: 'no-recent-record' };
+  if (recent.some((item) => item.point.status !== 'normal'))
+    return { eligible: false, reason: 'recent-issue' };
+  return { eligible: true, score: 10, label: '稳定' };
+}
 
 export function channelStability(
   channel: RateChannelSnapshot | undefined,
   now = Date.now(),
   channelState?: ComparableRateSite['channelState'],
-): {
-  score: number;
-  label: '稳定' | '存在异常' | '状态未知' | '无渠道状态';
-} {
-  if (!channel)
-    return channelState === 'error'
-      ? { score: STABILITY_SCORES.unknown, label: '状态未知' }
-      : { score: STABILITY_SCORES.none, label: '无渠道状态' };
-  const recent = (channel.timeline ?? []).filter((point) => {
-    const checkedAt = Date.parse(point.checkedAt ?? '');
-    return Number.isFinite(checkedAt) && now - checkedAt <= 5 * 60_000 && now >= checkedAt;
-  });
-  if (recent.some((point) => point.status === 'failed'))
-    return { score: STABILITY_SCORES.failed, label: '存在异常' };
-  if (recent.some((point) => point.status === 'degraded'))
-    return { score: STABILITY_SCORES.degraded, label: '存在异常' };
-  if (recent.some((point) => point.status === 'unknown'))
-    return { score: STABILITY_SCORES.unknown, label: '状态未知' };
-  if (recent.length === 0) return { score: STABILITY_SCORES.unknown, label: '状态未知' };
-  if (channel.status === 'failed') return { score: STABILITY_SCORES.failed, label: '存在异常' };
-  if (channel.status === 'degraded') return { score: STABILITY_SCORES.degraded, label: '存在异常' };
-  if (channel.status === 'unknown') return { score: STABILITY_SCORES.unknown, label: '状态未知' };
-  return { score: STABILITY_SCORES.normal, label: '稳定' };
+): { score: number; label: '稳定' | '存在异常' | '状态未知' | '无渠道状态' } {
+  const eligibility = channelEligibility(channel, now, channelState);
+  if (eligibility.eligible) return { score: 10, label: '稳定' };
+  if (eligibility.reason === 'unmatched' || eligibility.reason === 'unsupported')
+    return { score: 0, label: '无渠道状态' };
+  if (eligibility.reason === 'current-issue' || eligibility.reason === 'recent-issue')
+    return { score: 0, label: '存在异常' };
+  return { score: 0, label: '状态未知' };
 }
 
-function scoreCandidate(
-  effective: number,
-  minimum: number,
-  stability: ReturnType<typeof channelStability>,
-) {
-  const priceScore =
-    effective <= RATE_EPSILON ? 10 : Math.min(10, Math.max(0, (minimum / effective) * 10));
-  return {
-    priceScore,
-    stabilityScore: stability.score,
-    totalScore: priceScore * 0.6 + stability.score * 0.4,
-  };
+type EligibleCandidate = {
+  siteId: string;
+  siteName: string;
+  ratio: number;
+  rawRate: number;
+  effectiveRate: number;
+  groups: [AvailableRateGroup];
+  availability7d: number;
+  channelId: string;
+};
+
+type PlatformPool = {
+  platformLabel: string;
+  checking: boolean;
+  candidates: EligibleCandidate[];
+};
+
+export function normalizedPriceScore(effective: number, minimum: number, maximum: number): number {
+  if (Math.abs(maximum - minimum) <= RATE_EPSILON) return 10;
+  return Math.min(10, Math.max(0, (10 * (maximum - effective)) / (maximum - minimum)));
 }
 
-export function comparePlatformRates(sites: ComparableRateSite[]): PlatformRateComparison[] {
-  const now = Date.now();
-  const candidates = new Map<
-    string,
-    Array<{
-      siteId: string;
-      siteName: string;
-      ratio: number;
-      rawRate: number;
-      effectiveRate: number;
-      groups: AvailableRateGroup[];
-      stability: ReturnType<typeof channelStability>;
-      channelId?: string;
-    }>
-  >();
+export function comparePlatformRates(
+  sites: ComparableRateSite[],
+  now = Date.now(),
+): PlatformRateComparison[] {
+  const order = ['openai', 'claude', 'gemini', 'grok'];
+  const pools = new Map<string, PlatformPool>(
+    order.map((platformKey) => [
+      platformKey,
+      {
+        platformLabel: normalizePlatform(platformKey).label,
+        checking: false,
+        candidates: [],
+      },
+    ]),
+  );
   for (const site of sites) {
     if (!Number.isFinite(site.ratio) || (site.ratio ?? 0) <= 0) continue;
     const ratio = site.ratio!;
-    for (const minimum of findPlatformMinima(site.groups, ratio)) {
-      if (minimum.effectiveRate === undefined) continue;
-      for (const group of minimum.groups) {
-        const channel = resolveKeyGroupChannel(
-          site.channels ?? [],
-          group.name,
-          site.relationships ?? [],
-        );
-        const stability = channelStability(channel, now, site.channelState);
-        const candidate = {
-          siteId: site.siteId,
-          siteName: site.siteName,
-          ratio,
-          rawRate: group.rate,
-          effectiveRate: minimum.effectiveRate,
-          groups: [group],
-          stability,
-          ...(channel?.id ? { channelId: channel.id } : {}),
-        };
-        const current = candidates.get(minimum.platformKey) ?? [];
-        current.push(candidate);
-        candidates.set(minimum.platformKey, current);
+    for (const group of site.groups) {
+      if (group.status !== 'active') continue;
+      const normalizedRate = effectiveRate(group.rate, ratio);
+      if (normalizedRate === undefined) continue;
+
+      const match = matchGroupToChannel(site.channels ?? [], group.name, site.relationships ?? []);
+      const channel = match.status === 'matched' ? match.channel : undefined;
+      const platform = resolveActualPlatform(group, channel, site.relationships);
+      const pool = pools.get(platform.key) ?? {
+        platformLabel: platform.label,
+        checking: false,
+        candidates: [],
+      };
+      if (site.channelState === undefined || site.channels === undefined) pool.checking = true;
+      if (match.status === 'matched') {
+        const eligibility = channelEligibility(match.channel, now, site.channelState);
+        if (eligibility.eligible)
+          pool.candidates.push({
+            siteId: site.siteId,
+            siteName: site.siteName,
+            ratio,
+            rawRate: group.rate,
+            effectiveRate: normalizedRate,
+            groups: [group],
+            availability7d: match.channel.availability7d ?? -1,
+            channelId: match.channel.id,
+          });
       }
+      pools.set(platform.key, pool);
     }
   }
-  const order = ['openai', 'claude', 'gemini', 'grok'];
-  return [...candidates.entries()]
-    .map(([platformKey, items]) => {
-      const minimum = Math.min(...items.map((item) => item.effectiveRate));
-      const scored = items.map((item) => ({
-        ...item,
-        ...scoreCandidate(item.effectiveRate, minimum, item.stability),
-      }));
-      const ranked = scored.sort(
+
+  return [...pools.entries()]
+    .map(([platformKey, pool]): PlatformRateComparison => {
+      if (!pool.candidates.length)
+        return {
+          platformKey,
+          platformLabel: pool.platformLabel,
+          state: pool.checking ? 'checking' : 'empty',
+          stabilityLabel: pool.checking ? '正在核验' : '暂无稳定渠道',
+          sites: [],
+        };
+
+      const minimum = Math.min(...pool.candidates.map((item) => item.effectiveRate));
+      const maximum = Math.max(...pool.candidates.map((item) => item.effectiveRate));
+      const scored = pool.candidates.map((item) => {
+        const priceScore = normalizedPriceScore(item.effectiveRate, minimum, maximum);
+        return { ...item, priceScore, stabilityScore: 10, totalScore: priceScore * 0.6 + 4 };
+      });
+      scored.sort(
         (left, right) =>
           right.totalScore - left.totalScore ||
-          right.stabilityScore - left.stabilityScore ||
           right.priceScore - left.priceScore ||
+          left.effectiveRate - right.effectiveRate ||
+          right.availability7d - left.availability7d ||
           left.siteName.localeCompare(right.siteName, 'zh-CN') ||
-          (left.groups[0]?.name ?? '').localeCompare(right.groups[0]?.name ?? '', 'zh-CN') ||
-          left.siteId.localeCompare(right.siteId),
+          left.groups[0].name.localeCompare(right.groups[0].name, 'zh-CN') ||
+          left.siteId.localeCompare(right.siteId) ||
+          left.groups[0].id.localeCompare(right.groups[0].id),
       );
-      const first = ranked[0]!;
+      const first = scored[0]!;
       return {
         platformKey,
-        platformLabel: normalizePlatform(platformKey).label,
+        platformLabel: pool.platformLabel,
+        state: 'ready',
         effectiveRate: first.effectiveRate,
         priceScore: first.priceScore,
-        stabilityScore: first.stabilityScore,
-        stabilityLabel: first.stability.label,
-        sites: ranked.map((item) => ({
-          siteId: item.siteId,
-          siteName: item.siteName,
-          ratio: item.ratio,
-          rawRate: item.rawRate,
-          effectiveRate: item.effectiveRate,
-          groups: item.groups,
-          priceScore: item.priceScore,
-          stabilityScore: item.stabilityScore,
-          totalScore: item.totalScore,
-          stabilityLabel: item.stability.label,
-          ...(item.channelId ? { channelId: item.channelId } : {}),
-        })),
+        stabilityScore: 10,
+        stabilityLabel: '稳定',
+        sites: [
+          {
+            siteId: first.siteId,
+            siteName: first.siteName,
+            ratio: first.ratio,
+            rawRate: first.rawRate,
+            effectiveRate: first.effectiveRate,
+            groups: first.groups,
+            priceScore: first.priceScore,
+            stabilityScore: 10,
+            totalScore: first.totalScore,
+            stabilityLabel: '稳定',
+            channelId: first.channelId,
+          },
+        ],
       };
     })
     .sort(

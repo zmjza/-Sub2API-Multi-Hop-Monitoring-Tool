@@ -1,6 +1,28 @@
+import type { PreviewState } from '../../preview/types';
+
 export interface UsageSiteResult {
   siteId: string;
   payload: unknown;
+}
+
+const runtimePreviewStates = new Set<PreviewState>([
+  'success',
+  'stale',
+  'error',
+  'auth-required',
+  'partial',
+  'unsupported',
+]);
+
+export function stateForSelectedUsageSite(
+  siteId: string,
+  runtimeState: string | undefined,
+  refreshingSiteIds: ReadonlySet<string>,
+): PreviewState {
+  if (refreshingSiteIds.has(siteId)) return 'refreshing';
+  return runtimePreviewStates.has(runtimeState as PreviewState)
+    ? (runtimeState as PreviewState)
+    : 'success';
 }
 
 export function latestUsageTimestamp(payload: unknown): number | undefined {

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  BadgePercent,
   CheckCircle2,
   Clock3,
   Globe2,
@@ -14,6 +15,7 @@ import type {
 } from '../../../../electron/shared/contracts';
 import type { ChannelsProps } from './types';
 import {
+  channelRatePresentation,
   channelSyncPresentation,
   currentKeyGroupName,
   isChannelDataStale,
@@ -51,12 +53,17 @@ export function ChannelsPage(props: ChannelsProps) {
     props.selectedSite?.defaultKeyLabel,
   );
   const usageModels = usageModelsForGroup(props.usageData, keyGroupName);
-  const rankedChannels = rankChannels(
-    channelItems,
-    keyGroupName,
-    liveChannels?.availableChannels ?? [],
-    usageModels,
-  );
+  const rateContext = props.selectedSite
+    ? props.rateContexts?.sites[props.selectedSite.id]
+    : undefined;
+  const rateGroups = runtime
+    ? rateContext?.groups
+    : (rateContext?.groups ?? props.usageFilterOptions?.groups ?? []);
+  const rechargeRatio = props.selectedSite
+    ? props.rateContexts?.ratios[props.selectedSite.id]
+    : undefined;
+  const relationships = liveChannels?.availableChannels ?? [];
+  const rankedChannels = rankChannels(channelItems, keyGroupName, relationships, usageModels);
   const selectedItem =
     rankedChannels.find((item) => item.id === props.selectedChannelId) ?? rankedChannels[0];
   const detail = readChannelDetail(props.channelDetail);
@@ -73,6 +80,9 @@ export function ChannelsPage(props: ChannelsProps) {
   const lastChecked = selectedItem?.timeline.at(-1)?.checkedAt;
   const sync = channelSyncPresentation(props.state, props.channelsData);
   const stale = isChannelDataStale(props.channelsData);
+  const selectedRate = selectedItem
+    ? channelRatePresentation(selectedItem, rateGroups, rechargeRatio, channelItems, relationships)
+    : undefined;
   return (
     <section className="channels-page">
       <div className="channel-toolbar">
@@ -102,6 +112,15 @@ export function ChannelsPage(props: ChannelsProps) {
             {detailStatus === 'normal' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
             {statusLabel(detailStatus)} · 最近一次检查 {formatCheckedAt(lastChecked)}
           </span>
+          {selectedRate && (
+            <span
+              className={`channel-rate-badge is-${selectedRate.state}`}
+              title={selectedRate.title}
+            >
+              <BadgePercent size={13} />
+              {selectedRate.label}
+            </span>
+          )}
         </div>
         <div className="period-tabs">
           {[7, 15, 30].map((days) => (
@@ -139,72 +158,87 @@ export function ChannelsPage(props: ChannelsProps) {
         </div>
       ) : (
         <div className="channel-cards">
-          {rankedChannels.map((item) => (
-            <article
-              className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
-              key={item.id}
-              onClick={() => props.onSelectChannel?.(item.id)}
-            >
-              <div className="channel-card-head">
-                <div className="channel-title">
-                  <div className="channel-icon">
-                    <Activity size={20} />
+          {rankedChannels.map((item) => {
+            const rate = channelRatePresentation(
+              item,
+              rateGroups,
+              rechargeRatio,
+              channelItems,
+              relationships,
+            );
+            return (
+              <article
+                className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
+                key={item.id}
+                onClick={() => props.onSelectChannel?.(item.id)}
+              >
+                <div className="channel-card-head">
+                  <div className="channel-title">
+                    <div className="channel-icon">
+                      <Activity size={20} />
+                    </div>
+                    <div>
+                      <h3 title={item.name}>{item.name}</h3>
+                      <span>
+                        <b>{item.platform || '平台待查询'}</b> · {item.primaryModel || '模型待查询'}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 title={item.name}>{item.name}</h3>
-                    <span>
-                      <b>{item.platform || '平台待查询'}</b> · {item.primaryModel || '模型待查询'}
+                  <div className="channel-card-status-stack">
+                    <span className={`status-pill ${statusClass(item.status)}`}>
+                      {statusLabel(item.status)}
+                    </span>
+                    <span className={`channel-rate-badge is-${rate.state}`} title={rate.title}>
+                      <BadgePercent size={12} />
+                      {rate.label}
                     </span>
                   </div>
                 </div>
-              </div>
-              <div className="channel-metrics">
-                <div>
-                  <span>
-                    <Zap size={14} />
-                    对话延迟
-                  </span>
-                  <strong>{formatMilliseconds(item.latencyMs)}</strong>
-                </div>
-                <div>
-                  <span>
-                    <Globe2 size={14} />
-                    端点 PING
-                    <em className={`status-pill ${statusClass(item.status)}`}>
-                      {statusLabel(item.status)}
-                    </em>
-                  </span>
-                  <strong>{formatMilliseconds(item.pingMs)}</strong>
-                </div>
-              </div>
-              <div className="availability">
-                <div>
-                  <span>可用性 · 7 天</span>
-                  <strong>{formatAvailability(item.availability7d)}</strong>
-                </div>
-                {item.timeline.length ? (
-                  <div className="sparkline">
-                    {item.timeline.map((point, index) => (
-                      <i
-                        className={statusClass(point.status)}
-                        key={`${point.checkedAt}-${index}`}
-                      />
-                    ))}
+                <div className="channel-metrics">
+                  <div>
+                    <span>
+                      <Zap size={14} />
+                      对话延迟
+                    </span>
+                    <strong>{formatMilliseconds(item.latencyMs)}</strong>
                   </div>
-                ) : (
-                  <div className="timeline-empty">暂无状态记录</div>
-                )}
-                <small>
-                  近 {item.timeline.length} 次记录{' '}
-                  <em>{formatCheckedAt(item.timeline.at(-1)?.checkedAt)}</em>
-                </small>
-                <div className="timeline-label">
-                  <span>PAST</span>
-                  <span>NOW</span>
+                  <div>
+                    <span>
+                      <Globe2 size={14} />
+                      端点 PING
+                    </span>
+                    <strong>{formatMilliseconds(item.pingMs)}</strong>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
+                <div className="availability">
+                  <div>
+                    <span>可用性 · 7 天</span>
+                    <strong>{formatAvailability(item.availability7d)}</strong>
+                  </div>
+                  {item.timeline.length ? (
+                    <div className="sparkline">
+                      {item.timeline.map((point, index) => (
+                        <i
+                          className={statusClass(point.status)}
+                          key={`${point.checkedAt}-${index}`}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="timeline-empty">暂无状态记录</div>
+                  )}
+                  <small>
+                    近 {item.timeline.length} 次记录{' '}
+                    <em>{formatCheckedAt(item.timeline.at(-1)?.checkedAt)}</em>
+                  </small>
+                  <div className="timeline-label">
+                    <span>PAST</span>
+                    <span>NOW</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
