@@ -1,6 +1,6 @@
 {
   "name": "sub2api-multi-hub-monitor",
-  "version": "1.3.5",
+  "version": "1.4.1",
   "private": true,
   "description": "Local desktop monitor for multiple sub2api-compatible sites",
   "main": "dist-electron/main/index.js",
@@ -50,6 +50,10 @@
     "vitest": "4.1.10",
     "wait-on": "9.0.10"
   },
+  "overrides": {
+    "fast-uri": "3.1.4",
+    "shell-quote": "1.10.0"
+  },
   "build": {
     "appId": "com.liran.sub2api.monitor",
     "productName": "看看你还有💰吗？",
@@ -64,6 +68,7 @@
     "artifactName": "Sub2API-Multi-Hub-Monitor-${version}-${os}-${arch}.${ext}",
     "mac": {
       "icon": "build/icon.icns",
+      "identity": "-",
       "target": [
         "dmg"
       ]

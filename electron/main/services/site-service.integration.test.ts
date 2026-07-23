@@ -95,6 +95,105 @@ describe('SiteService authentication recovery', () => {
     expect(params.has('sort')).toBe(false);
   });
 
+  it('uses the same scoped filters for the usage list and server statistics', async () => {
+    const urls: string[] = [];
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      const url = request.url ?? '';
+      urls.push(url);
+      response.end(
+        JSON.stringify(
+          url.startsWith('/api/v1/usage/stats')
+            ? {
+                data: {
+                  total_requests: 2,
+                  total_tokens: 30,
+                  total_input_tokens: 18,
+                  total_output_tokens: 9,
+                  total_cache_read_tokens: 2,
+                  total_cache_creation_tokens: 1,
+                  total_cost: 0.5,
+                  total_actual_cost: 0.25,
+                  average_duration_ms: 1200,
+                },
+              }
+            : { data: { items: [], page: 1, page_size: 20, pages: 0, total: 0 } },
+        ),
+      );
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'usage-stats-site',
+      name: 'usage stats',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('usage-stats-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'safe-access',
+    });
+    const service = new SiteService(db, vault);
+    const query = {
+      siteId: 'usage-stats-site',
+      period: '7d' as const,
+      page: 3,
+      pageSize: 20,
+      apiKeyId: '12',
+      model: 'gpt-5',
+      groupId: '9',
+      requestType: 'stream',
+      billingType: '1',
+      billingMode: 'token',
+      sort: 'asc' as const,
+    };
+
+    await service.usage(query);
+    await expect(service.usageStats(query)).resolves.toMatchObject({
+      totalRequests: 2,
+      totalTokens: 30,
+      totalActualCost: 0.25,
+      averageDurationMs: 1200,
+    });
+
+    const [listUrl, statsUrl] = urls.map((url) => new URL(url, 'http://local.invalid'));
+    for (const key of [
+      'api_key_id',
+      'model',
+      'group_id',
+      'request_type',
+      'billing_type',
+      'billing_mode',
+      'start_date',
+      'end_date',
+      'timezone',
+    ]) {
+      expect(statsUrl.searchParams.get(key)).toBe(listUrl.searchParams.get(key));
+    }
+    expect(statsUrl.searchParams.has('page')).toBe(false);
+    expect(statsUrl.searchParams.has('page_size')).toBe(false);
+    expect(statsUrl.searchParams.has('sort_by')).toBe(false);
+    expect(statsUrl.searchParams.has('sort_order')).toBe(false);
+  });
+
   it('refreshes, falls back to password login, and only then rotates the stored session', async () => {
     let loginCount = 0;
     const server = createServer((request, response) => {
@@ -340,11 +439,13 @@ describe('SiteService authentication recovery', () => {
     const service = new SiteService(db, vault);
 
     expect(service.listSites().sites[0]).toMatchObject({
+      defaultKeyId: 'auto-key',
       defaultKeyLabel: 'Auto Key',
       rate: 0.4,
     });
     service.setKeyPreference('key-mode-site', { mode: 'manual', keyId: 'manual-key' });
     expect(service.listSites().sites[0]).toMatchObject({
+      defaultKeyId: 'manual-key',
       defaultKeyLabel: 'Manual Key',
       rate: 0.8,
     });
@@ -352,6 +453,7 @@ describe('SiteService authentication recovery', () => {
     service.setKeyPreference('key-mode-site', { mode: 'auto' });
 
     expect(service.listSites().sites[0]).toMatchObject({
+      defaultKeyId: 'auto-key',
       defaultKeyLabel: 'Auto Key',
       rate: 0.4,
     });
@@ -636,5 +738,131 @@ describe('SiteService authentication recovery', () => {
       accessToken: 'rate-renewed-access',
       refreshToken: 'rate-renewed-refresh',
     });
+  });
+});
+
+describe('SiteService API key management', () => {
+  it('loads safe key rows with partial usage and confirms a group update by rereading', async () => {
+    const methods: string[] = [];
+    let groupId = 7;
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      methods.push(`${request.method} ${request.url}`);
+      if (request.method === 'GET' && request.url?.startsWith('/api/v1/keys?'))
+        return response.end(
+          JSON.stringify({
+            data: {
+              items: [
+                {
+                  id: 1,
+                  name: 'Primary',
+                  key: 'fixture-value-never-leaves-main-layer',
+                  status: 'active',
+                  group_id: groupId,
+                  group: { id: groupId, name: groupId === 7 ? 'Default' : 'Fast' },
+                  created_at: '2026-07-01T00:00:00Z',
+                },
+              ],
+              page: 1,
+              page_size: 20,
+              pages: 1,
+              total: 1,
+            },
+          }),
+        );
+      if (request.method === 'GET' && request.url === '/api/v1/groups/available')
+        return response.end(
+          JSON.stringify({
+            data: [
+              { id: 7, name: 'Default' },
+              { id: 8, name: 'Fast' },
+            ],
+          }),
+        );
+      if (request.method === 'GET' && request.url === '/api/v1/groups/rates')
+        return response.end(JSON.stringify({ data: { 7: 1, 8: 0.5 } }));
+      if (request.method === 'POST' && request.url === '/api/v1/usage/dashboard/api-keys-usage')
+        return response.end(
+          JSON.stringify({ data: { stats: { 1: { api_key_id: 1, today_actual_cost: 0.25 } } } }),
+        );
+      if (
+        request.method === 'GET' &&
+        request.url?.startsWith('/api/v1/user/api-keys/1/usage/daily')
+      )
+        return response.end(
+          JSON.stringify({ data: { items: [{ date: '2026-07-24', actual_cost: 0.75 }] } }),
+        );
+      if (request.method === 'PUT' && request.url === '/api/v1/keys/1') {
+        groupId = 8;
+        return response.end(JSON.stringify({ data: { id: 1 } }));
+      }
+      if (request.method === 'GET' && request.url === '/api/v1/keys/1')
+        return response.end(
+          JSON.stringify({
+            data: {
+              id: 1,
+              name: 'Primary',
+              key: 'fixture-value-never-leaves-main-layer',
+              status: 'active',
+              group_id: groupId,
+              group: { id: groupId, name: 'Fast' },
+              created_at: '2026-07-01T00:00:00Z',
+            },
+          }),
+        );
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'missing' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'key-site',
+      name: 'keys',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('key-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'safe-access',
+    });
+    const service = new SiteService(db, vault);
+
+    const first = await service.apiKeys({ siteId: 'key-site', page: 1, pageSize: 20 });
+    expect(first).toMatchObject({
+      groups: [
+        { id: '7', effectiveRate: 1 },
+        { id: '8', effectiveRate: 0.5 },
+      ],
+      page: { total: 1 },
+      items: [{ id: '1', todayActualCost: 0.25, last30DaysActualCost: 0.75 }],
+    });
+    expect(JSON.stringify(first)).not.toContain('never-leaves');
+
+    const updated = await service.updateApiKeyGroup({
+      siteId: 'key-site',
+      keyId: '1',
+      groupId: '8',
+    });
+    expect(updated).toMatchObject({ id: '1', groupId: '8', groupName: 'Fast' });
+    expect(methods.filter((entry) => entry === 'PUT /api/v1/keys/1')).toHaveLength(1);
+    expect(methods.at(-1)).toBe('GET /api/v1/keys/1');
   });
 });

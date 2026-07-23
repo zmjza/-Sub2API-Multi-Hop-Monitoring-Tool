@@ -17,6 +17,7 @@ export function PreviewControls(props: Props) {
           onChange={(e) => props.onShellChange(e.target.value as MainShell)}
         >
           <option value="overview">主框架与全站总览</option>
+          <option value="api-keys">API 密钥</option>
           <option value="usage">使用记录</option>
           <option value="channels">渠道状态</option>
           <option value="sites">站点与设置</option>

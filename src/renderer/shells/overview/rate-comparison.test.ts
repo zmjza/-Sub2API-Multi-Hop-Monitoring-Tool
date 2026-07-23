@@ -176,8 +176,85 @@ describe('rate comparison rules', () => {
     expect(normalizePlatform('openai')).toEqual({ key: 'openai', label: 'OpenAI' });
     expect(normalizePlatform('anthropic')).toEqual({ key: 'claude', label: 'Claude' });
     expect(normalizePlatform('google')).toEqual({ key: 'gemini', label: 'Gemini' });
+    expect(normalizePlatform('antigravity')).toEqual({ key: 'gemini', label: 'Gemini' });
     expect(normalizePlatform('xai')).toEqual({ key: 'grok', label: 'Grok' });
     expect(normalizePlatform('Local-Lab')).toEqual({ key: 'local-lab', label: 'Local-Lab' });
+  });
+
+  it('uses Antigravity group and channel evidence as Gemini', () => {
+    expect(
+      resolveActualPlatform(
+        group('group-name', 'openai', 0.4, {
+          name: 'Antigravity 高速线路',
+        }),
+      ),
+    ).toEqual({ key: 'gemini', label: 'Gemini' });
+    expect(
+      resolveActualPlatform(
+        group('description', 'openai', 0.4, {
+          name: '高速线路',
+          description: 'Antigravity 专用',
+        }),
+      ),
+    ).toEqual({ key: 'gemini', label: 'Gemini' });
+    expect(
+      resolveActualPlatform(group('primary-model', 'openai', 0.4, { name: '高速线路' }), {
+        id: 'primary-model-channel',
+        name: '高速线路',
+        status: 'normal',
+        primaryModel: 'antigravity-pro',
+      }),
+    ).toEqual({ key: 'gemini', label: 'Gemini' });
+    expect(
+      resolveActualPlatform(group('extra-model', 'openai', 0.4, { name: '高速线路' }), {
+        id: 'extra-model-channel',
+        name: '高速线路',
+        status: 'normal',
+        extraModels: ['gemini-2.5', 'antigravity'],
+      }),
+    ).toEqual({ key: 'gemini', label: 'Gemini' });
+    expect(
+      resolveActualPlatform(
+        group('structured-relationship', 'openai', 0.4, {
+          name: '结构化线路',
+        }),
+        undefined,
+        [
+          {
+            name: 'relationship-channel',
+            platforms: [{ platform: 'antigravity', groupNames: ['结构化线路'], modelNames: [] }],
+          },
+        ],
+      ),
+    ).toEqual({ key: 'gemini', label: 'Gemini' });
+  });
+
+  it('does not treat similar Antigravity substrings as Gemini evidence', () => {
+    expect(
+      resolveActualPlatform(
+        group('similar-name', 'openai', 0.4, {
+          name: 'AntigravityLabs 高速线路',
+        }),
+      ),
+    ).toEqual({ key: 'openai', label: 'OpenAI' });
+  });
+
+  it('merges Gemini and Antigravity groups into one platform minimum', () => {
+    expect(
+      findPlatformMinima([
+        group('gemini', 'gemini', 0.4, { name: '常规线路' }),
+        group('antigravity', 'antigravity', 0.4, { name: '实验线路' }),
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        platformKey: 'gemini',
+        platformLabel: 'Gemini',
+        groups: [
+          expect.objectContaining({ id: 'gemini' }),
+          expect.objectContaining({ id: 'antigravity' }),
+        ],
+      }),
+    ]);
   });
 
   it('parses only positive finite recharge ratios', () => {

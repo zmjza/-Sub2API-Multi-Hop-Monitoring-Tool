@@ -171,7 +171,7 @@ describe('Sub2ApiAdapter', () => {
                   platforms: [
                     {
                       platform: 'openai',
-                      groups: [{ name: 'g', secret: 'drop' }],
+                      groups: [{ id: 9, name: 'g', secret: 'drop' }],
                       supported_models: [{ name: 'm', secret: 'drop' }],
                     },
                   ],
@@ -198,7 +198,9 @@ describe('Sub2ApiAdapter', () => {
       availableChannels: [
         {
           name: 'codex',
-          platforms: [{ platform: 'openai', groupNames: ['g'], modelNames: ['m'] }],
+          platforms: [
+            { platform: 'openai', groupIds: ['9'], groupNames: ['g'], modelNames: ['m'] },
+          ],
         },
       ],
       channels: [{ timeline: [{ status: 'degraded' }, { status: 'normal' }] }],
@@ -338,7 +340,7 @@ describe('Sub2ApiAdapter', () => {
               id: 7,
               created_at: '2026-07-13T00:00:00Z',
               api_key_id: 11,
-              api_key: { id: 11, name: 'Daily Key', key: 'sk-must-not-leave-main' },
+              api_key: { id: 11, name: 'Daily Key', key: 'fixture-must-not-leave-main' },
               user: { email: 'private@example.invalid' },
               ip_address: '192.0.2.1',
               user_agent: 'private-agent',
@@ -547,5 +549,299 @@ describe('Sub2ApiAdapter', () => {
     expect(core.keys).toHaveLength(2);
     const usage = await adapter.readUsage('access', { page: 1 });
     expect(usage.items[0]).toMatchObject({ firstTokenMs: 10000, durationMs: 20000 });
+  });
+
+  it('reads a filtered key page and strips the complete key and arbitrary upstream fields', async () => {
+    let requestedPath = '';
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        requestedPath = path;
+        return {
+          data: {
+            items: [
+              {
+                id: 11,
+                name: 'Daily',
+                key: 'fixture-complete-value',
+                status: 'active',
+                group_id: 25,
+                group: {
+                  id: 25,
+                  name: 'OpenAI',
+                  platform: 'openai',
+                  rate_multiplier: 0,
+                  subscription_type: 'standard',
+                },
+                current_concurrency: 2,
+                quota: 20,
+                quota_used: 3,
+                expires_at: '2026-08-01T00:00:00Z',
+                created_at: '2026-07-01T00:00:00Z',
+                private_note: 'must-not-pass',
+              },
+            ],
+            page: 2,
+            page_size: 20,
+            pages: 3,
+            total: 41,
+          },
+        };
+      },
+    });
+
+    const result = await adapter.readApiKeyPage('access', {
+      page: 2,
+      pageSize: 20,
+      search: 'Daily',
+      groupId: '25',
+      status: 'active',
+    });
+
+    expect(requestedPath).toBe(
+      '/keys?page=2&page_size=20&search=Daily&group_id=25&status=active&sort_by=created_at&sort_order=desc',
+    );
+    expect(result).toEqual({
+      items: [
+        {
+          id: '11',
+          name: 'Daily',
+          maskedLabel: 'sk-xxx...alue',
+          status: 'active',
+          groupId: '25',
+          groupName: 'OpenAI',
+          platform: 'openai',
+          effectiveRate: 0,
+          subscriptionType: 'standard',
+          currentConcurrency: 2,
+          quota: 20,
+          quotaUsed: 3,
+          expiresAt: '2026-08-01T00:00:00Z',
+          createdAt: '2026-07-01T00:00:00Z',
+        },
+      ],
+      page: 2,
+      pageSize: 20,
+      pages: 3,
+      total: 41,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/fixture-complete-value|private_note|must-not-pass/);
+  });
+
+  it('does not expose an entire malformed short key in its masked summary', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async () => ({
+        data: { items: [{ id: 12, name: 'Short', key: 'abc', status: 'active' }] },
+      }),
+    });
+
+    const result = await adapter.readApiKeyPage('access', { page: 1, pageSize: 20 });
+
+    expect(result.items[0]?.maskedLabel).toBe('sk-xxx...xabc');
+    expect(result.items[0]?.maskedLabel).not.toBe('sk-xxx...abc');
+  });
+
+  it('merges available groups with user rates while preserving a zero multiplier', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) =>
+        path === '/groups/rates'
+          ? { data: { '25': 0 } }
+          : {
+              data: [
+                {
+                  id: 25,
+                  name: 'OpenAI',
+                  platform: 'openai',
+                  status: 'active',
+                  rate_multiplier: 0.4,
+                  subscription_type: 'standard',
+                  private_note: 'must-not-pass',
+                },
+              ],
+            },
+    });
+
+    await expect(adapter.readApiKeyGroups('access')).resolves.toEqual([
+      {
+        id: '25',
+        name: 'OpenAI',
+        platform: 'openai',
+        status: 'active',
+        defaultRate: 0.4,
+        effectiveRate: 0,
+        subscriptionType: 'standard',
+      },
+    ]);
+    await expect(adapter.readApiKeyGroupRates('access')).resolves.toEqual({ '25': 0 });
+  });
+
+  it('reads key detail and writes only group_id before returning a sanitized key', async () => {
+    const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        calls.push({ method: 'GET', path });
+        return {
+          data: {
+            id: 11,
+            name: 'Daily',
+            key: 'another-complete-fixture',
+            status: 'active',
+            group_id: 25,
+            group: { id: 25, name: 'OpenAI' },
+          },
+        };
+      },
+      putJson: async (path: string, _token: string, _capability: string, body: unknown) => {
+        calls.push({ method: 'PUT', path, body });
+        return { data: { ok: true } };
+      },
+      postJson: async () => ({}),
+    });
+
+    await adapter.updateApiKeyGroup('access', '11', '25');
+    const detail = await adapter.readApiKeyDetail('access', '11');
+
+    expect(calls).toEqual([
+      { method: 'PUT', path: '/keys/11', body: { group_id: 25 } },
+      { method: 'GET', path: '/keys/11' },
+    ]);
+    expect(detail).toMatchObject({ id: '11', groupId: '25' });
+    expect(JSON.stringify(detail)).not.toContain('another-complete-fixture');
+  });
+
+  it('splits batch key usage into at most 100 ids and leaves missing metrics absent', async () => {
+    const bodies: unknown[] = [];
+    const adapter = new Sub2ApiAdapter({
+      getJson: async () => ({}),
+      putJson: async () => ({}),
+      postJson: async (_path: string, _token: string, _capability: string, body: unknown) => {
+        bodies.push(body);
+        const ids = (body as { api_key_ids: number[] }).api_key_ids;
+        return {
+          data: {
+            stats: Object.fromEntries(
+              ids
+                .slice(0, 1)
+                .map((id) => [
+                  String(id),
+                  { api_key_id: id, today_actual_cost: id / 100, total_actual_cost: id / 10 },
+                ]),
+            ),
+          },
+        };
+      },
+    });
+
+    const result = await adapter.readBatchApiKeyUsage(
+      'access',
+      Array.from({ length: 101 }, (_, index) => String(index + 1)),
+    );
+
+    expect(bodies).toHaveLength(2);
+    expect((bodies[0] as { api_key_ids: number[] }).api_key_ids).toHaveLength(100);
+    expect((bodies[1] as { api_key_ids: number[] }).api_key_ids).toEqual([101]);
+    expect(result['1']).toEqual({ apiKeyId: '1', todayActualCost: 0.01, totalActualCost: 0.1 });
+    expect(result['2']).toBeUndefined();
+    expect(result['101']).toEqual({
+      apiKeyId: '101',
+      todayActualCost: 1.01,
+      totalActualCost: 10.1,
+    });
+  });
+
+  it('sums 30-day actual cost and keeps absent daily cost distinguishable', async () => {
+    let requestedPath = '';
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        requestedPath = path;
+        return {
+          data: {
+            items: [
+              { date: '2026-07-01', actual_cost: 0.2 },
+              { date: '2026-07-02', actual_cost: 0.3 },
+              { date: '2026-07-03' },
+            ],
+          },
+        };
+      },
+    });
+
+    await expect(adapter.readApiKeyDailyUsage('access', '11', 'Asia/Shanghai')).resolves.toEqual({
+      apiKeyId: '11',
+      actualCost30d: 0.5,
+      days: [
+        { date: '2026-07-01', actualCost: 0.2 },
+        { date: '2026-07-02', actualCost: 0.3 },
+        { date: '2026-07-03' },
+      ],
+    });
+    expect(requestedPath).toBe('/user/api-keys/11/usage/daily?days=30&timezone=Asia%2FShanghai');
+  });
+
+  it('uses one normalized filter query for usage list and server statistics', async () => {
+    const paths: string[] = [];
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        paths.push(path);
+        return path.startsWith('/usage/stats')
+          ? {
+              data: {
+                total_requests: 4,
+                total_tokens: 12,
+                total_input_tokens: 7,
+                total_output_tokens: 3,
+                total_cache_read_tokens: 1,
+                total_cache_creation_tokens: 1,
+                total_actual_cost: 0.2,
+                total_cost: 0.3,
+                average_duration_ms: 350,
+              },
+            }
+          : { data: { items: [], page: 1, page_size: 20, pages: 0, total: 0 } };
+      },
+    });
+    const query = {
+      page: 1,
+      page_size: 20,
+      api_key_id: '11',
+      request_type: 'ws_v2',
+      billing_type: '1',
+      billing_mode: 'per_request',
+      start_date: '2026-07-01',
+      end_date: '2026-07-02',
+      timezone: 'Asia/Shanghai',
+      sort_by: 'created_at',
+      sort_order: 'desc',
+    };
+
+    await adapter.readUsage('access', query);
+    await expect(adapter.readUsageStats('access', query)).resolves.toMatchObject({
+      totalRequests: 4,
+      totalTokens: 12,
+      totalInputTokens: 7,
+      totalOutputTokens: 3,
+      totalCacheReadTokens: 1,
+      totalCacheCreationTokens: 1,
+      totalActualCost: 0.2,
+      totalCost: 0.3,
+      averageDurationMs: 350,
+    });
+
+    const listParams = new URL(paths[0]!, 'https://local').searchParams;
+    const statsParams = new URL(paths[1]!, 'https://local').searchParams;
+    for (const key of [
+      'api_key_id',
+      'request_type',
+      'billing_type',
+      'billing_mode',
+      'start_date',
+      'end_date',
+      'timezone',
+    ]) {
+      expect(statsParams.get(key)).toBe(listParams.get(key));
+    }
+    expect(statsParams.has('page')).toBe(false);
+    expect(statsParams.has('page_size')).toBe(false);
+    expect(statsParams.has('sort_by')).toBe(false);
+    expect(statsParams.has('sort_order')).toBe(false);
   });
 });

@@ -297,3 +297,36 @@ Vite 生产构建会清理并重建 `dist/`。若 `npm run build` 与 `npm run t
 **适用范围**
 
 Electron IPC 后异步补齐下拉选项、搜索建议或其他已知延迟数据的端到端测试。
+
+## 高危传递依赖可用精确 overrides 修复但必须跑完整工具链
+
+**现象**
+
+官方 Registry 审计报告 `fast-uri@3.1.3` 和 `shell-quote@1.8.4` 为高危，但直接依赖 `electron-builder` 与 `concurrently` 当时均未发布携带修复版本的新版本。
+
+**根因**
+
+漏洞位于传递依赖；盲目执行 `npm audit fix --force` 会降级或跨主版本修改直接依赖，扩大工具链风险。
+
+**正确做法**
+
+先用 `npm ls` 确认依赖来源，再在 `package.json` 使用精确 `overrides` 锁定 `fast-uri@3.1.4` 与 `shell-quote@1.10.0`。更新锁文件后运行 lint、typecheck、完整测试、构建、Electron E2E 和双平台打包。
+
+**验证方式**
+
+`npm ls fast-uri shell-quote` 显示两个 override 生效；官方 Registry 高危审计输出 `found 0 vulnerabilities`，完整工具链与发布构建通过。
+
+**禁止事项**
+
+不要使用 `npm audit fix --force` 代替依赖分析；不要只看审计归零而跳过构建和打包兼容验证。
+
+**相关文件或命令**
+
+- `package.json`
+- `package-lock.json`
+- `npm ls fast-uri shell-quote`
+- `npm audit --registry=https://registry.npmjs.org --audit-level=high`
+
+**适用范围**
+
+本项目 npm 传递依赖漏洞修复、CI 安全门禁和发布工具链升级。

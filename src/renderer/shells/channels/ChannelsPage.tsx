@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  BadgePercent,
   CheckCircle2,
   Clock3,
   Globe2,
@@ -15,9 +14,13 @@ import type {
 } from '../../../../electron/shared/contracts';
 import type { ChannelsProps } from './types';
 import {
-  channelRatePresentation,
+  channelPollingDelay,
+  normalizeChannelPollingSeconds,
+  type ChannelPollingSeconds,
+} from '../../channel-polling';
+import {
   channelSyncPresentation,
-  currentKeyGroupName,
+  currentKeyGroup,
   isChannelDataStale,
   rankChannels,
   usageModelsForGroup,
@@ -27,6 +30,68 @@ import './channels.css';
 export function ChannelsPage(props: ChannelsProps) {
   const runtime = Boolean(window.sub2apiDesktop);
   const [period, setPeriod] = useState<7 | 15 | 30>(7);
+  const [pollingSeconds, setPollingSeconds] = useState<ChannelPollingSeconds>(60);
+  const [countdown, setCountdown] = useState(60);
+  const [pollingPaused, setPollingPaused] = useState(false);
+  const refreshListenerRef = useRef(props.onRefreshChannels);
+  const lastRefreshAtRef = useRef(Date.now());
+  const nextRefreshAtRef = useRef(Date.now() + 60_000);
+  const pollingFailuresRef = useRef(0);
+  const pollingRunningRef = useRef(false);
+  refreshListenerRef.current = props.onRefreshChannels;
+  const performRefresh = async () => {
+    if (pollingRunningRef.current) return;
+    pollingRunningRef.current = true;
+    lastRefreshAtRef.current = Date.now();
+    try {
+      const result = await refreshListenerRef.current?.();
+      if (result?.ok) {
+        setPollingPaused(false);
+        pollingFailuresRef.current = 0;
+        nextRefreshAtRef.current = Date.now() + pollingSeconds * 1_000;
+      } else if (result?.terminal) {
+        setPollingPaused(true);
+        nextRefreshAtRef.current = Number.POSITIVE_INFINITY;
+      } else {
+        const delay = channelPollingDelay(pollingFailuresRef.current, result?.retryAfterSeconds);
+        pollingFailuresRef.current += 1;
+        nextRefreshAtRef.current = Date.now() + delay;
+      }
+    } finally {
+      pollingRunningRef.current = false;
+      setCountdown(
+        Number.isFinite(nextRefreshAtRef.current)
+          ? Math.max(0, Math.ceil((nextRefreshAtRef.current - Date.now()) / 1_000))
+          : 0,
+      );
+    }
+  };
+  useEffect(() => {
+    const refreshIfDue = (minimumAgeSeconds: number) => {
+      if (document.visibilityState === 'hidden') return;
+      const ageSeconds = Math.floor((Date.now() - lastRefreshAtRef.current) / 1_000);
+      const remainingSeconds = Math.ceil((nextRefreshAtRef.current - Date.now()) / 1_000);
+      if (ageSeconds < minimumAgeSeconds || remainingSeconds > 0) {
+        setCountdown(Math.max(0, remainingSeconds));
+        return;
+      }
+      void performRefresh();
+    };
+    const timer = window.setInterval(() => refreshIfDue(pollingSeconds), 1_000);
+    const onVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        pollingFailuresRef.current === 0 &&
+        Date.now() - lastRefreshAtRef.current >= 30_000
+      )
+        void performRefresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [pollingSeconds]);
   const liveChannels = readChannelEnvelope(props.channelsData);
   const unsupported = props.state === 'unsupported' || liveChannels?.state === 'unsupported';
   const channelItems = liveChannels
@@ -46,24 +111,22 @@ export function ChannelsPage(props: ChannelsProps) {
           availability7d: Number.parseFloat(item.availability),
           timeline: [],
         }));
-  const keyGroupName = currentKeyGroupName(
+  const keyGroup = currentKeyGroup(
     props.keyOptions ?? [],
     props.usageFilterOptions?.groups ?? [],
     props.keyPreference,
     props.selectedSite?.defaultKeyLabel,
   );
+  const keyGroupName = keyGroup?.groupName;
   const usageModels = usageModelsForGroup(props.usageData, keyGroupName);
-  const rateContext = props.selectedSite
-    ? props.rateContexts?.sites[props.selectedSite.id]
-    : undefined;
-  const rateGroups = runtime
-    ? rateContext?.groups
-    : (rateContext?.groups ?? props.usageFilterOptions?.groups ?? []);
-  const rechargeRatio = props.selectedSite
-    ? props.rateContexts?.ratios[props.selectedSite.id]
-    : undefined;
   const relationships = liveChannels?.availableChannels ?? [];
-  const rankedChannels = rankChannels(channelItems, keyGroupName, relationships, usageModels);
+  const rankedChannels = rankChannels(
+    channelItems,
+    keyGroupName,
+    relationships,
+    usageModels,
+    keyGroup?.groupId,
+  );
   const selectedItem =
     rankedChannels.find((item) => item.id === props.selectedChannelId) ?? rankedChannels[0];
   const detail = readChannelDetail(props.channelDetail);
@@ -80,15 +143,41 @@ export function ChannelsPage(props: ChannelsProps) {
   const lastChecked = selectedItem?.timeline.at(-1)?.checkedAt;
   const sync = channelSyncPresentation(props.state, props.channelsData);
   const stale = isChannelDataStale(props.channelsData);
-  const selectedRate = selectedItem
-    ? channelRatePresentation(selectedItem, rateGroups, rechargeRatio, channelItems, relationships)
-    : undefined;
   return (
     <section className="channels-page">
       <div className="channel-toolbar">
-        <button className="channel-refresh" aria-label="刷新渠道" onClick={props.onRefreshChannels}>
+        <button
+          className="channel-refresh"
+          aria-label="刷新渠道"
+          onClick={() => {
+            void performRefresh();
+          }}
+        >
           <RefreshCw size={16} />
         </button>
+        <label className="channel-polling-select">
+          <span>自动刷新</span>
+          <select
+            aria-label="渠道自动刷新间隔"
+            value={pollingSeconds}
+            onChange={(event) => {
+              const next = normalizeChannelPollingSeconds(Number(event.target.value));
+              lastRefreshAtRef.current = Date.now();
+              nextRefreshAtRef.current = Date.now() + next * 1_000;
+              pollingFailuresRef.current = 0;
+              setPollingPaused(false);
+              setPollingSeconds(next);
+              setCountdown(next);
+            }}
+          >
+            <option value={30}>30 秒</option>
+            <option value={60}>60 秒</option>
+            <option value={120}>120 秒</option>
+          </select>
+        </label>
+        <span className="channel-polling-countdown">
+          {pollingPaused ? '自动刷新已暂停' : `${countdown}s 后刷新`}
+        </span>
         {(stale ||
           ['failed', 'loading', 'stale', 'partial', 'unsupported'].includes(sync.kind)) && (
           <span className="channel-sync-state">
@@ -112,15 +201,6 @@ export function ChannelsPage(props: ChannelsProps) {
             {detailStatus === 'normal' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
             {statusLabel(detailStatus)} · 最近一次检查 {formatCheckedAt(lastChecked)}
           </span>
-          {selectedRate && (
-            <span
-              className={`channel-rate-badge is-${selectedRate.state}`}
-              title={selectedRate.title}
-            >
-              <BadgePercent size={13} />
-              {selectedRate.label}
-            </span>
-          )}
         </div>
         <div className="period-tabs">
           {[7, 15, 30].map((days) => (
@@ -159,13 +239,6 @@ export function ChannelsPage(props: ChannelsProps) {
       ) : (
         <div className="channel-cards">
           {rankedChannels.map((item) => {
-            const rate = channelRatePresentation(
-              item,
-              rateGroups,
-              rechargeRatio,
-              channelItems,
-              relationships,
-            );
             return (
               <article
                 className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
@@ -187,10 +260,6 @@ export function ChannelsPage(props: ChannelsProps) {
                   <div className="channel-card-status-stack">
                     <span className={`status-pill ${statusClass(item.status)}`}>
                       {statusLabel(item.status)}
-                    </span>
-                    <span className={`channel-rate-badge is-${rate.state}`} title={rate.title}>
-                      <BadgePercent size={12} />
-                      {rate.label}
                     </span>
                   </div>
                 </div>

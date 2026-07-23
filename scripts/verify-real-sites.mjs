@@ -36,6 +36,9 @@ for (const site of sites) {
     usageList: 'not-run',
     usageFilters: 'not-run',
     availableRates: 'not-run',
+    apiKeys: 'not-run',
+    apiKeyUsage: 'not-run',
+    keyGroupWrite: 'not-run',
     channels: 'not-run',
     channelDetail: 'not-run',
     channelDetailFields: [],
@@ -53,6 +56,66 @@ for (const site of sites) {
         (key) => key.groupId && core.rates.get(key.groupId) !== undefined,
       ),
     });
+    try {
+      const [page, groups] = await Promise.all([
+        adapter.readApiKeyPage(session.accessToken, { page: 1, pageSize: 20 }),
+        adapter.readApiKeyGroups(session.accessToken),
+      ]);
+      result.apiKeys = JSON.stringify({
+        supported: true,
+        pageItems: page.items.length,
+        total: page.total,
+        groupCount: groups.length,
+        masked: page.items.every((key) => key.maskedLabel.startsWith('sk-xxx...')),
+      });
+      const first = page.items[0];
+      if (first) {
+        const [today, daily] = await Promise.all([
+          adapter.readBatchApiKeyUsage(
+            session.accessToken,
+            page.items.map((key) => key.id),
+          ),
+          adapter.readApiKeyDailyUsage(session.accessToken, first.id, 'Asia/Shanghai'),
+        ]);
+        result.apiKeyUsage = JSON.stringify({
+          batchSupported: true,
+          todayKnown: today[first.id]?.todayActualCost !== undefined,
+          dailySupported: true,
+          dayCount: daily.days.length,
+          actualCost30dKnown: daily.actualCost30d !== undefined,
+        });
+        if (process.env.VERIFY_KEY_GROUP_WRITE === '1' && first.groupId) {
+          const alternative = groups.find((group) => group.id !== first.groupId);
+          if (!alternative) result.keyGroupWrite = 'skipped:no-alternative-group';
+          else {
+            const originalGroupId = first.groupId;
+            let restored = false;
+            try {
+              await adapter.updateApiKeyGroup(session.accessToken, first.id, alternative.id);
+              const changed = await adapter.readApiKeyDetail(session.accessToken, first.id);
+              if (changed.groupId !== alternative.id) throw new Error('write-readback-mismatch');
+              await adapter.updateApiKeyGroup(session.accessToken, first.id, originalGroupId);
+              const restoredKey = await adapter.readApiKeyDetail(session.accessToken, first.id);
+              restored = restoredKey.groupId === originalGroupId;
+              result.keyGroupWrite = restored
+                ? 'verified-and-restored'
+                : 'restore-readback-mismatch';
+            } finally {
+              if (!restored) {
+                await adapter.updateApiKeyGroup(session.accessToken, first.id, originalGroupId);
+                const restoredKey = await adapter.readApiKeyDetail(session.accessToken, first.id);
+                result.keyGroupWrite =
+                  restoredKey.groupId === originalGroupId
+                    ? 'verified-after-finally-restore'
+                    : 'restore-failed';
+              }
+            }
+          }
+        } else result.keyGroupWrite = 'skipped:write-disabled-or-no-group';
+      }
+    } catch (error) {
+      result.apiKeys = `error:${error?.code ?? error?.message ?? 'unknown'}`;
+    }
     try {
       const filters = await adapter.readUsageFilters(session.accessToken, 'Asia/Shanghai');
       result.usageFilters = JSON.stringify({

@@ -1,5 +1,23 @@
 # 使用记录 UI 壳接入清单
 
+## 2026-07-23 自动筛选与服务端汇总增量
+
+本增量只在现有使用记录壳内修改，不新建页面或 Stitch Screen。API Key、模型、分组、请求类型、计费类型、计费模式或有效日期范围改变后约 `300ms` 防抖自动请求，重置到第一页；强制刷新、重置和按当前筛选导出 CSV 保留。`GET /api/v1/usage` 与 `GET /api/v1/usage/stats` 必须共享同一规范化筛选对象，顶部总请求、总 Token、实际消费和平均耗时只接受服务端筛选统计，不读取未筛选站点快照，也不按当前分页估算。
+
+### 逐文件接入计划
+
+| 文件                                                                                                                | 计划修改                                                                 | 状态、事件与类型入口                                                                                                | 边界与失败测试                                                                                |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `src/renderer/shells/usage/UsagePage.tsx`                                                                           | 将六类选择和有效日期变更接入防抖；统一列表/统计 epoch；筛选变化回第一页  | `filterChanged`、`forceRefresh`、`reset`、`exportCurrentFilters`；loading/refreshing/partial/error/empty            | fake timer 证明一次变更只发一组请求；迟到统计/列表不能覆盖新条件                              |
+| `src/renderer/shells/usage/types.ts`                                                                                | 以真实上游枚举替换旧预览枚举，补规范化筛选和统计来源类型                 | request type 为 unknown/sync/stream/ws_v2/cyber；billing type 为 0/1；billing mode 为 token/per_request/image/video | 未知值显式 unknown，不把旧 `chat/embedding`、`token` billing type 或 `standard` mode 继续发送 |
+| `src/renderer/shells/usage/usage.css`                                                                               | 稳定两行筛选、统计卡和 refreshing 布局                                   | 控件约 40px、8px 圆角；表格横向滚动                                                                                 | 自动刷新状态不得推动统计区或表格跳动                                                          |
+| `electron/main/services/site-service.ts`                                                                            | 在现有站点服务内接受单一筛选 DTO，分别读取列表和 stats，支持请求世代隔离 | 服务端统计结果标记 filter fingerprint                                                                               | stats 单项失败保留列表并显示 partial，不用本地估算兜底                                        |
+| `electron/shared/contracts.ts`、`electron/preload/index.ts`、`electron/preload/bridge.cts`、`src/renderer/env.d.ts` | 扩展同条件列表/统计/导出白名单与 Zod schema                              | 固定 channel、站点 ID、页码、日期和枚举校验                                                                         | 非法枚举、反向日期、越权站点 RED；禁止任意 channel                                            |
+| `electron/main/adapters/sub2api-adapter.ts`                                                                         | 对 `/usage` 与 `/usage/stats` 复用筛选序列化                             | 相同 query builder                                                                                                  | 测试逐字段比较两个请求的 query，禁止静默丢条件                                                |
+| `src/renderer/shells/usage/UsagePage.test.ts` 及现有 usage service/adapter 测试                                     | 补 fake timer、分页重置、竞态、partial、CSV 当前筛选                     | 300ms 约定允许测试以精确配置值断言                                                                                  | 先 RED 再实现；不得通过拉长防抖掩盖重复请求                                                   |
+
+允许修改范围仅限上述使用记录调用链及对应测试。禁止改全局样式、站点认证、缓存安全、其他页面业务行为、版本和构建配置；静态预览数据不得冒充服务端统计。
+
 ## 审计回写（2026-07-14）
 
 本壳已接入真实 usage IPC、当前站下拉、今日统计、真实模型/分组/Key 枚举、组合筛选、每页 20 条、时间排序、思考等级、本地中文时间、K/M、列设置和主进程 CSV 导出；正式运行态不回退静态记录。Electron E2E、两站只读复测、CSV `0600` 权限和 macOS 打包应用页面检查已通过。
@@ -10,7 +28,7 @@
 - 依据：RQ-06/RQ-07/RQ-17；今日统计、两行筛选、密集记录表、列设置、分页和 CSV。
 - 高不透明数据面优先，工具栏/浮层可使用克制玻璃。
 
-## 真实文件与白名单
+## 历史 Stitch 壳文件与白名单
 
 | 文件                                      | 职责                 |
 | ----------------------------------------- | -------------------- |
@@ -19,7 +37,7 @@
 | `src/renderer/shells/usage/types.ts`      | 记录、事件类型       |
 | `src/renderer/shells/usage/data.ts`       | 脱敏静态预览记录     |
 
-白名单仅限上表。禁止修改全局样式、其他壳、Electron/preload、配置和依赖，禁止新增文件或把静态数据描述为 API 结果。
+本表只记录历史 Stitch 视觉承接白名单。2026-07-23 增量的合法修改范围以本文顶部“逐文件接入计划”为准；仍禁止修改全局样式、无关壳、认证/凭据安全、版本和构建配置，也不得把静态数据描述为 API 结果。
 
 ## 入口与接线
 

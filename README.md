@@ -8,7 +8,7 @@
 
 ### 全部站点
 
-- 汇总全部有效站点的余额、今日 Token、今日消费和状态覆盖。
+- 按每站实际当前 API Key 汇总可用额度、今日 Token、今日消费和状态覆盖；当前 Key 未确定时不回退整站统计。
 - 刷新按钮按当前站点优先、受控并发刷新全部站点，各卡片独立反馈进度和结果。
 - 显示真实加载、刷新、部分成功、过期、认证失效和错误状态。
 - Token 自动使用 K/M 紧凑格式，缺少可信倍率时明确显示不可用。
@@ -16,9 +16,17 @@
 - 支持每站点独立设置充值比例，并按 `原始倍率 / 充值比例` 查看各平台最低分组；未设置比例的站点不参与跨站最低价比较。
 - 每张卡片可打开倍率 Popover 搜索和筛选全部分组；站点状态上方按 OpenAI、Claude、Gemini、Grok 等动态平台比较跨站最低折算倍率并保留平局。
 
+### API 密钥
+
+- 分页读取当前用户的全部 Key，只显示脱敏摘要，并按名称、摘要、分组和状态筛选。
+- 展示分组、平台、有效倍率、并发、今日与近 30 天实际消费、有效期和状态。
+- 普通用户可对单个 Key 切换可用分组；写入后必须远程回读一致才显示成功。
+- 完整 Key 不进入 Renderer、IPC 返回、SQLite、日志、CSV、截图或测试夹具。
+
 ### 使用记录
 
-- 按站点、模型、分组、Key、时间和请求类型筛选真实用量。
+- 按站点、模型、分组、Key、时间、请求类型、计费类型和计费模式筛选真实用量，筛选变化约 300ms 后自动请求。
+- 顶部总请求、总 Token、实际消费和平均耗时与列表使用同一筛选条件，并读取服务端统计接口。
 - Key、分组和模型独立分阶段加载，慢接口不会阻塞已经返回的下拉选项。
 - 每页最多 20 条，时间按本地时区显示为 `YYYY/MM/DD HH:mm:ss`。
 - Token 单元格组合显示输入、输出和缓存读取 Token；首字按低于 10 秒、10–20 秒、20 秒以上分级。
@@ -29,6 +37,8 @@
 
 - 支持站点与渠道下拉选择，切换时不使用旧对象数据冒充新结果。
 - 展示渠道状态、延迟、Ping、可用率和时间线；上游未返回的指标保持“待查询”。
+- 主窗口页面可见时默认每 60 秒低频刷新，可选 30/60/120 秒；隐藏、最小化或后台时暂停，并对 429 退避。
+- Key 与渠道优先按结构化分组 ID 关系关联；渠道健康区不再显示倍率折算徽标或文案。
 - 渠道超过 6 个时列表独立滚动，不影响页头和详情区。
 
 ### 站点管理与设置
@@ -83,8 +93,12 @@
 - `POST /api/v1/auth/login`
 - `GET /api/v1/profile`
 - `GET /api/v1/keys`
+- `GET /api/v1/keys/:id`
+- `PUT /api/v1/keys/:id`
 - `GET /api/v1/groups/available`
 - `GET /api/v1/groups/rates`
+- `POST /api/v1/usage/dashboard/api-keys-usage`
+- `GET /api/v1/user/api-keys/:id/usage/daily`
 - `GET /api/v1/usage`
 - `GET /api/v1/usage/stats`
 - `GET /api/v1/usage/dashboard/models`
@@ -99,7 +113,7 @@
 - preload 仅暴露按功能分组的白名单 API，业务输入在 IPC 边界再次校验。
 - 密码、access token 和 refresh token 通过 Electron `safeStorage` 使用平台安全后端保护。
 - SQLite 只保存站点元数据、凭据引用、脱敏快照和设置，不存储明文密码或完整 API Key。
-- 真实站点验证仅执行只读请求，不创建、修改或删除远程 Key、渠道和用户数据。
+- 真实站点验证仅对用户明确授权的 Key 执行可恢复分组切换，并在同次验证中回读恢复原分组；不创建、删除或修改其他远程数据。
 - 项目不提供云同步、遥测、付款、远程删除或自动更新。
 
 ## 技术栈
@@ -146,21 +160,22 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.3.4
+## 当前版本 1.4.1
 
-- `1.3.4` 将渠道状态直接内联到倍率卡片，按分组独立匹配渠道并支持加载、无数据、无匹配、失败重试和 7 天时间线；保留完整渠道状态快捷弹窗。四平台顺序与主题保持 OpenAI/Claude/Gemini/Grok，卡片继续单行横向滚动。
+- `1.4.0` 新增 API 密钥管理与单 Key 分组切换，并完成使用记录自动筛选、全部站点当前 Key 统计、渠道低频实时监控、结构化渠道关联和渠道折算 UI 清理。
+- `1.4.1` 修复 macOS 应用 bundle 签名不完整导致安装后可能无法打开的问题，改由 electron-builder 完成整包 ad-hoc 签名。
 - 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
-本轮 1.3.4 双平台构建产物及校验值：
+本轮 1.4.1 双平台构建产物及校验值：
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg`          | `76be6fef59edeff6e36897fe080d8ac7b02d0bf55e6c476623c962c25243ed12` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-mac-arm64.dmg.blockmap` | `f116a7c223f4f227ffdd808c833efbd68ee334cf330610fbae8f61f236c844ed` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe`            | `cce46d6ebfd54ff28fadf8c7038ed4ad6cf6a6f1ffecd201329c1393a784a1f1` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.4-win-x64.exe.blockmap`   | `a42cfc896ebf4d189e649b2f8211286df8993154c9705ff6d8c9e30cefdcbbda` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg`          | `e25a5a5ecdb1c5e0e9a598eabda5f8d205199b3c1b8f512e3dcc2b5e912081ce` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg.blockmap` | `dd0162b7d5356a841b6515186ed17864969c742d73eab3d9b187b63c9a1e6ee5` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe`            | `4455af60671d1633a45cdedebbf231c91e0aa7a8e8eca8d7f35863154e3aeb80` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe.blockmap`   | `c24ab8de965d8106f5cfb65fc58df2e786cd8c9b3f20856da8193b25a4cdd213` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 
@@ -170,7 +185,7 @@ npm run dev
 
 - 当前产物为 ARM64，适用于 Apple Silicon Mac。
 - DMG 已通过 `hdiutil verify`。
-- 当前未签名、未公证；首次打开时应使用 macOS 提供的“打开”确认流程，不建议关闭系统安全机制。
+- 当前使用完整 ad-hoc 签名，bundle 严格签名校验通过；仍不是 Apple Developer ID 签名且未公证，首次打开时可能需要使用 macOS 提供的“打开”确认流程，不建议关闭系统安全机制。
 
 ### Windows
 
@@ -179,13 +194,14 @@ npm run dev
 
 ## 验证状态
 
-2026-07-20 `1.3.4` 倍率与渠道状态优化当前证据：
+2026-07-24 `1.4.1` 当前证据：
 
 - Prettier、ESLint、TypeScript：通过。
-- Vitest：28 个文件，154 项通过。
+- Vitest：34 个文件，210 项通过。
 - 开发 Electron E2E 与 macOS ARM64 打包应用 E2E：均为 6 项通过。
-- 三站只读验证：倍率分组接口分别返回 18、8、22 个安全标准化分组，使用记录与渠道列表/详情均支持。
-- macOS ARM64 打包应用：内联渠道状态、加载/失败重试、四平台配色、单行横向滚动、完整渠道弹窗和窄窗口页面样式检查通过；证据位于 `real-test-evidence/macos-1.3.4/`。
+- 两个授权站点完成 Key 分组切换、回读和原分组恢复；第三站凭据登录受 Turnstile 阻断，仅通过用户已有登录会话只读确认 API 密钥页面能力。
+- macOS ARM64 打包应用：API 密钥宽窄布局、当前 Key 总览、使用记录、渠道低频刷新与去折算 UI 页面检查通过；证据位于 `real-test-evidence/macos-1.4.0/`。
+- macOS ARM64 安装副本：DMG 和 `/Applications` 应用严格签名校验通过，使用原有用户数据经 LaunchServices 正常显示前台窗口，最终安装副本 E2E 6/6。
 - Windows x64：NSIS 交叉构建及 PE32+/asar/版本结构验证通过；未执行 Windows 真机。
 
 详细步骤和证据见 [macOS 真机实测清单](liran_docs/09-%E7%9C%9F%E6%9C%BA%E5%AE%9E%E6%B5%8B.md)。
@@ -194,7 +210,7 @@ npm run dev
 
 ```text
 electron/                 Electron 主进程、preload、适配器、服务、存储与安全逻辑
-src/renderer/             React Renderer、五个业务界面和独立悬浮窗
+src/renderer/             React Renderer、六个主导航业务界面和独立悬浮窗
 tests/e2e/                Playwright Electron 端到端测试
 scripts/                  真机清单校验和授权站点只读验证脚本
 build/                    桌面应用图标与构建资源
@@ -220,7 +236,7 @@ real-test-evidence/       脱敏的 macOS 页面与验收证据
 
 - 只支持固定浅色模式。
 - macOS 仅构建 ARM64 产物，尚未提供 Intel x64 或 Universal 版本。
-- macOS 产物未签名、未公证。
+- macOS 产物为完整 ad-hoc 签名，但不是 Apple Developer ID 签名且未公证。
 - Windows 安装器已交叉构建，但未完成 Windows 真机验收。
 - 物理多显示器拔插未在当前单显示器 Mac 上实测。
 - 渠道延迟、Ping、可用率和时间线依赖站点实际开放的监控能力。

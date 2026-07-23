@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
   ChevronDown,
+  KeyRound,
   LayoutDashboard,
   LoaderCircle,
   Network,
@@ -18,10 +19,20 @@ import {
   type PreviewState,
 } from './preview/types';
 import { OverviewPage } from './shells/overview/OverviewPage';
+import { CurrentKeyStatsLoader } from './shells/overview/current-key-stats-loader';
+import {
+  availableCreditForKey,
+  resolveEffectiveKey,
+  type CurrentKeyStatsState,
+} from './shells/overview/current-key-stats';
 import { desktopRateChannelStatusLoader } from './shells/overview/rate-channel-status-loader';
 import { UsagePage } from './shells/usage/UsagePage';
+import { ApiKeysPage } from './shells/api-keys/ApiKeysPage';
+import type { ApiKeyRow, ApiKeysPageState, ApiKeyStatus } from './shells/api-keys/types';
+import { UsageLoadCoordinator } from './shells/usage/usage-load-coordinator';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
+import { retryAfterSecondsFromError } from './channel-polling';
 import { SitesPage } from './shells/sites/SitesPage';
 import { FloatingWindow } from './shells/floating/FloatingWindow';
 import {
@@ -37,6 +48,7 @@ import type {
   UsageFilterOptions,
   FloatingSettings,
   RateContexts,
+  ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
 const initialLocation = parsePreviewLocation(window.location.search);
 const showPreviewControls =
@@ -53,10 +65,25 @@ export function App() {
   const [dashboard, setDashboard] =
     useState<import('../../electron/shared/contracts').DashboardSnapshot>();
   const [usageData, setUsageData] = useState<unknown>();
+  const [usageStats, setUsageStats] = useState<unknown>();
+  const [apiKeysData, setApiKeysData] = useState<ApiKeyManagementPayload>();
+  const [apiKeysState, setApiKeysState] = useState<ApiKeysPageState>('loading');
+  const [apiKeyFilters, setApiKeyFilters] = useState<{
+    search: string;
+    groupId: string;
+    status: '' | ApiKeyStatus;
+    page: number;
+  }>({ search: '', groupId: '', status: '', page: 1 });
+  const [writingKeyIds, setWritingKeyIds] = useState<Set<string>>(() => new Set());
+  const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [channelsData, setChannelsData] = useState<unknown>();
   const [channelDetail, setChannelDetail] = useState<unknown>();
   const [selectedChannelId, setSelectedChannelId] = useState<string>();
   const [keyContexts, setKeyContexts] = useState<SiteKeyContexts>({});
+  const [currentKeyStatsBySite, setCurrentKeyStatsBySite] = useState<
+    Record<string, CurrentKeyStatsState>
+  >({});
+  const [isRefreshingCurrentKeyStats, setIsRefreshingCurrentKeyStats] = useState(false);
   const [usageFiltersBySite, setUsageFiltersBySite] = useState<Record<string, UsageFilterOptions>>(
     {},
   );
@@ -79,8 +106,11 @@ export function App() {
   const channelLoadCoordinatorRef = useRef(new ChannelLoadCoordinator());
   const channelStatusLoaderRef = useRef(desktopRateChannelStatusLoader());
   const keyContextRequestRef = useRef(new Map<string, number>());
+  const currentKeyStatsRequestRef = useRef(0);
+  const currentKeyStatsLoaderRef = useRef<CurrentKeyStatsLoader | null>(null);
   const siteRequestRef = useRef(0);
-  const usageRequestRef = useRef(0);
+  const usageLoadCoordinatorRef = useRef(new UsageLoadCoordinator());
+  const apiKeysRequestRef = useRef(0);
   const channelDetailRequestRef = useRef(0);
   const floatingUsageScanRef = useRef({ running: false, latestAt: 0, siteId: '' });
   const selectedSite = dashboard?.sites.find(
@@ -96,6 +126,26 @@ export function App() {
   const usageFilterOptions = selectedSite
     ? (usageFiltersBySite[selectedSite.id] ?? groupsFromKeys(keyOptions))
     : { models: [], groups: [] };
+  const currentKeySelectionKey = JSON.stringify(
+    (dashboard?.sites ?? []).map((site) => {
+      const keyContext = keyContexts[site.id] ?? {
+        keys: [],
+        preference: { mode: 'auto' as const },
+      };
+      const key = resolveEffectiveKey(keyContext.keys, keyContext.preference, site.defaultKeyId);
+      return [
+        site.id,
+        site.balance,
+        site.defaultKeyId,
+        keyContext.preference.mode,
+        keyContext.preference.keyId,
+        key?.id,
+        key?.quota,
+        key?.quotaUsed,
+        key?.subscriptionType,
+      ];
+    }),
+  );
   shellRef.current = shell;
   currentSiteRef.current = selectedSite?.id;
   const runtimeState = selectedSite?.status;
@@ -122,11 +172,14 @@ export function App() {
   context.dashboard = dashboard;
   context.selectedSite = selectedSite;
   context.usageData = usageData;
+  context.usageStats = usageStats;
   context.channelsData = channelsData;
   context.channelDetail = channelDetail;
   context.selectedChannelId = selectedChannelId;
   context.keyOptions = keyOptions;
   context.keyContexts = keyContexts;
+  context.currentKeyStatsBySite = currentKeyStatsBySite;
+  context.isRefreshingCurrentKeyStats = isRefreshingCurrentKeyStats;
   context.rateContexts = rateContexts;
   context.isRefreshingRates = isRefreshingRates;
   context.refreshingRateSiteIds = [...refreshingRateSiteIds];
@@ -201,6 +254,12 @@ export function App() {
     currentSiteRef.current = siteId;
     setCurrentSiteId(siteId);
     setUsageData(undefined);
+    setUsageStats(undefined);
+    setApiKeysData(undefined);
+    setApiKeysState('loading');
+    setApiKeyFilters({ search: '', groupId: '', status: '', page: 1 });
+    setWritingKeyIds(new Set());
+    setApiKeyMessage('');
     setChannelsData(undefined);
     setChannelDetail(undefined);
     setSelectedChannelId(undefined);
@@ -246,6 +305,7 @@ export function App() {
   };
   const refreshAll = () => {
     if (isRefreshingAll || !dashboard?.sites.length) return;
+    void loadCurrentKeyStats(true);
     setIsRefreshingAll(true);
     setRefreshingSiteIds(new Set(dashboard.sites.map((site) => site.id)));
     void window.sub2apiDesktop?.sites
@@ -260,6 +320,7 @@ export function App() {
   };
   context.onSelectSite = selectSite;
   context.onRefreshSite = refreshAll;
+  context.onRefreshCurrentKeyStats = () => void loadCurrentKeyStats(true);
   context.onPreviousSite = () => moveSite(-1);
   context.onNextSite = () => moveSite(1);
   context.onOpenSite = () => {
@@ -359,9 +420,9 @@ export function App() {
           setChannelDetail({ state: 'error' });
       });
   };
-  context.onRefreshChannels = () => {
-    if (!selectedSite) return;
-    void loadChannels(selectedSite.id, true);
+  context.onRefreshChannels = async () => {
+    if (!selectedSite) return { ok: false };
+    return loadChannels(selectedSite.id, true);
   };
   context.floatingPosition = floatingPosition;
   context.floatingOpacity = floatingOpacity;
@@ -378,20 +439,62 @@ export function App() {
   context.onUsageQuery = ({ period, page, ...filters }) => {
     if (!selectedSite) return;
     const siteId = selectedSite.id;
-    const requestId = ++usageRequestRef.current;
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) return;
+    const query = { siteId, period, page, pageSize: 20, ...filters };
     setUsageData(undefined);
+    setUsageStats(undefined);
     setState('loading');
-    void window.sub2apiDesktop?.sites
-      .usage({ siteId, period, page, pageSize: 20, ...filters })
-      .then((value) => {
-        if (currentSiteRef.current !== siteId || usageRequestRef.current !== requestId) return;
+    void usageLoadCoordinatorRef.current.load(
+      () => desktop.usage(query),
+      () => desktop.usageStats(query),
+      (value, stats) => {
+        if (currentSiteRef.current !== siteId) return;
         setUsageData(value);
+        setUsageStats(stats);
         setState('success');
-      })
-      .catch(() => {
-        if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
-          setState('error');
+      },
+      () => {
+        if (currentSiteRef.current === siteId) setState('error');
+      },
+    );
+  };
+  const loadApiKeys = async (
+    siteId: string,
+    filters = apiKeyFilters,
+    force = false,
+  ): Promise<void> => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) return;
+    const requestId = ++apiKeysRequestRef.current;
+    setApiKeysState(apiKeysData ? 'refreshing' : 'loading');
+    try {
+      const value = await desktop.apiKeys({
+        siteId,
+        page: filters.page,
+        pageSize: 20,
+        ...(filters.search ? { search: filters.search } : {}),
+        ...(filters.groupId ? { groupId: filters.groupId } : {}),
+        ...(filters.status
+          ? { status: filters.status === 'exhausted' ? 'quota-exhausted' : filters.status }
+          : {}),
+        force,
       });
+      if (requestId !== apiKeysRequestRef.current || currentSiteRef.current !== siteId) return;
+      setApiKeysData(value);
+      setApiKeysState(value.items.length ? value.state : 'empty');
+    } catch (error) {
+      if (requestId !== apiKeysRequestRef.current || currentSiteRef.current !== siteId) return;
+      const message = error instanceof Error ? error.message : '';
+      setApiKeysState(
+        message.includes('AUTH_REQUIRED')
+          ? 'auth-required'
+          : message.includes('UNSUPPORTED')
+            ? 'unsupported'
+            : 'error',
+      );
+      setApiKeyMessage('API 密钥读取失败，请稍后重试');
+    }
   };
   useEffect(() => {
     const refresh = () =>
@@ -499,16 +602,13 @@ export function App() {
   useEffect(() => {
     if (!selectedSite || initialLocation.surface === 'floating') return;
     const siteId = selectedSite.id;
-    const requestId = ++usageRequestRef.current;
+    usageLoadCoordinatorRef.current.invalidate();
     void loadKeyContext(siteId);
-    if (shell === 'usage')
-      void window.sub2apiDesktop?.sites
-        .usage({ siteId, period: 'today', page: 1, pageSize: 20 })
-        .then((value) => {
-          if (currentSiteRef.current === siteId && usageRequestRef.current === requestId)
-            setUsageData(value);
-        })
-        .catch(() => undefined);
+    if (shell === 'api-keys') void loadApiKeys(siteId);
+    if (shell === 'usage') {
+      setUsageData(undefined);
+      setUsageStats(undefined);
+    }
     if (shell === 'channels') void loadChannels(selectedSite.id);
   }, [selectedSite?.id, shell]);
   useEffect(() => {
@@ -517,6 +617,10 @@ export function App() {
       .then((value) => setKeyContexts(value))
       .catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (initialLocation.surface === 'floating' || shell !== 'overview') return;
+    void loadCurrentKeyStats();
+  }, [currentKeySelectionKey, shell]);
   useEffect(() => {
     if (initialLocation.surface === 'floating') return;
     const desktop = window.sub2apiDesktop?.sites;
@@ -548,7 +652,10 @@ export function App() {
       .catch(() => undefined);
   }, []);
 
-  async function loadChannels(siteId: string, force = false) {
+  async function loadChannels(
+    siteId: string,
+    force = false,
+  ): Promise<{ ok: boolean; retryAfterSeconds?: number; terminal?: boolean }> {
     const request = channelLoadCoordinatorRef.current.begin(siteId);
     const isCurrent = () =>
       channelLoadCoordinatorRef.current.isCurrent(request, currentSiteRef.current);
@@ -558,7 +665,7 @@ export function App() {
     }
     try {
       const value = await channelStatusLoaderRef.current.loadChannels(siteId, force);
-      if (!isCurrent()) return;
+      if (!isCurrent()) return { ok: false };
       setChannelsData(value);
       const rawChannels =
         value && typeof value === 'object' && 'channels' in value ? value.channels : undefined;
@@ -569,18 +676,77 @@ export function App() {
       if (!id) {
         setChannelDetail(undefined);
         setState('success');
-        return;
+        return { ok: true };
       }
       const detailRequestId = ++channelDetailRequestRef.current;
       const detail = await channelStatusLoaderRef.current.loadDetail(siteId, id, force);
       if (isCurrent() && channelDetailRequestRef.current === detailRequestId)
         setChannelDetail(detail);
       if (isCurrent()) setState('success');
-    } catch {
-      if (!isCurrent()) return;
+      return { ok: true };
+    } catch (error) {
+      if (!isCurrent()) return { ok: false };
       setChannelsData((current: unknown) => current ?? { state: 'error', channels: [] });
       setChannelDetail({ state: 'error' });
       setState('error');
+      const retryAfterSeconds = retryAfterSecondsFromError(error);
+      if (error instanceof Error && error.message.includes('CHANNEL_AUTH_REQUIRED'))
+        return { ok: false, terminal: true };
+      return retryAfterSeconds === undefined ? { ok: false } : { ok: false, retryAfterSeconds };
+    }
+  }
+
+  async function loadCurrentKeyStats(force = false) {
+    const desktop = window.sub2apiDesktop?.sites;
+    const sites = dashboard?.sites ?? [];
+    if (!desktop || sites.length === 0) {
+      setCurrentKeyStatsBySite({});
+      return;
+    }
+    if (!currentKeyStatsLoaderRef.current)
+      currentKeyStatsLoaderRef.current = new CurrentKeyStatsLoader((siteId, keyId) =>
+        desktop.usageStats({
+          siteId,
+          period: 'today',
+          page: 1,
+          pageSize: 1,
+          apiKeyId: keyId,
+        }),
+      );
+    const inputs = sites.map((site) => {
+      const context = keyContexts[site.id] ?? {
+        keys: [],
+        preference: { mode: 'auto' as const },
+      };
+      const key = resolveEffectiveKey(context.keys, context.preference, site.defaultKeyId);
+      return {
+        siteId: site.id,
+        keyId: key?.id,
+        availableCredit: availableCreditForKey(key, site.balance),
+      };
+    });
+    const requestId = ++currentKeyStatsRequestRef.current;
+    setIsRefreshingCurrentKeyStats(true);
+    setCurrentKeyStatsBySite((current) =>
+      Object.fromEntries(
+        inputs.map((input) => {
+          const previous = current[input.siteId];
+          return [
+            input.siteId,
+            previous && 'keyId' in previous && previous.keyId === input.keyId
+              ? previous
+              : input.keyId
+                ? { state: 'loading' as const, keyId: input.keyId }
+                : { state: 'unknown' as const },
+          ];
+        }),
+      ),
+    );
+    try {
+      const result = await currentKeyStatsLoaderRef.current.load(inputs, force);
+      if (currentKeyStatsRequestRef.current === requestId) setCurrentKeyStatsBySite(result);
+    } finally {
+      if (currentKeyStatsRequestRef.current === requestId) setIsRefreshingCurrentKeyStats(false);
     }
   }
   useEffect(() => {
@@ -592,8 +758,79 @@ export function App() {
   }, [shell]);
   if (initialLocation.surface === 'floating')
     return <FloatingWindow {...context} onStateChange={setState} />;
+  const apiKeysPage = (
+    <ApiKeysPage
+      state={apiKeysState}
+      sites={dashboard?.sites.map(({ id, name }) => ({ id, name })) ?? []}
+      selectedSiteId={selectedSite?.id}
+      search={apiKeyFilters.search}
+      groupFilter={apiKeyFilters.groupId}
+      statusFilter={apiKeyFilters.status}
+      groups={
+        apiKeysData?.groups.map((group) => ({
+          id: group.id,
+          name: group.name,
+          platform: group.platform,
+          rate: group.effectiveRate ?? group.defaultRate,
+        })) ?? []
+      }
+      keys={(apiKeysData?.items ?? []).map(apiKeyRow)}
+      pagination={apiKeysData?.page ?? { page: 1, pageSize: 20, pages: 0, total: 0 }}
+      writingKeyIds={[...writingKeyIds]}
+      errorMessage={apiKeysState === 'error' ? apiKeyMessage : undefined}
+      successMessage={apiKeysState !== 'error' ? apiKeyMessage : undefined}
+      onSelectSite={selectSite}
+      onSearchChange={(search) => {
+        const next = { ...apiKeyFilters, search, page: 1 };
+        setApiKeyFilters(next);
+        if (selectedSite) void loadApiKeys(selectedSite.id, next);
+      }}
+      onGroupFilterChange={(groupId) => {
+        const next = { ...apiKeyFilters, groupId, page: 1 };
+        setApiKeyFilters(next);
+        if (selectedSite) void loadApiKeys(selectedSite.id, next);
+      }}
+      onStatusFilterChange={(status) => {
+        const next = { ...apiKeyFilters, status, page: 1 };
+        setApiKeyFilters(next);
+        if (selectedSite) void loadApiKeys(selectedSite.id, next);
+      }}
+      onRefresh={() => selectedSite && void loadApiKeys(selectedSite.id, apiKeyFilters, true)}
+      onPageChange={(page) => {
+        const next = { ...apiKeyFilters, page };
+        setApiKeyFilters(next);
+        if (selectedSite) void loadApiKeys(selectedSite.id, next);
+      }}
+      onGroupChange={(keyId, groupId) => {
+        if (!selectedSite || writingKeyIds.has(keyId)) return;
+        const siteId = selectedSite.id;
+        setWritingKeyIds((current) => new Set(current).add(keyId));
+        setApiKeyMessage('');
+        void window.sub2apiDesktop?.sites
+          .updateApiKeyGroup({ siteId, keyId, groupId })
+          .then(() => {
+            if (currentSiteRef.current !== siteId) return;
+            setApiKeyMessage('分组已同步到远程站点');
+            return loadApiKeys(siteId, apiKeyFilters, true);
+          })
+          .catch(() => {
+            if (currentSiteRef.current === siteId) setApiKeyMessage('分组切换失败，已保留原分组');
+          })
+          .finally(() => {
+            if (currentSiteRef.current === siteId)
+              setWritingKeyIds((current) => {
+                const next = new Set(current);
+                next.delete(keyId);
+                return next;
+              });
+          });
+      }}
+      onOpenSiteManagement={() => setShell('sites')}
+    />
+  );
   const pages = {
     overview: <OverviewPage {...context} />,
+    'api-keys': apiKeysPage,
     usage: <UsagePage {...context} />,
     channels: <ChannelsPage {...context} />,
     sites: <SitesPage {...context} />,
@@ -601,6 +838,7 @@ export function App() {
   };
   const navigation = [
     ['overview', '全部站点', LayoutDashboard],
+    ['api-keys', 'API 密钥', KeyRound],
     ['usage', '使用记录', TimerReset],
     ['channels', '渠道状态', Network],
     ['sites', '站点管理', SlidersHorizontal],
@@ -766,5 +1004,23 @@ function mergeUsageFilters(
   return {
     models: incoming.models.length ? incoming.models : (current?.models ?? []),
     groups: incoming.groups.length ? incoming.groups : (current?.groups ?? []),
+  };
+}
+
+function apiKeyRow(key: ApiKeyManagementPayload['items'][number]): ApiKeyRow {
+  return {
+    id: key.id,
+    name: key.name,
+    maskedLabel: key.maskedLabel,
+    groupId: key.groupId,
+    groupName: key.groupName,
+    platform: key.platform,
+    effectiveRate: key.effectiveRate,
+    currentConcurrency: key.currentConcurrency,
+    todayActualCost: key.todayActualCost,
+    last30DaysActualCost: key.last30DaysActualCost,
+    expiresAt: key.expiresAt,
+    status: key.status === 'quota-exhausted' ? 'exhausted' : key.status,
+    createdAt: key.createdAt ?? '',
   };
 }

@@ -1,5 +1,72 @@
 # 倍率比较与渠道稳定性避坑
 
+## 官网品牌图标要验证来源、打包形态和最终清晰度
+
+**现象**
+
+从原型截图裁切出的几十像素 PNG 在 Retina 屏幕上发虚；替换成 SVG 后，开发 E2E 仍可能加载旧 `dist/`，或因 Vite 把小 SVG 内联而误判资源没有打包。
+
+**根因**
+
+截图资源分辨率不足；Electron E2E 默认读取生产 `dist/` 而不是实时源码；Vite 会按体积把 SVG 输出为独立文件或 `data:image/svg+xml`。
+
+**正确做法**
+
+从品牌官网或官网页面明确声明的资源地址下载 SVG，保存到 Renderer 本地目录并记录来源。改完先执行生产构建，再运行 Electron E2E；资源断言同时接受本地 `.svg` URL 和 SVG data URL，并检查 `complete`、`naturalWidth`、最终 40×40 几何及打包应用截图。
+
+**验证方式**
+
+检查构建输出包含独立或内联 SVG；在 macOS 打包应用 1600px 和 720px 截图中人工确认图标边缘清晰、无裁切、无加载失败，且运行时不依赖远程地址。
+
+**禁止事项**
+
+不要继续放大低分辨率截图 PNG；不要从非官方聚合站点冒充官网下载；不要在未重建 `dist/` 时用 Electron E2E 判断新 Renderer；不要强制要求所有 SVG 都以独立文件输出。
+
+**相关文件或命令**
+
+- `src/renderer/assets/rate-platforms/`
+- `src/renderer/shells/overview/OverviewPage.tsx`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run build`
+
+**适用范围**
+
+倍率平台品牌图标及其他需要随 Electron 离线分发的官网 SVG 资源。
+
+## 平台别名与隐藏滚动条必须覆盖完整证据链
+
+**现象**
+
+Antigravity 被渲染成第五个平台，或只在直接平台字段中归入 Gemini，但分组说明、主模型和附加模型仍被漏掉；隐藏倍率卡片滚动条后又可能同时失去横向滚动能力。
+
+**根因**
+
+平台别名只接入单一归一化入口，没有覆盖文本与结构化关系证据；滚动条隐藏被误实现为移除 `overflow-x`。窄屏验证若没有固定视口，也无法证明卡片确实保持单行且可横滑。
+
+**正确做法**
+
+让 `antigravity` 同时进入直接平台归一化、带单词边界的文本识别和结构化关系链，并与 Gemini 合并候选池。横向容器保留原生 `overflow-x: auto`、焦点语义和滚动行为，仅使用局部 WebKit/Firefox CSS 隐藏滚动条；宽屏和窄屏断言绑定明确视口。
+
+**验证方式**
+
+倍率单测覆盖直接别名、分组名、说明、主模型、附加模型、候选池合并及相似子字符串；Electron E2E 分别在 1600px 与 720px 验证单行、实际溢出、无可见滚动条和键盘可聚焦，并人工查看打包应用截图。
+
+**禁止事项**
+
+不要只修改 `normalizePlatform` 而遗漏其他证据入口；不要使用无边界的子字符串匹配；不要以 `overflow: hidden` 或删除 overflow 的方式隐藏滚动条；不要用未固定宽度的截图证明响应式行为。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/rate-comparison.ts`
+- `src/renderer/shells/overview/rate-comparison.test.ts`
+- `src/renderer/shells/overview/OverviewPage.tsx`
+- `src/renderer/shells/overview/overview.css`
+- `tests/e2e/electron-smoke.spec.ts`
+
+**适用范围**
+
+倍率平台分类、模型别名、单行横向卡片和其他隐藏原生滚动条但必须保留可操作性的容器。
+
 ## 并列最低分组必须独立匹配渠道
 
 **现象**
@@ -190,3 +257,35 @@ Electron E2E 连续打开两个站点渠道弹窗，确认缓存打开不增加�
 **适用范围**
 
 所有通过父组件内联回调加载数据的弹窗和浮层。
+
+## 卡片底部对齐必须由固定槽位承担
+
+**现象**
+
+站点卡片的充值比例、查看倍率和查看渠道状态会掉成两行；正文、额度或摘要状态不同还会让当前渠道摘要上下漂移。
+
+**根因**
+
+操作区使用 `flex-wrap: wrap`，且 `margin-top: auto` 放在操作区上，导致渠道摘要仍跟随正文高度；摘要只有 `min-height` 时，详情错误文案还会继续撑高外框。
+
+**正确做法**
+
+操作区使用 `minmax(0, 1fr) max-content max-content` 三列网格，充值比例列和 select 允许收缩，两个文字按钮保持内容宽度。把自动剩余空间放到渠道摘要之前，并为摘要设置稳定高度和受控溢出。
+
+**验证方式**
+
+Electron E2E 读取每个 footer 的计算样式、三个子控件坐标、scroll/client 尺寸和卡片边界；按网格行校验摘要与 footer 顶边误差不超过 1px，并覆盖五卡四列、720px 单列、加载、成功、无匹配和错误摘要。
+
+**禁止事项**
+
+不要用整卡固定高度掩盖内容差异；不要隐藏按钮文字、改为纯图标、允许 footer 横向滚动或只搜索 CSS 字符串代替几何验证。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/overview.css`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e -- --grep "connects site entry"`
+
+**适用范围**
+
+全部站点卡片底部操作区、当前渠道摘要及其他等高网格卡片的固定 footer。

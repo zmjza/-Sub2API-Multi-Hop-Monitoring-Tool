@@ -8,6 +8,29 @@
   gap: 8px;
   margin-bottom: 24px;
 }
+
+.channel-polling-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #5b5671;
+  font-size: 13px;
+}
+
+.channel-polling-select select {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #ddd9ed;
+  border-radius: 8px;
+  background: #fff;
+  color: #312e45;
+}
+
+.channel-polling-countdown {
+  color: #7b7591;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 .channel-sync-state {
   color: #92400e;
   font-size: 12px;
@@ -68,37 +91,6 @@
   justify-items: end;
   align-content: start;
   gap: 6px;
-}
-.channel-rate-badge {
-  min-width: 104px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid #c7d2fe;
-  border-radius: 999px;
-  padding: 0 8px;
-  background: #eef2ff;
-  color: #4338ca;
-  font-size: 10px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-.channel-rate-badge.is-unset,
-.channel-rate-badge.is-loading {
-  border-color: #d8dce3;
-  background: #f3f4f6;
-  color: #64748b;
-}
-.channel-rate-badge.is-unavailable {
-  border-color: #fed7aa;
-  background: #fff7ed;
-  color: #9a3412;
-}
-.channel-detail .channel-rate-badge {
-  width: fit-content;
-  margin-top: 8px;
 }
 .channel-title {
   display: flex;

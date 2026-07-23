@@ -1,5 +1,46 @@
 # 应用主框架与全站总览 UI 壳接入清单
 
+## 2026-07-23 当前 Key 口径与渠道增量
+
+本增量取代主总览历史“整站余额/整站今日统计”和快捷弹层“整站全部渠道、不按当前 Key 过滤”的目标口径，但保留历史验收记录作为旧版本事实。手动模式使用用户选择 Key，自动模式使用实际生效 Key；Key 未确定时明确显示待查询/未确定，禁止回退整站值。顶部只显示“所选 Key 可用额度、今日 Token、今日消费”；每张站点卡片显示脱敏 Key、分组、今日请求、Token、消费、可用额度和关联渠道。
+
+### 逐文件接入计划
+
+| 文件                                                                                                                | 计划修改                                                                                                            | 接口、状态与事件入口                                                                              | 边界与失败测试                                                         |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `src/renderer/shells/overview/OverviewPage.tsx`                                                                     | 替换顶部三指标和卡片 Key 指标；关联渠道区域消费九态；快捷弹层只展示已确认关联或明确未关联结果                       | current-key snapshot、跨站 aggregate、channel relation；loading/partial/stale/unknown/unsupported | Key 变化和快速切站丢弃旧结果；未确定不显示整站值；订阅显示“按订阅规则” |
+| `src/renderer/shells/overview/types.ts`                                                                             | 新增 `SelectedKeySnapshot`、额度判别联合、relation groupId 和九态                                                   | normal/degraded/failed/unknown/stale/refresh-failed/unlinked/ambiguous/unsupported                | 类型层不允许仅凭名称构造已关联；完整 Key 字段禁止进入 Renderer         |
+| `src/renderer/shells/overview/overview.css`                                                                         | 稳定顶部指标、卡片 Key 行、渠道摘要和弹层高度                                                                       | 局部 `.overview-`/既有弹层作用域                                                                  | 长 Key/分组/状态不得挤压 footer；窄宽横向/纵向滚动不重叠               |
+| `src/renderer/shells/overview/ChannelStatusPopover.tsx`                                                             | 删除渠道健康中的 BadgePercent、倍率徽标、折算文案、tooltip 和占位；显示名称、平台、模型、健康、延迟、可用率和时间线 | 关联渠道详情按需状态                                                                              | 无倍率节点且健康字段仍在；刷新失败保留旧状态                           |
+| `electron/main/services/site-service.ts`、`electron/main/domain/key-policy.ts`、`snapshot.ts`                       | 在现有站点服务和领域函数内解析实际当前 Key，按单 Key stats 聚合并缓存                                               | `/usage/stats?period=today&api_key_id=...`；Key/分组 cache fingerprint                            | 跨站受控并发；单站失败隔离；Key 变化使旧缓存失效                       |
+| `electron/shared/contracts.ts`、`electron/preload/index.ts`、`electron/preload/bridge.cts`、`src/renderer/env.d.ts` | 扩展脱敏 Key 快照、聚合和关联状态白名单/schema                                                                      | 固定站点数组和请求序号                                                                            | 拒绝完整 Key、非法 ID 和任意 channel                                   |
+| Overview、dashboard、current-key、relation 与 E2E 测试                                                              | 补额度公式、自动/手动/未确定、竞态、订阅、关联九态和去倍率回归                                                      | 有限额 `max(0,min(账号余额,quota-quota_used))`；无限额用账号余额                                  | 先 RED；不得依赖真实生产站或把缺失值写成 0                             |
+
+保留 `RatePopover.tsx`、`RechargeRatioControl.tsx`、`rate-comparison.ts`、底层倍率/充值比例和独立“查看倍率”入口。只删除渠道健康区域专用的折算呈现。禁止修改悬浮窗统计口径、全局主题、认证与存储安全、版本和构建配置。
+
+## 2026-07-21 倍率对比 Stitch 增量
+
+- Stitch Project：`空间视觉优化方案`（`15431967796154605995`）。
+- Screen：`中文标签版倍率对比卡片组`（`227212f94b9b427e887875644935ab9e`）。
+- HTML：`liran_docs/stitch-artifacts/15431967796154605995/01-rate-comparison/screen.html`。
+- 截图：同目录 `screenshot.png`；Stitch 服务返回的截图仅有 `2560×790` 头部裁切，不能覆盖 HTML 中可直接确认的卡片规格。
+- 本轮仍在现有 `OverviewPage.tsx`、`overview.css`、`rate-comparison.ts` 和既有测试范围内承接；不创建独立页面、不改接口协议、不引入 Tailwind 或 Material Symbols。
+
+### 倍率控件规格盘点
+
+| 对象 | HTML 第一事实规格                                                                                                                                                    |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 标题 | `32px/40px`、700；说明 `16px/24px`；标题区与控制区在窄宽度下允许分行，但卡片列表不换行。                                                                             |
+| 控制 | 周期下拉为白底描边圆角控件；刷新为等高纯图标按钮，保留 disabled、focus-visible 和旋转刷新状态。                                                                      |
+| 列表 | 四个平台固定 OpenAI、Claude、Gemini、Grok；桌面四列，列间距 `24px`；第五平台起仍在同一行横向滚动。滚动条视觉隐藏，但原生触控板、触屏、Shift+滚轮与键盘滚动能力保留。 |
+| 卡片 | 白色高不透明表面，圆角 `32px`、边框 `1px`、padding `16px`；同一视口内四卡等高，hover 轻微上移并增加阴影。                                                            |
+| 品牌 | 本地图片容器 `40×40px`；1.3.8 起使用四个平台官网下载的 SVG，OpenAI 绿、Claude 橙、Gemini 蓝、Grok 黑灰作为状态、图标底和交互强调色；Antigravity 统一显示 Gemini。    |
+| 头部 | 左侧为图标、平台名和小型状态 badge；右侧为折算倍率主值与 `倍率` 标签。长名称不得挤压倍率或形成竖排。                                                                 |
+| 内容 | 圆角 `24px`、虚线边框、居中布局；ready 显示推荐站点/分组、价格分、稳定分和五分钟稳定标签；checking/empty/error 使用相同高度槽位。                                    |
+| 文字 | 平台标题 `20px/28px`、600；倍率主值 `30px`；正文 `14px/20px`；辅助文字 `10–11px`。站点与分组单行省略并保留 title。                                                   |
+
+高风险项为：现有全局 `button/svg` 规则、旧 22px 卡片圆角、旧 14px 列间距、可见细滚动条、长站点名和未知第五平台。所有覆盖必须保持在 `.rate-comparison-*` 局部作用域。
+
 ## 审计回写（2026-07-14）
 
 `1440 x 1024` 仅为视觉参考，不是固定画布。Renderer 响应式铺满 BrowserWindow；Electron 主窗口默认使用工作区宽度 60%、高度 90%，居中并允许边缘/四角缩放。左侧导航固定在视口左侧，右侧页面独立滚动。
@@ -16,7 +57,7 @@
 - 依据：已确认的高密度固定浅色桌面工作台、克制液态玻璃和 RQ-09/RQ-11/RQ-17。
 - 功能：导航、顶部栏、五项汇总指标和站点表格。悬浮窗规格由独立 Screen/Renderer 承担，不在总览页面展示预览。
 
-## 真实文件与白名单
+## 历史 Stitch 壳文件与白名单
 
 | 文件                                                  | 职责                               |
 | ----------------------------------------------------- | ---------------------------------- |
@@ -31,7 +72,7 @@
 | `src/renderer/preview/preview.test.ts`                | 状态与固定浅色回归测试             |
 | `package.json`、`package-lock.json`、`pnpm-lock.yaml` | 仅登记离线图标依赖 `lucide-react`  |
 
-Stitch 承接后的 Codex 修改白名单仅为上表文件。禁止修改其他业务壳、Electron/preload、配置和业务实现；依赖例外仅允许 `lucide-react`，用于替代 Stitch 的在线 Material Symbols，保证 Electron 离线可用。
+本表只记录历史 Stitch 承接白名单。2026-07-23 增量的合法修改范围以本文顶部“逐文件接入计划”为准；禁止扩张到无关业务壳、全局样式、认证/凭据安全、版本、构建配置或新依赖。
 
 ## 入口与接线
 

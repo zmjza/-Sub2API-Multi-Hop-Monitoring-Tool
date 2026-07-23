@@ -1,5 +1,9 @@
 # IPC、安全与日志脱敏
 
+## 2026-07-23 规划影响
+
+新增 API 密钥、过滤 stats、所选 Key 汇总和渠道调度 IPC 必须逐项建立严格 Zod 输入/输出，禁止把 `unknown`、完整上游对象、任意 URL/方法或 Token 暴露给 Renderer。分组写入对象必须 `.strict()` 且只含 siteId、keyId、groupId；Key 输出 schema 不得存在完整 key 字段。日志、错误、测试快照、CSV 和 E2E 截图纳入敏感模式扫描。当前状态为待实现，不得继承旧版本安全测试结论。
+
 > 2026-07-14 真机回写：`sandbox`、`contextIsolation`、禁用 Node integration、CommonJS preload 白名单桥、输入/输出 Zod 校验和敏感字段扫描已落地。Electron E2E 已断言桥对象并完成业务 IPC 流；打包应用数据、SQLite、凭据后端、CSV 和稳定截图扫描未发现秘密泄漏。
 
 上级：[[03-索引]]

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
   ArrowDown,
@@ -14,6 +14,7 @@ import {
 import type { UsageProps } from './types';
 import { usageRecords } from './data';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
+import { UsageQueryController } from './usage-query-controller';
 import './usage.css';
 export function UsagePage(props: UsageProps) {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'custom'>('today');
@@ -30,6 +31,12 @@ export function UsagePage(props: UsageProps) {
     endDate: '',
   });
   const [showColumns, setShowColumns] = useState(false);
+  const queryListenerRef = useRef(props.onUsageQuery);
+  queryListenerRef.current = props.onUsageQuery;
+  const queryControllerRef = useRef<UsageQueryController | undefined>(undefined);
+  queryControllerRef.current ??= new UsageQueryController((query) =>
+    queryListenerRef.current?.(query),
+  );
   const [visibleColumns, setVisibleColumns] = useState(
     () =>
       new Set([
@@ -72,6 +79,18 @@ export function UsagePage(props: UsageProps) {
     page,
     runtime ? 0 : Math.max(1, Math.ceil(records.length / 20)),
   );
+  const stats = readUsageStats(props.usageStats);
+  const filterKey = JSON.stringify(compactFilters(filters));
+  useEffect(() => {
+    setPage(1);
+    queryControllerRef.current?.schedule({
+      period,
+      page: 1,
+      sort,
+      ...compactFilters(filters),
+    });
+  }, [props.selectedSite?.id, period, sort, filterKey]);
+  useEffect(() => () => queryControllerRef.current?.dispose(), []);
   return (
     <section className="usage-page">
       <div className="usage-summary">
@@ -81,7 +100,7 @@ export function UsagePage(props: UsageProps) {
           </div>
           <div>
             <span>总请求数</span>
-            <b>{props.selectedSite?.todayRequests?.toLocaleString() ?? '—'}</b>
+            <b>{stats?.totalRequests.toLocaleString() ?? '—'}</b>
             <small>所选范围内</small>
           </div>
         </article>
@@ -91,28 +110,12 @@ export function UsagePage(props: UsageProps) {
           </div>
           <div>
             <span>总 Token</span>
-            <b>
-              {props.selectedSite?.todayTokens !== undefined
-                ? formatTokenCount(props.selectedSite.todayTokens)
-                : '—'}
-            </b>
+            <b>{stats ? formatTokenCount(stats.totalTokens) : '—'}</b>
             <small>
-              输入:{' '}
-              {props.selectedSite?.todayInputTokens !== undefined
-                ? formatTokenCount(props.selectedSite.todayInputTokens)
-                : '—'}{' '}
-              / 输出:{' '}
-              {props.selectedSite?.todayOutputTokens !== undefined
-                ? formatTokenCount(props.selectedSite.todayOutputTokens)
-                : '—'}{' '}
-              / 缓存:{' '}
-              {props.selectedSite?.todayCacheReadTokens !== undefined
-                ? formatTokenCount(props.selectedSite.todayCacheReadTokens)
-                : '—'}{' '}
-              / 创建:{' '}
-              {props.selectedSite?.todayCacheCreationTokens !== undefined
-                ? formatTokenCount(props.selectedSite.todayCacheCreationTokens)
-                : '—'}
+              输入: {stats ? formatTokenCount(stats.totalInputTokens) : '—'} / 输出:{' '}
+              {stats ? formatTokenCount(stats.totalOutputTokens) : '—'} / 缓存:{' '}
+              {stats ? formatTokenCount(stats.totalCacheReadTokens) : '—'} / 创建:{' '}
+              {stats ? formatTokenCount(stats.totalCacheCreationTokens) : '—'}
             </small>
           </div>
         </article>
@@ -122,17 +125,8 @@ export function UsagePage(props: UsageProps) {
           </div>
           <div>
             <span>总消费</span>
-            <b>
-              {props.selectedSite?.todayActualCost !== undefined
-                ? `$${props.selectedSite.todayActualCost.toFixed(4)}`
-                : '—'}
-            </b>
-            <small>
-              标准{' '}
-              {props.selectedSite?.todayTotalCost !== undefined
-                ? `$${props.selectedSite.todayTotalCost.toFixed(4)}`
-                : '—'}
-            </small>
+            <b>{stats ? `$${stats.totalActualCost.toFixed(4)}` : '—'}</b>
+            <small>标准 {stats ? `$${stats.totalCost.toFixed(4)}` : '—'}</small>
           </div>
         </article>
         <article className="usage-stat duration">
@@ -141,11 +135,7 @@ export function UsagePage(props: UsageProps) {
           </div>
           <div>
             <span>平均耗时</span>
-            <b>
-              {props.selectedSite?.averageDurationMs !== undefined
-                ? `${(props.selectedSite.averageDurationMs / 1000).toFixed(2)}s`
-                : '—'}
-            </b>
+            <b>{stats ? `${(stats.averageDurationMs / 1000).toFixed(2)}s` : '—'}</b>
           </div>
         </article>
       </div>
@@ -168,7 +158,6 @@ export function UsagePage(props: UsageProps) {
               onClick={() => {
                 setPeriod(value);
                 setPage(1);
-                props.onUsageQuery?.({ period: value, page: 1, sort, ...compactFilters(filters) });
               }}
             >
               {label}
@@ -218,21 +207,30 @@ export function UsagePage(props: UsageProps) {
             label="请求类型"
             value={filters.requestType}
             options={[
-              ['chat', 'Chat'],
-              ['embedding', 'Embedding'],
+              ['sync', '同步'],
+              ['stream', '流式'],
+              ['ws_v2', 'WebSocket'],
             ]}
             onChange={(requestType) => setFilters({ ...filters, requestType })}
           />
           <UsageFilter
             label="计费类型"
             value={filters.billingType}
-            options={[['token', 'Token']]}
+            options={[
+              ['0', '余额'],
+              ['1', '订阅'],
+            ]}
             onChange={(billingType) => setFilters({ ...filters, billingType })}
           />
           <UsageFilter
             label="计费模式"
             value={filters.billingMode}
-            options={[['standard', '标准']]}
+            options={[
+              ['token', '按 Token'],
+              ['per_request', '按请求'],
+              ['image', '按图片'],
+              ['video', '按视频'],
+            ]}
             onChange={(billingMode) => setFilters({ ...filters, billingMode })}
           />
         </div>
@@ -255,7 +253,7 @@ export function UsagePage(props: UsageProps) {
               setPeriod(resetQuery.period);
               setPage(resetQuery.page);
               setSort(resetQuery.sort);
-              props.onUsageQuery?.(resetQuery);
+              queryControllerRef.current?.flush(resetQuery);
             }}
           >
             <RotateCcw size={15} />
@@ -269,7 +267,12 @@ export function UsagePage(props: UsageProps) {
             className="usage-action-button"
             onClick={() => {
               setPage(1);
-              props.onUsageQuery?.({ period, page: 1, sort, ...compactFilters(filters) });
+              queryControllerRef.current?.flush({
+                period,
+                page: 1,
+                sort,
+                ...compactFilters(filters),
+              });
             }}
           >
             刷新
@@ -365,12 +368,6 @@ export function UsagePage(props: UsageProps) {
                               const next = sort === 'desc' ? 'asc' : 'desc';
                               setSort(next);
                               setPage(1);
-                              props.onUsageQuery?.({
-                                period,
-                                page: 1,
-                                sort: next,
-                                ...compactFilters(filters),
-                              });
                             }}
                           >
                             时间 {sort === 'desc' ? '↓' : '↑'}
@@ -486,6 +483,28 @@ export function UsagePage(props: UsageProps) {
       </section>
     </section>
   );
+}
+
+export function readUsageStats(value: unknown) {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const keys = [
+    'totalRequests',
+    'totalTokens',
+    'totalInputTokens',
+    'totalOutputTokens',
+    'totalCacheReadTokens',
+    'totalCacheCreationTokens',
+    'totalActualCost',
+    'totalCost',
+    'averageDurationMs',
+  ] as const;
+  if (keys.some((key) => typeof record[key] !== 'number' || !Number.isFinite(record[key])))
+    return undefined;
+  return Object.fromEntries(keys.map((key) => [key, record[key]])) as Record<
+    (typeof keys)[number],
+    number
+  >;
 }
 
 export function readUsagePagination(value: unknown, fallbackPage = 1, fallbackPages = 0) {

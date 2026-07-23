@@ -14,6 +14,13 @@ import {
   usageRecordSchema,
   usageQuerySchema,
   usageFilterOptionsSchema,
+  apiKeyListQuerySchema,
+  apiKeyGroupUpdateRequestSchema,
+  apiKeyListPayloadSchema,
+  apiKeyBatchUsageRequestSchema,
+  apiKeySummarySchema,
+  siteSummarySchema,
+  usageStatsSchema,
 } from './contracts.js';
 
 describe('IPC boundary schemas', () => {
@@ -192,6 +199,135 @@ describe('IPC boundary schemas', () => {
         sites: {
           'site-a': { ...context.sites['site-a'], password: 'must-not-pass' },
         },
+      }),
+    ).toThrow();
+  });
+
+  it('keeps API key list, update, and usage contracts strict and secret-free', () => {
+    expect(
+      apiKeyListQuerySchema.parse({
+        siteId: 'site-a',
+        page: 2,
+        pageSize: 100,
+        search: 'daily',
+        groupId: '25',
+        status: 'active',
+      }),
+    ).toMatchObject({ page: 2, pageSize: 100, status: 'active' });
+    expect(() =>
+      apiKeyListQuerySchema.parse({ siteId: 'site-a', page: 1, pageSize: 101 }),
+    ).toThrow();
+    expect(() =>
+      apiKeyGroupUpdateRequestSchema.parse({
+        siteId: 'site-a',
+        keyId: '11',
+        groupId: '25',
+        name: 'must-not-pass',
+      }),
+    ).toThrow();
+    expect(() =>
+      apiKeyBatchUsageRequestSchema.parse({
+        siteId: 'site-a',
+        keyIds: Array.from({ length: 101 }, (_, index) => String(index + 1)),
+      }),
+    ).toThrow();
+
+    const payload = apiKeyListPayloadSchema.parse({
+      items: [
+        {
+          id: '11',
+          name: 'Daily',
+          maskedLabel: 'sk-xxx...A1B2',
+          status: 'active',
+          groupId: '25',
+          groupName: 'OpenAI',
+          platform: 'openai',
+          effectiveRate: 0,
+          currentConcurrency: 2,
+          quota: 20,
+          quotaUsed: 3,
+          expiresAt: '2026-08-01T00:00:00Z',
+          createdAt: '2026-07-01T00:00:00Z',
+        },
+      ],
+      page: 1,
+      pageSize: 20,
+      pages: 1,
+      total: 1,
+    });
+    expect(payload.items[0].effectiveRate).toBe(0);
+    expect(() =>
+      apiKeyListPayloadSchema.parse({
+        ...payload,
+        items: [{ ...payload.items[0], key: 'not-allowed-at-ipc-boundary' }],
+      }),
+    ).toThrow();
+  });
+
+  it('keeps only safe effective-key identity and subscription metadata in overview contracts', () => {
+    expect(
+      siteSummarySchema.parse({
+        id: 'site-a',
+        name: 'A',
+        baseUrl: 'https://example.invalid',
+        status: 'success',
+        source: 'live',
+        errors: [],
+        defaultKeyId: '11',
+      }).defaultKeyId,
+    ).toBe('11');
+    expect(
+      apiKeySummarySchema.parse({
+        id: '11',
+        name: 'Subscription',
+        maskedLabel: 'sk-xxx...0011',
+        status: 'active',
+        subscriptionType: 'monthly',
+      }).subscriptionType,
+    ).toBe('monthly');
+  });
+
+  it('allows only confirmed usage filter enums and safe server statistics', () => {
+    expect(
+      usageQuerySchema.parse({
+        siteId: 'site-a',
+        requestType: 'ws_v2',
+        billingType: '1',
+        billingMode: 'per_request',
+      }),
+    ).toMatchObject({ requestType: 'ws_v2', billingType: '1', billingMode: 'per_request' });
+    expect(() => usageQuerySchema.parse({ siteId: 'site-a', requestType: 'chat' })).toThrow();
+    expect(() => usageQuerySchema.parse({ siteId: 'site-a', billingType: '2' })).toThrow();
+    expect(() => usageQuerySchema.parse({ siteId: 'site-a', billingMode: 'standard' })).toThrow();
+    expect(
+      usageStatsSchema.parse({
+        totalRequests: 4,
+        totalTokens: 12,
+        totalInputTokens: 7,
+        totalOutputTokens: 3,
+        totalCacheReadTokens: 1,
+        totalCacheCreationTokens: 1,
+        totalActualCost: 0.2,
+        totalCost: 0.3,
+        averageDurationMs: 350,
+      }),
+    ).toEqual({
+      totalRequests: 4,
+      totalTokens: 12,
+      totalInputTokens: 7,
+      totalOutputTokens: 3,
+      totalCacheReadTokens: 1,
+      totalCacheCreationTokens: 1,
+      totalActualCost: 0.2,
+      totalCost: 0.3,
+      averageDurationMs: 350,
+    });
+    expect(() =>
+      usageStatsSchema.parse({
+        totalRequests: 4,
+        totalTokens: 12,
+        totalActualCost: 0.2,
+        averageDurationMs: 350,
       }),
     ).toThrow();
   });

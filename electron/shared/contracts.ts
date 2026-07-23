@@ -17,22 +17,29 @@ export type BatchSiteInput = z.infer<typeof batchSiteInputSchema>;
 export const siteIdSchema = z.string().min(1).max(128);
 export const refreshRequestSchema = z.object({ siteId: siteIdSchema });
 export const siteNoteSchema = z.object({ siteId: siteIdSchema, note: z.string().trim().max(500) });
-export const usageQuerySchema = z.object({
-  siteId: siteIdSchema,
-  period: z.enum(['today', '7d', '30d', 'custom']).default('today'),
-  page: z.number().int().positive().max(10_000).default(1),
-  pageSize: z.number().int().positive().max(100).default(20),
-  apiKeyId: z.string().max(128).optional(),
-  model: z.string().max(200).optional(),
-  groupId: z.string().max(128).optional(),
-  startDate: z.string().max(40).optional(),
-  endDate: z.string().max(40).optional(),
-  requestType: z.string().max(80).optional(),
-  billingType: z.string().max(80).optional(),
-  billingMode: z.string().max(80).optional(),
-  sort: z.enum(['asc', 'desc']).default('desc'),
-});
-export type UsageQuery = z.input<typeof usageQuerySchema>;
+export const usageQuerySchema = z
+  .object({
+    siteId: siteIdSchema,
+    period: z.enum(['today', '7d', '30d', 'custom']).default('today'),
+    page: z.number().int().positive().max(10_000).default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    apiKeyId: z.string().max(128).optional(),
+    model: z.string().max(200).optional(),
+    groupId: z.string().max(128).optional(),
+    startDate: z.string().max(40).optional(),
+    endDate: z.string().max(40).optional(),
+    requestType: z.enum(['unknown', 'sync', 'stream', 'ws_v2', 'cyber']).optional(),
+    billingType: z.enum(['0', '1']).optional(),
+    billingMode: z.enum(['token', 'per_request', 'image', 'video']).optional(),
+    sort: z.enum(['asc', 'desc']).default('desc'),
+  })
+  .strict();
+type ParsedUsageQuery = z.input<typeof usageQuerySchema>;
+export type UsageQuery = Omit<ParsedUsageQuery, 'requestType' | 'billingType' | 'billingMode'> & {
+  requestType?: string;
+  billingType?: string;
+  billingMode?: string;
+};
 export type SiteNoteInput = z.infer<typeof siteNoteSchema>;
 export const keyPreferenceSchema = z
   .object({ mode: z.enum(['auto', 'manual']), keyId: z.string().min(1).max(128).optional() })
@@ -154,6 +161,7 @@ export interface SiteSummary {
   source: 'live' | 'cache' | 'none';
   fetchedAt?: number;
   errors: string[];
+  defaultKeyId?: string;
   defaultKeyLabel?: string;
   note?: string;
   rate?: number;
@@ -191,6 +199,7 @@ export const siteSummarySchema = z.object({
   source: z.enum(['live', 'cache', 'none']),
   fetchedAt: z.number().optional(),
   errors: z.array(z.string()),
+  defaultKeyId: z.string().optional(),
   defaultKeyLabel: z.string().optional(),
   note: z.string().max(500).optional(),
   rate: z.number().optional(),
@@ -217,6 +226,7 @@ export const apiKeySummarySchema = z.object({
   groupName: z.string().optional(),
   quota: z.number().finite().optional(),
   quotaUsed: z.number().finite().optional(),
+  subscriptionType: z.string().max(100).optional(),
   rate: z.number().nonnegative().optional(),
 });
 export const siteKeyContextSchema = z
@@ -229,6 +239,135 @@ export const siteKeyContextsSchema = z.record(z.string(), siteKeyContextSchema);
 export type ApiKeySummaryView = z.infer<typeof apiKeySummarySchema>;
 export type SiteKeyContext = z.infer<typeof siteKeyContextSchema>;
 export type SiteKeyContexts = z.infer<typeof siteKeyContextsSchema>;
+
+const numericEntityIdSchema = z
+  .string()
+  .regex(/^\d+$/)
+  .min(1)
+  .max(128)
+  .refine((value) => Number.isSafeInteger(Number(value)) && Number(value) > 0, 'ID 超出安全范围');
+export const apiKeyListQuerySchema = z
+  .object({
+    siteId: siteIdSchema,
+    page: z.number().int().positive().max(10_000).default(1),
+    pageSize: z.number().int().positive().max(100).default(20),
+    search: z.string().trim().max(100).optional(),
+    groupId: numericEntityIdSchema.optional(),
+    status: z.enum(['active', 'disabled', 'quota-exhausted', 'expired', 'unknown']).optional(),
+    force: z.boolean().default(false),
+  })
+  .strict();
+export const apiKeyDetailRequestSchema = z
+  .object({ siteId: siteIdSchema, keyId: numericEntityIdSchema })
+  .strict();
+export const apiKeyGroupUpdateRequestSchema = z
+  .object({
+    siteId: siteIdSchema,
+    keyId: numericEntityIdSchema,
+    groupId: numericEntityIdSchema,
+  })
+  .strict();
+export const apiKeyBatchUsageRequestSchema = z
+  .object({
+    siteId: siteIdSchema,
+    keyIds: z.array(numericEntityIdSchema).min(1).max(100),
+  })
+  .strict();
+export const managedApiKeySchema = z
+  .object({
+    id: numericEntityIdSchema,
+    name: z.string().min(1).max(200),
+    maskedLabel: z.string().min(1).max(80),
+    status: z.enum(['active', 'disabled', 'quota-exhausted', 'expired', 'unknown']),
+    groupId: numericEntityIdSchema.optional(),
+    groupName: z.string().max(300).optional(),
+    platform: z.string().max(100).optional(),
+    effectiveRate: z.number().finite().nonnegative().optional(),
+    subscriptionType: z.string().max(100).optional(),
+    currentConcurrency: z.number().int().nonnegative().optional(),
+    quota: z.number().finite().nonnegative().optional(),
+    quotaUsed: z.number().finite().nonnegative().optional(),
+    expiresAt: z.string().max(80).optional(),
+    createdAt: z.string().max(80).optional(),
+    todayActualCost: z.number().finite().nonnegative().optional(),
+    last30DaysActualCost: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+export const apiKeyListPayloadSchema = z
+  .object({
+    items: managedApiKeySchema.array().max(100),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().nonnegative().max(100),
+    pages: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+  })
+  .strict();
+export const apiKeyGroupSchema = z
+  .object({
+    id: numericEntityIdSchema,
+    name: z.string().min(1).max(300),
+    platform: z.string().max(100).optional(),
+    status: z.string().max(80).optional(),
+    defaultRate: z.number().finite().nonnegative().optional(),
+    effectiveRate: z.number().finite().nonnegative().optional(),
+    subscriptionType: z.string().max(100).optional(),
+  })
+  .strict();
+export const apiKeyGroupsSchema = apiKeyGroupSchema.array().max(1_000);
+export const apiKeyManagementPayloadSchema = z
+  .object({
+    items: managedApiKeySchema.array().max(100),
+    groups: apiKeyGroupsSchema,
+    page: apiKeyListPayloadSchema.omit({ items: true }),
+    state: z.enum(['success', 'partial']),
+  })
+  .strict();
+export const apiKeyBatchUsageItemSchema = z
+  .object({
+    apiKeyId: numericEntityIdSchema,
+    todayActualCost: z.number().finite().nonnegative().optional(),
+    totalActualCost: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+export const apiKeyBatchUsageSchema = z.record(numericEntityIdSchema, apiKeyBatchUsageItemSchema);
+export const apiKeyDailyUsageSchema = z
+  .object({
+    apiKeyId: numericEntityIdSchema,
+    actualCost30d: z.number().finite().nonnegative().optional(),
+    days: z
+      .array(
+        z
+          .object({
+            date: z.string().min(1).max(40),
+            actualCost: z.number().finite().nonnegative().optional(),
+          })
+          .strict(),
+      )
+      .max(30),
+  })
+  .strict();
+export const usageStatsSchema = z
+  .object({
+    totalRequests: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+    totalInputTokens: z.number().int().nonnegative(),
+    totalOutputTokens: z.number().int().nonnegative(),
+    totalCacheReadTokens: z.number().int().nonnegative(),
+    totalCacheCreationTokens: z.number().int().nonnegative(),
+    totalActualCost: z.number().finite().nonnegative(),
+    totalCost: z.number().finite().nonnegative(),
+    averageDurationMs: z.number().finite().nonnegative(),
+  })
+  .strict();
+export type ApiKeyListQuery = z.input<typeof apiKeyListQuerySchema>;
+export type ApiKeyGroupUpdateRequest = z.infer<typeof apiKeyGroupUpdateRequestSchema>;
+export type ManagedApiKey = z.infer<typeof managedApiKeySchema>;
+export type ApiKeyListPayload = z.infer<typeof apiKeyListPayloadSchema>;
+export type ApiKeyGroup = z.infer<typeof apiKeyGroupSchema>;
+export type ApiKeyManagementPayload = z.infer<typeof apiKeyManagementPayloadSchema>;
+export type ApiKeyBatchUsage = z.infer<typeof apiKeyBatchUsageSchema>;
+export type ApiKeyDailyUsage = z.infer<typeof apiKeyDailyUsageSchema>;
+export type UsageStats = z.infer<typeof usageStatsSchema>;
 const normalizedChannelStatusSchema = z.enum(['normal', 'degraded', 'failed', 'unknown']);
 const channelTimelinePointSchema = z
   .object({
@@ -287,6 +426,7 @@ export const channelViewSchema = z
                 z
                   .object({
                     platform: z.string().min(1).max(100),
+                    groupIds: z.array(numericEntityIdSchema).max(500),
                     groupNames: z.array(z.string().min(1).max(200)).max(500),
                     modelNames: z.array(z.string().min(1).max(200)).max(500),
                   })

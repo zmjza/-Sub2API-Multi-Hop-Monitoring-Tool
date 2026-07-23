@@ -93,6 +93,6 @@ describe('time, titles, notification, and CSV safety', () => {
       { time: 'now', keyLabel: '=cmd', model: 'gpt', tokens: 1, actualCost: 0.1 },
     ]);
     expect(csv).toContain('\t=cmd');
-    expect(csv).not.toContain('sk-live-secret');
+    expect(csv).not.toContain('raw-key-material');
   });
 });

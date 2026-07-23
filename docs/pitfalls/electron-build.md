@@ -723,3 +723,103 @@ Renderer 使用一个全局 `state` 表示当前站点状态。自动用量扫�
 **适用范围**
 
 所有由后台轮询、最近活动、通知或路由自动切换当前实体，同时复用全局 loading/refreshing 状态的 Renderer。
+
+## electron-builder 缓存 7zz 的 linker 签名可能被 macOS 直接终止
+
+**现象**
+
+Windows NSIS 交叉构建已生成 `win-unpacked`，但压缩阶段报 `ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`，缓存目录中的 `7za` 退出码为空；直接运行其目标 `7zz` 稳定以 137 退出。
+
+**根因**
+
+缓存内 universal `7zz` 架构和执行权限正常，`codesign -dv` 仅显示 linker-generated ad-hoc 标记，但 `codesign --verify --strict` 判定未签名。当前 macOS 会在启动阶段终止该二进制。
+
+**正确做法**
+
+先复制到 `/tmp`，执行 `codesign --force --sign -` 后直接运行验证假设。验证成功后，只对 electron-builder 对应缓存的 `7zz` 补 ad-hoc 签名，再重跑原始 `npm run dist:win`，不修改 NSIS 或业务配置。
+
+**验证方式**
+
+签名后的 `7zz i` 正常输出格式列表；`npm run dist:win` 生成当前版本 NSIS 和 blockmap；安装器为 PE32，`win-unpacked` 主程序为 PE32+ x86-64。
+
+**禁止事项**
+
+不要把 137 直接归因于架构不匹配；不要为了绕过缓存问题修改发布目标、关闭系统安全机制或冒充 Windows 真机通过。
+
+**相关文件或命令**
+
+- `~/Library/Caches/electron-builder/7zip@1.0.0/.../bin/7zz`
+- `codesign --verify --strict --verbose=4 <7zz>`
+- `codesign --force --sign - <7zz>`
+- `npm run dist:win`
+
+**适用范围**
+
+Apple Silicon macOS 上使用 electron-builder/NSIS 进行 Windows x64 交叉构建。
+
+## 未签名 Electron 目录副本的手工 deep 签名可能破坏可运行性
+
+**现象**
+
+`dist:mac` 生成的 DMG 内应用可以启动并通过 E2E，但对 `release/mac-arm64/*.app` 目录副本执行普通或带 entitlement 的 `codesign --deep` 后，目录副本均以 SIGKILL 退出；严格签名校验通过也不能证明 Electron 可运行。
+
+**根因**
+
+Electron 下载包自带 linker-generated ad-hoc 签名。手工 deep 重签会改变主程序和 Framework 的签名标志、资源封装及运行时语义；即使使用 electron-builder entitlement 模板，也不等价于 electron-builder/electron-osx-sign 的完整签名流程。
+
+**正确做法**
+
+未配置正式签名身份时，以 electron-builder 生成且只读挂载的 DMG 内应用作为发布物真机对象。不要为了让 `codesign --verify --strict` 变绿而手工重签整个 `.app`。诊断中修改过的目录副本移出工作区保留，再从已验证 DMG 还原目录副本。
+
+**验证方式**
+
+直接运行 DMG 挂载点内可执行文件，并通过 `SUB2API_PACKAGED_EXECUTABLE=<mounted-app>` 执行完整 Electron E2E；同时运行 `hdiutil verify`、`file` 和 asar 版本/入口检查。
+
+**禁止事项**
+
+不要把严格签名校验失败单独当作未签名内部包不可运行；不要对最终 `.app` 盲目执行 `codesign --deep`；不要把 ad-hoc 内部包描述为开发者签名或已公证。
+
+**相关文件或命令**
+
+- `npm run dist:mac`
+- `hdiutil attach -readonly <dmg>`
+- `SUB2API_PACKAGED_EXECUTABLE=<mounted-app> npm run test:e2e`
+- `hdiutil verify <dmg>`
+
+**适用范围**
+
+本项目未签名 macOS ARM64 DMG、打包应用 E2E 和签名问题诊断。
+
+## 关闭身份发现会留下不完整 linker 签名，分发包应由 electron-builder 完成 ad-hoc 签名
+
+**现象**
+
+本机构建、DMG 挂载启动和隔离 E2E 可以通过，但把应用安装到 `/Applications` 或从下载渠道获取后可能显示损坏、无法验证或无法打开。`codesign --verify --deep --strict <app>` 报 `code has no resources but signature indicates they must be present`，顶层标识仍是 `Electron`。
+
+**根因**
+
+仅设置 `CSC_IDENTITY_AUTO_DISCOVERY=false` 会阻止 electron-builder 执行整包签名，但 Electron 主程序仍带 linker-generated ad-hoc 标记。该标记没有绑定 Info.plist 和 bundle 资源，本机无 quarantine 或关闭 Gatekeeper 时可以启动，不能代表下载分发路径安全。
+
+**正确做法**
+
+在 electron-builder 的 `mac` 配置中显式设置 `identity: "-"`，让 electron-builder/electron-osx-sign 按 Electron bundle 顺序签名主程序、Helper、Framework 和资源。不要对构建完成的 App 手工执行 `codesign --deep`。ad-hoc 签名只解决 bundle 完整性，不等于 Apple Developer ID 签名或公证。
+
+**验证方式**
+
+对最终 DMG 执行 `hdiutil verify`，只读挂载后对镜像内 App 执行 `codesign --verify --deep --strict --verbose=4`；确认标识为项目 appId、`Sealed Resources` 存在。再安装到 `/Applications`，用 LaunchServices 打开并确认前台窗口，最后以安装副本执行完整 Electron E2E。
+
+**禁止事项**
+
+不要把无 quarantine 的本机直接启动当作分发验证；不要因为 `codesign -dv` 出现 `adhoc` 就推断 bundle 签名完整；不要关闭系统安全机制作为产品修复；不要把 ad-hoc 包描述为 Apple 已信任、已公证或首次打开无提示。
+
+**相关文件或命令**
+
+- `package.json` 的 `build.mac.identity`
+- `electron/build-config.test.ts`
+- `npm run dist:mac`
+- `codesign --verify --deep --strict --verbose=4 <app>`
+- `SUB2API_PACKAGED_EXECUTABLE=<installed-executable> npm run test:e2e`
+
+**适用范围**
+
+macOS Electron 内部分发、DMG 安装、下载隔离属性与后续 Developer ID 发布流程。

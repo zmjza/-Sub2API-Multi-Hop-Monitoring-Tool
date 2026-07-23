@@ -13,7 +13,7 @@ export const previewStates = [
 ] as const;
 export type PreviewState = (typeof previewStates)[number];
 export type ThemeMode = 'light';
-export type MainShell = 'overview' | 'usage' | 'channels' | 'sites' | 'radar';
+export type MainShell = 'overview' | 'api-keys' | 'usage' | 'channels' | 'sites' | 'radar';
 export interface PreviewContext {
   state: PreviewState;
   theme: ThemeMode;
@@ -29,6 +29,7 @@ export interface PreviewContext {
   dashboard?: DashboardSnapshot;
   selectedSite?: SiteSummary;
   usageData?: unknown;
+  usageStats?: unknown;
   channelsData?: unknown;
   channelDetail?: unknown;
   selectedChannelId?: string;
@@ -40,9 +41,12 @@ export interface PreviewContext {
     groupName?: string;
     quota?: number;
     quotaUsed?: number;
+    subscriptionType?: string;
     rate?: number;
   }>;
   keyContexts?: SiteKeyContexts;
+  currentKeyStatsBySite?: Record<string, CurrentKeyStatsState>;
+  isRefreshingCurrentKeyStats?: boolean;
   usageFilterOptions?: {
     models: string[];
     groups: Array<{ id: string; name: string; rate?: number }>;
@@ -50,6 +54,7 @@ export interface PreviewContext {
   keyPreference?: { mode: 'auto' | 'manual'; keyId?: string };
   onSelectSite?: (siteId: string) => void;
   onRefreshSite?: () => void;
+  onRefreshCurrentKeyStats?: () => void;
   onRefreshFloating?: () => void;
   onPreviousSite?: () => void;
   onNextSite?: () => void;
@@ -76,7 +81,11 @@ export interface PreviewContext {
   onRefreshSiteRates?: (siteId: string) => Promise<void>;
   onRechargeRatioChange?: (siteId: string, ratio: number) => Promise<void>;
   onSelectChannel?: (channelId: string) => void;
-  onRefreshChannels?: () => void;
+  onRefreshChannels?: () => Promise<{
+    ok: boolean;
+    retryAfterSeconds?: number;
+    terminal?: boolean;
+  }>;
   floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom';
   floatingOpacity?: number;
   onFloatingPositionChange?: (
@@ -94,7 +103,7 @@ export function parsePreviewLocation(search: string): PreviewLocation {
   const params = new URLSearchParams(search);
   const surface = params.get('surface') === 'floating' ? 'floating' : 'main';
   const shellValue = params.get('shell');
-  const shell: MainShell = ['overview', 'usage', 'channels', 'sites', 'radar'].includes(
+  const shell: MainShell = ['overview', 'api-keys', 'usage', 'channels', 'sites', 'radar'].includes(
     shellValue ?? '',
   )
     ? (shellValue as MainShell)
@@ -117,3 +126,4 @@ import type {
   SiteKeyContexts,
   SiteSummary,
 } from '../../../electron/shared/contracts';
+import type { CurrentKeyStatsState } from '../shells/overview/current-key-stats';

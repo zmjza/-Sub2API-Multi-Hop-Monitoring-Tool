@@ -13,6 +13,10 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatTokenCount } from '../../lib/format';
+import openAiLogo from '../../assets/rate-platforms/openai-official.svg';
+import claudeLogo from '../../assets/rate-platforms/claude-official.svg';
+import geminiLogo from '../../assets/rate-platforms/gemini-official.svg';
+import grokLogo from '../../assets/rate-platforms/grok-official.svg';
 import type { OverviewProps } from './types';
 import { overviewSites } from './data';
 import { RechargeRatioControl } from './RechargeRatioControl';
@@ -21,7 +25,6 @@ import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
 import {
   matchGroupToChannel,
-  resolveCurrentKey,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
 import {
@@ -40,7 +43,21 @@ import {
   type RateRefreshMinutes,
   type RateChannelSnapshot,
 } from './rate-comparison';
+import {
+  aggregateCurrentKeyStats,
+  availableCreditForKey,
+  resolveEffectiveKey,
+  type CurrentKeyStatsState,
+} from './current-key-stats';
 import './overview.css';
+
+const ratePlatformLogos: Record<string, string> = {
+  openai: openAiLogo,
+  claude: claudeLogo,
+  gemini: geminiLogo,
+  grok: grokLogo,
+};
+
 export function OverviewPage(props: OverviewProps) {
   const [editingId, setEditingId] = useState<string>();
   const [draftNote, setDraftNote] = useState('');
@@ -75,6 +92,7 @@ export function OverviewPage(props: OverviewProps) {
   const inlineRequestIdRef = useRef(0);
   const channelStatusLoaderRef = useRef<RateChannelStatusLoader | null>(null);
   const comparisonRefreshPromiseRef = useRef<Promise<void> | undefined>(undefined);
+  const channelPollingLastRunRef = useRef(Date.now());
   const refreshAllRatesRef = useRef(props.onRefreshAllRates);
   refreshAllRatesRef.current = props.onRefreshAllRates;
   if (!channelStatusLoaderRef.current)
@@ -100,6 +118,13 @@ export function OverviewPage(props: OverviewProps) {
         })));
   const healthySites =
     props.dashboard?.sites.filter((site) => site.status === 'success').length ?? 0;
+  const currentKeyTotals = aggregateCurrentKeyStats(
+    liveSites.map((site) => props.currentKeyStatsBySite?.[site.id] ?? { state: 'unknown' }),
+  );
+  const currentKeyCreditLabel =
+    currentKeyTotals.counted === 0
+      ? '待查询'
+      : `$${currentKeyTotals.availableCredit.toFixed(2)}${currentKeyTotals.subscriptionCount ? ` + ${currentKeyTotals.subscriptionCount} 订阅` : ''}`;
   const rateComparisons = comparePlatformRates(
     liveSites.map((site) => ({
       siteId: site.id,
@@ -127,10 +152,10 @@ export function OverviewPage(props: OverviewProps) {
   const currentChannelContextBySite = Object.fromEntries(
     liveSites.map((site) => {
       const keyContext = keyContextForSite(site.id, props);
-      const currentKey = resolveCurrentKey(
+      const currentKey = resolveEffectiveKey(
         keyContext.keys,
         keyContext.preference,
-        'defaultKeyLabel' in site ? site.defaultKeyLabel : undefined,
+        'defaultKeyId' in site ? site.defaultKeyId : undefined,
       );
       const groups = props.rateContexts?.sites[site.id]?.groups ?? [];
       const groupName =
@@ -140,6 +165,7 @@ export function OverviewPage(props: OverviewProps) {
             rateChannelsBySite[site.id] ?? [],
             groupName,
             rateChannelRelationshipsBySite[site.id] ?? [],
+            currentKey?.groupId,
           )
         : undefined;
       return [site.id, { currentKey, groupName, match }] as const;
@@ -267,6 +293,55 @@ export function OverviewPage(props: OverviewProps) {
     }
   }, [currentChannelDetailKeys, loadInlineDetail]);
 
+  useEffect(() => {
+    if (!window.sub2apiDesktop) return;
+    let active = true;
+    const run = async () => {
+      if (!active || document.visibilityState === 'hidden') return;
+      channelPollingLastRunRef.current = Date.now();
+      const siteIds = JSON.parse(channelSiteIdsKey) as string[];
+      await Promise.allSettled(
+        siteIds.map(
+          (siteId, index) =>
+            new Promise<void>((resolve) => {
+              window.setTimeout(
+                () => {
+                  if (!active || document.visibilityState === 'hidden') {
+                    resolve();
+                    return;
+                  }
+                  void loadInlineChannels(siteId, true).finally(resolve);
+                },
+                index * 250 + Math.floor(Math.random() * 201),
+              );
+            }),
+        ),
+      );
+      if (!active) return;
+      const detailKeys = JSON.parse(currentChannelDetailKeys) as string[];
+      await Promise.allSettled(
+        detailKeys.map((key) => {
+          const separator = key.indexOf(':');
+          return loadInlineDetail(key.slice(0, separator), key.slice(separator + 1), true);
+        }),
+      );
+    };
+    const interval = window.setInterval(() => void run(), 60_000);
+    const onVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - channelPollingLastRunRef.current >= 30_000
+      )
+        void run();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [channelSiteIdsKey, currentChannelDetailKeys, loadInlineChannels, loadInlineDetail]);
+
   const refreshRateComparison = useCallback(() => {
     if (comparisonRefreshPromiseRef.current) return comparisonRefreshPromiseRef.current;
     const siteIds = JSON.parse(comparableSiteIdsKey) as string[];
@@ -294,20 +369,28 @@ export function OverviewPage(props: OverviewProps) {
       <div className="overview-metrics">
         {[
           [
-            '总余额',
-            props.dashboard ? `$${props.dashboard.totals.balance.toFixed(2)}` : '$12,450.80',
+            '所选 Key 可用额度',
+            props.dashboard ? currentKeyCreditLabel : '$12,450.80',
             WalletCards,
             'balance',
           ],
           [
             '今日消耗 Token',
-            props.dashboard ? formatTokenCount(props.dashboard.totals.todayTokens) : '1.24M',
+            props.dashboard
+              ? currentKeyTotals.counted
+                ? formatTokenCount(currentKeyTotals.totalTokens)
+                : '待查询'
+              : '1.24M',
             Clock3,
             'tokens',
           ],
           [
             '今日消耗',
-            props.dashboard ? `$${props.dashboard.totals.todayActualCost.toFixed(2)}` : '$45.20',
+            props.dashboard
+              ? currentKeyTotals.counted
+                ? `$${currentKeyTotals.totalActualCost.toFixed(2)}`
+                : '待查询'
+              : '$45.20',
             ArrowDownUp,
             'cost',
           ],
@@ -319,9 +402,7 @@ export function OverviewPage(props: OverviewProps) {
           ],
           [
             '已统计',
-            props.dashboard
-              ? `${props.dashboard.totals.counted} / ${props.dashboard.totals.total}`
-              : '24 / 28',
+            props.dashboard ? `${currentKeyTotals.counted} / ${currentKeyTotals.total}` : '24 / 28',
             Sigma,
             'counted',
           ],
@@ -337,10 +418,6 @@ export function OverviewPage(props: OverviewProps) {
       </div>
       <section className="rate-comparison-band" aria-label="跨站倍率对比">
         <div className="rate-comparison-heading">
-          <div>
-            <h2>倍率对比</h2>
-            <span>按充值比例折算后，比较各平台最低分组</span>
-          </div>
           <div className="rate-comparison-controls">
             <label>
               <select
@@ -369,66 +446,108 @@ export function OverviewPage(props: OverviewProps) {
         </div>
         {rateComparisons.length > 0 ? (
           <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">
-            {rateComparisons.map((comparison) => (
-              <article
-                key={comparison.platformKey}
-                className={`rate-platform-card rate-platform-${comparison.platformKey}`}
-                data-platform={comparison.platformKey}
-                tabIndex={0}
-                aria-label={`${comparison.platformLabel} 倍率推荐`}
-              >
-                <header>
-                  <div>
-                    <span>{comparison.platformLabel}</span>
-                    <small>{comparison.state === 'ready' ? '综合推荐' : '稳定性核验'}</small>
-                  </div>
-                  <strong>
-                    {comparison.state === 'ready' && comparison.sites[0]
-                      ? `${comparison.sites[0].totalScore.toFixed(1)} 分`
-                      : '—'}
-                  </strong>
-                </header>
-                {comparison.state === 'ready' && comparison.sites[0] ? (
-                  <>
-                    <div className="rate-platform-score-row">
-                      <span>
-                        价格 <b>{comparison.sites[0].priceScore.toFixed(1)}</b>
-                      </span>
-                      <span>
-                        稳定 <b>10.0</b>
-                      </span>
-                      <span className="rate-status-label 稳定">5 分钟稳定</span>
+            {rateComparisons.map((comparison) => {
+              const recommendation = comparison.state === 'ready' ? comparison.sites[0] : undefined;
+              const logo = ratePlatformLogos[comparison.platformKey];
+              const multiplier = recommendation
+                ? formatRateMultiplier(recommendation.effectiveRate).replace(/x$/, '')
+                : '—';
+              const stateLabel = recommendation
+                ? '稳定'
+                : comparison.state === 'checking'
+                  ? '核验中'
+                  : '待推荐';
+
+              return (
+                <article
+                  key={comparison.platformKey}
+                  className={`rate-platform-card rate-platform-${comparison.platformKey}`}
+                  data-platform={comparison.platformKey}
+                  tabIndex={0}
+                  aria-label={`${comparison.platformLabel} 倍率推荐`}
+                >
+                  <header className="rate-platform-header">
+                    <div className="rate-platform-brand">
+                      {logo ? (
+                        <img
+                          className="rate-platform-logo"
+                          src={logo}
+                          alt={`${comparison.platformLabel} 图标`}
+                        />
+                      ) : (
+                        <span className="rate-platform-logo-fallback" aria-hidden="true">
+                          <BadgePercent size={22} />
+                        </span>
+                      )}
+                      <div className="rate-platform-identity">
+                        <h3>{comparison.platformLabel}</h3>
+                        <span className={`rate-platform-badge is-${comparison.state}`}>
+                          {stateLabel}
+                        </span>
+                      </div>
                     </div>
-                    <div className="rate-platform-rate">
-                      {formatRateMultiplier(comparison.sites[0].effectiveRate)}
+                    <div className="rate-platform-multiplier">
+                      <strong>
+                        {multiplier}
+                        {recommendation ? <small>x</small> : null}
+                      </strong>
+                      <span>倍率</span>
                     </div>
-                    <article className="rate-platform-site">
-                      <b title={comparison.sites[0].siteName}>{comparison.sites[0].siteName}</b>
-                      <span title={comparison.sites[0].groups[0]?.name}>
-                        {comparison.sites[0].groups[0]?.name ?? '未命名分组'}
-                      </span>
-                      <small>
-                        原始 {formatRateMultiplier(comparison.sites[0].rawRate)} · 充值比例 1:
-                        {comparison.sites[0].ratio}
-                      </small>
-                    </article>
-                  </>
-                ) : (
-                  <div className={`rate-platform-state is-${comparison.state}`} role="status">
-                    {comparison.state === 'checking' ? (
-                      <RefreshCw size={17} className="spin" />
+                  </header>
+
+                  <div
+                    className={`rate-platform-content is-${comparison.state}`}
+                    role={recommendation ? undefined : 'status'}
+                  >
+                    {recommendation ? (
+                      <>
+                        <span className="rate-platform-state-icon" aria-hidden="true">
+                          <CheckCircle2 size={26} />
+                        </span>
+                        <p className="rate-platform-recommendation">
+                          推荐渠道：
+                          <b title={recommendation.siteName}>{recommendation.siteName}</b>
+                        </p>
+                        <div className="rate-platform-site">
+                          <span title={recommendation.groups[0]?.name}>
+                            {recommendation.groups[0]?.name ?? '未命名分组'}
+                          </span>
+                          <small>
+                            原始 {formatRateMultiplier(recommendation.rawRate)} · 充值比例 1:
+                            {recommendation.ratio}
+                          </small>
+                        </div>
+                        <div className="rate-platform-score-row">
+                          <span>
+                            价格 <b>{recommendation.priceScore.toFixed(1)}</b>
+                          </span>
+                          <span>
+                            稳定 <b>{recommendation.stabilityScore.toFixed(1)}</b>
+                          </span>
+                        </div>
+                        <span className="rate-status-label 稳定">5 分钟稳定</span>
+                      </>
                     ) : (
-                      <Activity size={17} />
+                      <>
+                        <span className="rate-platform-state-icon" aria-hidden="true">
+                          {comparison.state === 'checking' ? (
+                            <RefreshCw size={25} className="spin" />
+                          ) : (
+                            <Activity size={25} />
+                          )}
+                        </span>
+                        <strong>
+                          {comparison.state === 'checking' ? '正在核验渠道稳定性' : '暂无稳定渠道'}
+                        </strong>
+                        <small>
+                          {comparison.state === 'checking' ? '请稍候' : '正在持续核验中'}
+                        </small>
+                      </>
                     )}
-                    <span>
-                      {comparison.state === 'checking'
-                        ? '正在核验渠道稳定性'
-                        : '暂无稳定渠道可推荐'}
-                    </span>
                   </div>
-                )}
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         ) : (
           <div className="rate-comparison-empty" role="status">
@@ -474,6 +593,7 @@ export function OverviewPage(props: OverviewProps) {
           ) : (
             <div className="site-card-grid">
               {liveSites.map((site, index) => {
+                const keyStats = props.currentKeyStatsBySite?.[site.id];
                 const channelContext = currentChannelContextBySite[site.id];
                 const matchedChannel =
                   channelContext?.match?.status === 'matched'
@@ -502,7 +622,7 @@ export function OverviewPage(props: OverviewProps) {
                     }}
                   >
                     <div className="site-card-header">
-                      <span className="site-name">
+                      <span className="site-name" title={site.name}>
                         <i
                           className={
                             site.status === 'success' || site.status === '正常'
@@ -553,6 +673,9 @@ export function OverviewPage(props: OverviewProps) {
                       ) : (
                         '默认 Key · 已脱敏'
                       )}
+                      <small className="site-card-group">
+                        {channelContext?.currentKey?.groupName ?? '分组待查询'}
+                      </small>
                     </div>
                     <div className="site-card-meta">
                       <span className="site-rate-badge" title="当前 Key 倍率">
@@ -562,7 +685,7 @@ export function OverviewPage(props: OverviewProps) {
                           : '—'}
                       </span>
                       <span className="site-card-balance">
-                        <b>{formatSiteBalance(site, props)}</b>
+                        <b>{formatCurrentKeyCredit(keyStats, site, props)}</b>
                         {quotaForSite(site, props) ? (
                           <span className="quota-summary">
                             <span>
@@ -582,11 +705,7 @@ export function OverviewPage(props: OverviewProps) {
                             </small>
                           </span>
                         ) : (
-                          <small>
-                            {typeof site.todayActualCost === 'number'
-                              ? `$${site.todayActualCost.toFixed(2)} 今日`
-                              : '$0.45 今日'}
-                          </small>
+                          <small>{currentKeyStatsLabel(keyStats)}</small>
                         )}
                       </span>
                       <span className="muted">
@@ -602,25 +721,25 @@ export function OverviewPage(props: OverviewProps) {
                       <span>
                         <small>今日请求</small>
                         <b>
-                          {'todayRequests' in site && typeof site.todayRequests === 'number'
-                            ? site.todayRequests
-                            : '—'}
+                          {keyStats?.state === 'success'
+                            ? keyStats.totalRequests
+                            : keyStatValue(keyStats)}
                         </b>
                       </span>
                       <span>
                         <small>今日 Token</small>
                         <b>
-                          {'todayTokens' in site && typeof site.todayTokens === 'number'
-                            ? formatTokenCount(site.todayTokens)
-                            : '—'}
+                          {keyStats?.state === 'success'
+                            ? formatTokenCount(keyStats.totalTokens)
+                            : keyStatValue(keyStats)}
                         </b>
                       </span>
                       <span>
                         <small>今日消费</small>
                         <b>
-                          {'todayActualCost' in site && typeof site.todayActualCost === 'number'
-                            ? `$${site.todayActualCost.toFixed(4)}`
-                            : '—'}
+                          {keyStats?.state === 'success'
+                            ? `$${keyStats.totalActualCost.toFixed(4)}`
+                            : keyStatValue(keyStats)}
                         </b>
                       </span>
                     </div>
@@ -744,8 +863,6 @@ export function OverviewPage(props: OverviewProps) {
           siteId={channelPopover.siteId}
           siteName={liveSites.find((site) => site.id === channelPopover.siteId)?.name ?? '当前站点'}
           cache={channelStatusCacheBySite[channelPopover.siteId]}
-          rateGroups={props.rateContexts?.sites[channelPopover.siteId]?.groups}
-          ratio={props.rateContexts?.ratios[channelPopover.siteId]}
           loadChannels={(force) =>
             channelStatusLoaderRef.current!.loadChannels(channelPopover.siteId, force)
           }
@@ -796,6 +913,27 @@ function statusLabel(status: string): string {
   );
 }
 
+function keyStatValue(state: CurrentKeyStatsState | undefined): string {
+  return state?.state === 'loading' ? '查询中' : state?.state === 'error' ? '刷新失败' : '待查询';
+}
+
+function currentKeyStatsLabel(state: CurrentKeyStatsState | undefined): string {
+  return state?.state === 'success' ? '当前 Key 今日' : keyStatValue(state);
+}
+
+function formatCurrentKeyCredit(
+  state: CurrentKeyStatsState | undefined,
+  site: unknown,
+  props: OverviewProps,
+): string {
+  if (state?.state !== 'success') return keyStatValue(state);
+  return state.availableCredit.kind === 'amount'
+    ? `$${state.availableCredit.value.toFixed(2)}`
+    : state.availableCredit.kind === 'subscription'
+      ? '按订阅规则'
+      : formatSiteBalance(site, props);
+}
+
 function statusTone(status: string): string {
   return status === 'success'
     ? 'good'
@@ -812,21 +950,41 @@ export function quotaForSite(
     typeof site === 'object' && site !== null ? (site as { id?: string; balance?: unknown }) : {};
   if (!value.id) return undefined;
   const context = keyContextForSite(value.id, props);
-  if (context.preference.mode !== 'manual') return undefined;
-  const key = context.keys.find((candidate) => candidate.id === context.preference.keyId);
-  if (!key || typeof key.quota !== 'number' || !Number.isFinite(key.quota) || key.quota <= 0)
+  const key = resolveEffectiveKey(
+    context.keys,
+    context.preference,
+    effectiveKeyIdForSite(value.id, props),
+  );
+  if (
+    !key ||
+    key.subscriptionType?.trim() ||
+    typeof key.quota !== 'number' ||
+    !Number.isFinite(key.quota) ||
+    key.quota <= 0
+  )
     return undefined;
   const used =
     typeof key.quotaUsed === 'number' && Number.isFinite(key.quotaUsed)
       ? Math.max(0, key.quotaUsed)
       : 0;
-  const remaining = Math.max(0, key.quota - used);
+  const quotaRemaining = Math.max(0, key.quota - used);
+  const remaining =
+    typeof value.balance === 'number' && Number.isFinite(value.balance)
+      ? Math.min(Math.max(0, value.balance), quotaRemaining)
+      : quotaRemaining;
   return {
     total: key.quota,
     used,
     remaining,
     percent: Math.min(100, Math.max(0, (used / key.quota) * 100)),
   };
+}
+
+function effectiveKeyIdForSite(siteId: string, props: OverviewProps): string | undefined {
+  const site =
+    props.dashboard?.sites.find((candidate) => candidate.id === siteId) ??
+    (props.selectedSite?.id === siteId ? props.selectedSite : undefined);
+  return site?.defaultKeyId;
 }
 
 function keyContextForSite(siteId: string, props: OverviewProps) {
@@ -847,13 +1005,24 @@ function shouldShowKeySelect(siteId: string, props: OverviewProps): boolean {
 }
 
 export function formatSiteBalance(site: unknown, props: OverviewProps): string {
-  const quota = quotaForSite(site, props);
-  if (quota) return `$${quota.remaining.toFixed(2)}`;
   const value =
     typeof site === 'object' && site !== null ? (site as { id?: string; balance?: unknown }) : {};
-  return typeof value.balance === 'number'
-    ? `$${value.balance.toFixed(2)}`
-    : String(value.balance ?? '—');
+  if (!value.id) return '待查询';
+  const context = keyContextForSite(value.id, props);
+  const key = resolveEffectiveKey(
+    context.keys,
+    context.preference,
+    effectiveKeyIdForSite(value.id, props),
+  );
+  const credit = availableCreditForKey(
+    key,
+    typeof value.balance === 'number' ? value.balance : undefined,
+  );
+  return credit.kind === 'amount'
+    ? `$${credit.value.toFixed(2)}`
+    : credit.kind === 'subscription'
+      ? '按订阅规则'
+      : '待查询';
 }
 
 function siteNote(site: unknown): string {

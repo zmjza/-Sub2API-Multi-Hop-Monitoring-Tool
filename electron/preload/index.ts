@@ -7,8 +7,13 @@ import type {
   SiteSummary,
   SiteKeyContexts,
   UsageQuery,
+  UsageStats,
   RateContexts,
   RateSiteContext,
+  ApiKeyListQuery,
+  ApiKeyGroupUpdateRequest,
+  ApiKeyManagementPayload,
+  ManagedApiKey,
 } from '../shared/contracts.js';
 
 export interface DesktopBridge {
@@ -29,12 +34,15 @@ export interface DesktopBridge {
     refreshAllRateGroups(): Promise<RateContexts>;
     setRechargeRatio(siteId: string, ratio: number): Promise<RateContexts>;
     usage(query: UsageQuery): Promise<unknown>;
+    usageStats(query: UsageQuery): Promise<UsageStats>;
     usageGroups(siteId: string): Promise<unknown>;
     usageModels(siteId: string): Promise<unknown>;
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
     channels(siteId: string): Promise<unknown>;
     channelStatus(siteId: string, channelId: string): Promise<unknown>;
     keys(siteId: string): Promise<unknown>;
+    apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload>;
+    updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey>;
     keyContexts(): Promise<SiteKeyContexts>;
     keyPreference(siteId: string): Promise<unknown>;
     setKeyPreference(

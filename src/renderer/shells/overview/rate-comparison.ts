@@ -77,7 +77,7 @@ export function normalizePlatform(platform: string): { key: string; label: strin
   const key = value.toLocaleLowerCase();
   if (['openai', 'chatgpt'].includes(key)) return { key: 'openai', label: 'OpenAI' };
   if (['anthropic', 'claude'].includes(key)) return { key: 'claude', label: 'Claude' };
-  if (['google', 'gemini'].includes(key)) return { key: 'gemini', label: 'Gemini' };
+  if (['google', 'gemini', 'antigravity'].includes(key)) return { key: 'gemini', label: 'Gemini' };
   if (['xai', 'x.ai', 'grok'].includes(key)) return { key: 'grok', label: 'Grok' };
   return { key, label: value };
 }
@@ -93,7 +93,8 @@ function platformFromText(value?: string): { key: string; label: string } | unde
   if (/(^|[^a-z0-9])(openai|chatgpt|codex|gpt(?:[-_. ]?\d+)?)(?=$|[^a-z0-9])/.test(text))
     detected.add('openai');
   if (/(^|[^a-z0-9])(claude|anthropic)(?=$|[^a-z0-9])/.test(text)) detected.add('claude');
-  if (/(^|[^a-z0-9])(gemini|google[ ._-]*gemini)(?=$|[^a-z0-9])/.test(text)) detected.add('gemini');
+  if (/(^|[^a-z0-9])(gemini|google[ ._-]*gemini|antigravity)(?=$|[^a-z0-9])/.test(text))
+    detected.add('gemini');
   if (/(^|[^a-z0-9])(grok|xai|x\.ai)(?=$|[^a-z0-9])/.test(text)) detected.add('grok');
   return detected.size === 1 ? normalizePlatform([...detected][0]!) : undefined;
 }

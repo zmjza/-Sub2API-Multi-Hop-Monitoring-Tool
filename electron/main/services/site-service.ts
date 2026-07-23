@@ -19,6 +19,11 @@ import type {
   BatchSiteInput,
   RateContexts,
   RateSiteContext,
+  ApiKeyListQuery,
+  ApiKeyGroupUpdateRequest,
+  ApiKeyManagementPayload,
+  ManagedApiKey,
+  ApiKeyBatchUsage,
 } from '../../shared/contracts.js';
 import {
   apiKeySummarySchema,
@@ -53,6 +58,11 @@ export class SiteService {
   private readonly inflightRefresh = new Map<string, Promise<SiteSummary>>();
   private readonly rateStates = new Map<string, RateSiteContext>();
   private readonly inflightRateRefresh = new Map<string, Promise<RateSiteContext>>();
+  private readonly apiKeyWrites = new Map<string, Promise<ManagedApiKey>>();
+  private readonly apiKeyUsageCache = new Map<
+    string,
+    { fetchedAt: number; todayActualCost?: number; last30DaysActualCost?: number }
+  >();
   private progressListener?: (
     siteId: string,
     phase: 'profile' | 'keys' | 'groups' | 'rates' | 'usage',
@@ -541,23 +551,21 @@ export class SiteService {
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const adapter = new Sub2ApiAdapter(client);
-    const range = usageDateRange(query.period, query.startDate, query.endDate);
-    const result = await adapter.readUsage(credential.accessToken, {
-      page: query.page,
-      page_size: query.pageSize,
-      api_key_id: query.apiKeyId,
-      model: query.model,
-      group_id: query.groupId,
-      start_date: range.startDate,
-      end_date: range.endDate,
-      request_type: query.requestType,
-      billing_type: query.billingType,
-      billing_mode: query.billingMode,
-      sort_by: query.sort ? 'created_at' : undefined,
-      sort_order: query.sort,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
+    const result = await adapter.readUsage(credential.accessToken, usageUpstreamQuery(query));
     this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageList: 'supported' });
+    return result;
+  }
+
+  async usageStats(query: UsageQuery) {
+    const site = this.db.listSites().find((candidate) => candidate.id === query.siteId);
+    const credential = site ? this.vault.read(site.id) : undefined;
+    if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
+    const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+    const result = await new Sub2ApiAdapter(client).readUsageStats(
+      credential.accessToken,
+      usageUpstreamQuery(query),
+    );
+    this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageStats: 'supported' });
     return result;
   }
 
@@ -616,9 +624,116 @@ export class SiteService {
     return new Sub2ApiAdapter(client).readChannelStatus(credential.accessToken, channelId);
   }
 
+  async apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload> {
+    const { adapter, accessToken } = this.apiKeySession(query.siteId);
+    const [page, groups] = await Promise.all([
+      adapter.readApiKeyPage(accessToken, {
+        page: query.page ?? 1,
+        pageSize: query.pageSize ?? 20,
+        search: query.search,
+        groupId: query.groupId,
+        status: query.status,
+      }),
+      adapter.readApiKeyGroups(accessToken),
+    ]);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    let partial = false;
+    const today: ApiKeyBatchUsage = await adapter
+      .readBatchApiKeyUsage(
+        accessToken,
+        page.items.map((key) => key.id),
+      )
+      .catch(() => {
+        partial = true;
+        return {} as ApiKeyBatchUsage;
+      });
+    const items = await mapConcurrent(page.items, 4, async (key) => {
+      const cacheKey = `${query.siteId}:${key.id}`;
+      const cached = this.apiKeyUsageCache.get(cacheKey);
+      const fresh = cached && !query.force && Date.now() - cached.fetchedAt < 60_000;
+      let last30DaysActualCost = fresh ? cached.last30DaysActualCost : undefined;
+      if (!fresh) {
+        try {
+          last30DaysActualCost = (await adapter.readApiKeyDailyUsage(accessToken, key.id, timezone))
+            .actualCost30d;
+        } catch {
+          partial = true;
+        }
+      }
+      const todayActualCost = today[key.id]?.todayActualCost ?? cached?.todayActualCost;
+      this.apiKeyUsageCache.set(cacheKey, {
+        fetchedAt: Date.now(),
+        ...(todayActualCost === undefined ? {} : { todayActualCost }),
+        ...(last30DaysActualCost === undefined ? {} : { last30DaysActualCost }),
+      });
+      const group = groups.find((candidate) => candidate.id === key.groupId);
+      return {
+        ...key,
+        ...(key.platform || !group?.platform ? {} : { platform: group.platform }),
+        ...(key.effectiveRate !== undefined || group?.effectiveRate === undefined
+          ? {}
+          : { effectiveRate: group.effectiveRate }),
+        ...(todayActualCost === undefined ? {} : { todayActualCost }),
+        ...(last30DaysActualCost === undefined ? {} : { last30DaysActualCost }),
+      };
+    });
+    return {
+      items,
+      groups,
+      page: { page: page.page, pageSize: page.pageSize, pages: page.pages, total: page.total },
+      state: partial ? 'partial' : 'success',
+    };
+  }
+
+  updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey> {
+    const lockKey = `${input.siteId}:${input.keyId}`;
+    if (this.apiKeyWrites.has(lockKey)) return Promise.reject(new Error('KEY_UPDATE_IN_PROGRESS'));
+    const request = this.performApiKeyGroupUpdate(input).finally(() => {
+      if (this.apiKeyWrites.get(lockKey) === request) this.apiKeyWrites.delete(lockKey);
+    });
+    this.apiKeyWrites.set(lockKey, request);
+    return request;
+  }
+
+  private async performApiKeyGroupUpdate(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey> {
+    const { adapter, accessToken } = this.apiKeySession(input.siteId);
+    await adapter.updateApiKeyGroup(accessToken, input.keyId, input.groupId);
+    const confirmed = await adapter.readApiKeyDetail(accessToken, input.keyId);
+    if (confirmed.groupId !== input.groupId) throw new Error('KEY_GROUP_CONFIRMATION_FAILED');
+    this.apiKeyUsageCache.delete(`${input.siteId}:${input.keyId}`);
+    const cached = this.keys.get(input.siteId);
+    if (cached) {
+      this.keys.set(
+        input.siteId,
+        cached.map((key) =>
+          key.id === input.keyId
+            ? {
+                ...key,
+                groupId: confirmed.groupId,
+                groupName: confirmed.groupName,
+                rate: confirmed.effectiveRate,
+              }
+            : key,
+        ),
+      );
+      this.keyContextListener?.(input.siteId);
+    }
+    return confirmed;
+  }
+
+  private apiKeySession(siteId: string) {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    const credential = site ? this.vault.read(site.id) : undefined;
+    if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
+    return {
+      adapter: new Sub2ApiAdapter(new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`)),
+      accessToken: credential.accessToken,
+    };
+  }
+
   listKeys(siteId: string) {
     return (this.keys.get(siteId) ?? []).map(
-      ({ id, name, maskedLabel, status, groupId, groupName, quota, quotaUsed, rate }) => ({
+      ({
         id,
         name,
         maskedLabel,
@@ -627,6 +742,18 @@ export class SiteService {
         groupName,
         quota,
         quotaUsed,
+        subscriptionType,
+        rate,
+      }) => ({
+        id,
+        name,
+        maskedLabel,
+        status,
+        groupId,
+        groupName,
+        quota,
+        quotaUsed,
+        subscriptionType,
         rate,
       }),
     );
@@ -778,7 +905,16 @@ export class SiteService {
       errors,
       capabilities: site.capabilities,
       estimatedDurationMs: estimateDurationRange(this.durations.get(site.id) ?? []),
-      ...this.runtime.get(site.id),
+      ...(() => {
+        const runtime = this.runtime.get(site.id);
+        return runtime
+          ? {
+              defaultKeyId: runtime.keyId,
+              defaultKeyLabel: runtime.defaultKeyLabel,
+              rate: runtime.rate,
+            }
+          : {};
+      })(),
       note: this.db.getSiteNote(site.id),
     };
   }
@@ -789,6 +925,24 @@ function withRates(keys: ApiKeySummary[], rates: Map<string, number | undefined>
     ...key,
     rate: key.groupId ? rates.get(key.groupId) : undefined,
   }));
+}
+
+async function mapConcurrent<T, R>(
+  values: T[],
+  concurrency: number,
+  task: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < values.length) {
+      const index = cursor++;
+      const value = values[index];
+      if (value !== undefined) results[index] = await task(value);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker));
+  return results;
 }
 
 export function usageDateRange(
@@ -802,6 +956,25 @@ export function usageDateRange(
   const start = new Date(end);
   start.setDate(start.getDate() - (period === '30d' ? 29 : period === '7d' ? 6 : 0));
   return { startDate: formatLocalDate(start), endDate: formatLocalDate(end) };
+}
+
+function usageUpstreamQuery(query: UsageQuery): Record<string, string | number | undefined> {
+  const range = usageDateRange(query.period, query.startDate, query.endDate);
+  return {
+    page: query.page,
+    page_size: query.pageSize,
+    api_key_id: query.apiKeyId,
+    model: query.model,
+    group_id: query.groupId,
+    start_date: range.startDate,
+    end_date: range.endDate,
+    request_type: query.requestType,
+    billing_type: query.billingType,
+    billing_mode: query.billingMode,
+    sort_by: query.sort ? 'created_at' : undefined,
+    sort_order: query.sort,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
 }
 
 function formatLocalDate(value: Date): string {

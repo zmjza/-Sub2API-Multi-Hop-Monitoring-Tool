@@ -1,9 +1,19 @@
-import { normalizeApiKey } from './schemas.js';
+import { normalizeApiKey, upstreamApiKeySchema } from './schemas.js';
 import type { ApiKeySummary } from '../domain/types.js';
-import type { AvailableRateGroup } from '../../shared/contracts.js';
+import type {
+  ApiKeyBatchUsage,
+  ApiKeyDailyUsage,
+  ApiKeyGroup,
+  ApiKeyListPayload,
+  ManagedApiKey,
+  UsageStats,
+  AvailableRateGroup,
+} from '../../shared/contracts.js';
 
 interface JsonClient {
   getJson(path: string, accessToken: string, capability: string): Promise<unknown>;
+  postJson?(path: string, accessToken: string, capability: string, body: unknown): Promise<unknown>;
+  putJson?(path: string, accessToken: string, capability: string, body: unknown): Promise<unknown>;
 }
 
 export interface NormalizedUsageToday {
@@ -74,6 +84,7 @@ export interface NormalizedAvailableChannel {
   name: string;
   platforms: Array<{
     platform: string;
+    groupIds: string[];
     groupNames: string[];
     modelNames: string[];
   }>;
@@ -203,6 +214,149 @@ export class Sub2ApiAdapter {
     return items;
   }
 
+  async readApiKeyPage(
+    accessToken: string,
+    query: {
+      page: number;
+      pageSize: number;
+      search?: string;
+      groupId?: string;
+      status?: string;
+    },
+  ): Promise<ApiKeyListPayload> {
+    const params = new URLSearchParams();
+    params.set('page', String(query.page));
+    params.set('page_size', String(query.pageSize));
+    if (query.search) params.set('search', query.search);
+    if (query.groupId) params.set('group_id', query.groupId);
+    if (query.status) params.set('status', query.status === 'disabled' ? 'inactive' : query.status);
+    params.set('sort_by', 'created_at');
+    params.set('sort_order', 'desc');
+    const raw = await this.client.getJson(`/keys?${params.toString()}`, accessToken, 'keys');
+    return normalizeApiKeyPage(unwrapPayload(raw), query.page, query.pageSize);
+  }
+
+  async readApiKeyDetail(accessToken: string, keyId: string): Promise<ManagedApiKey> {
+    assertNumericId(keyId, 'API key');
+    const raw = await this.client.getJson(
+      `/keys/${encodeURIComponent(keyId)}`,
+      accessToken,
+      'apiKeyDetail',
+    );
+    return normalizeManagedApiKey(asRecord(unwrapPayload(raw)));
+  }
+
+  async updateApiKeyGroup(accessToken: string, keyId: string, groupId: string) {
+    assertNumericId(keyId, 'API key');
+    assertNumericId(groupId, 'group');
+    const putJson = requireJsonMethod(this.client.putJson, 'PUT');
+    const raw = await putJson.call(
+      this.client,
+      `/keys/${encodeURIComponent(keyId)}`,
+      accessToken,
+      'apiKeyUpdate',
+      { group_id: Number(groupId) },
+    );
+    const record = asRecord(unwrapPayload(raw));
+    return record.id === undefined ? undefined : normalizeManagedApiKey(record);
+  }
+
+  async readApiKeyGroups(accessToken: string): Promise<ApiKeyGroup[]> {
+    const [groupsRaw, ratesRaw] = await Promise.all([
+      this.client.getJson('/groups/available', accessToken, 'groups'),
+      this.client.getJson('/groups/rates', accessToken, 'groupRates').catch(() => ({})),
+    ]);
+    const rates = normalizeGroupRates(ratesRaw);
+    return asArray(unwrapPayload(groupsRaw)).flatMap((group) => {
+      const id = stringOrUndefined(group.id ?? group.group_id);
+      const name = stringOrUndefined(group.name ?? group.group_name);
+      if (!id || !name || !isSafeNumericId(id)) return [];
+      const defaultRate = numberOrUndefined(
+        group.rate_multiplier ?? group.ratio ?? group.rate ?? group.default_ratio,
+      );
+      const platform = stringOrUndefined(group.platform);
+      const status = stringOrUndefined(group.status);
+      const subscriptionType = stringOrUndefined(group.subscription_type);
+      return [
+        {
+          id,
+          name,
+          ...(platform ? { platform } : {}),
+          ...(status ? { status } : {}),
+          ...(defaultRate !== undefined && defaultRate >= 0 ? { defaultRate } : {}),
+          ...(rates[id] !== undefined
+            ? { effectiveRate: rates[id] }
+            : defaultRate !== undefined && defaultRate >= 0
+              ? { effectiveRate: defaultRate }
+              : {}),
+          ...(subscriptionType ? { subscriptionType } : {}),
+        },
+      ];
+    });
+  }
+
+  async readApiKeyGroupRates(accessToken: string): Promise<Record<string, number>> {
+    return normalizeGroupRates(
+      await this.client.getJson('/groups/rates', accessToken, 'groupRates'),
+    );
+  }
+
+  async readBatchApiKeyUsage(accessToken: string, keyIds: string[]): Promise<ApiKeyBatchUsage> {
+    const normalizedIds = [...new Set(keyIds)];
+    normalizedIds.forEach((id) => assertNumericId(id, 'API key'));
+    const postJson = requireJsonMethod(this.client.postJson, 'POST');
+    const result: ApiKeyBatchUsage = {};
+    for (let start = 0; start < normalizedIds.length; start += 100) {
+      const batch = normalizedIds.slice(start, start + 100);
+      const raw = await postJson.call(
+        this.client,
+        '/usage/dashboard/api-keys-usage',
+        accessToken,
+        'apiKeyBatchUsage',
+        { api_key_ids: batch.map(Number) },
+      );
+      const stats = asRecord(asRecord(unwrapPayload(raw)).stats);
+      for (const value of Object.values(stats)) {
+        const item = asRecord(value);
+        const apiKeyId = stringOrUndefined(item.api_key_id);
+        if (!apiKeyId || !isSafeNumericId(apiKeyId)) continue;
+        const todayActualCost = nonnegativeNumberOrUndefined(item.today_actual_cost);
+        const totalActualCost = nonnegativeNumberOrUndefined(item.total_actual_cost);
+        result[apiKeyId] = {
+          apiKeyId,
+          ...(todayActualCost !== undefined ? { todayActualCost } : {}),
+          ...(totalActualCost !== undefined ? { totalActualCost } : {}),
+        };
+      }
+    }
+    return result;
+  }
+
+  async readApiKeyDailyUsage(
+    accessToken: string,
+    keyId: string,
+    timezone: string,
+  ): Promise<ApiKeyDailyUsage> {
+    assertNumericId(keyId, 'API key');
+    const raw = await this.client.getJson(
+      `/user/api-keys/${encodeURIComponent(keyId)}/usage/daily?days=30&timezone=${encodeURIComponent(timezone)}`,
+      accessToken,
+      'apiKeyDailyUsage',
+    );
+    const days = asArray(asRecord(unwrapPayload(raw)).items).flatMap((item) => {
+      const date = stringOrUndefined(item.date);
+      if (!date) return [];
+      const actualCost = nonnegativeNumberOrUndefined(item.actual_cost);
+      return [{ date, ...(actualCost !== undefined ? { actualCost } : {}) }];
+    });
+    const costs = days.flatMap((day) => (day.actualCost === undefined ? [] : [day.actualCost]));
+    return {
+      apiKeyId: keyId,
+      ...(costs.length ? { actualCost30d: costs.reduce((sum, cost) => sum + cost, 0) } : {}),
+      days,
+    };
+  }
+
   async readChannelStatus(accessToken: string, channelId: string) {
     try {
       const raw = await this.client.getJson(
@@ -221,11 +375,34 @@ export class Sub2ApiAdapter {
   }
 
   async readUsage(accessToken: string, query: Record<string, string | number | undefined>) {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query))
-      if (value !== undefined) params.set(key, String(value));
+    const params = buildUsageParams(query, true);
     const raw = await this.client.getJson(`/usage?${params.toString()}`, accessToken, 'usageList');
     return normalizeUsagePayload(unwrapPayload(raw));
+  }
+
+  async readUsageStats(
+    accessToken: string,
+    query: Record<string, string | number | undefined>,
+  ): Promise<UsageStats> {
+    const params = buildUsageParams(query, false);
+    const raw = await this.client.getJson(
+      `/usage/stats?${params.toString()}`,
+      accessToken,
+      'usageStats',
+    );
+    const stats = asRecord(unwrapPayload(raw));
+    return {
+      totalRequests: nonnegativeNumberOrUndefined(stats.total_requests) ?? 0,
+      totalTokens: nonnegativeNumberOrUndefined(stats.total_tokens) ?? 0,
+      totalInputTokens: nonnegativeNumberOrUndefined(stats.total_input_tokens) ?? 0,
+      totalOutputTokens: nonnegativeNumberOrUndefined(stats.total_output_tokens) ?? 0,
+      totalCacheReadTokens: nonnegativeNumberOrUndefined(stats.total_cache_read_tokens) ?? 0,
+      totalCacheCreationTokens:
+        nonnegativeNumberOrUndefined(stats.total_cache_creation_tokens) ?? 0,
+      totalActualCost: nonnegativeNumberOrUndefined(stats.total_actual_cost) ?? 0,
+      totalCost: nonnegativeNumberOrUndefined(stats.total_cost) ?? 0,
+      averageDurationMs: nonnegativeNumberOrUndefined(stats.average_duration_ms) ?? 0,
+    };
   }
 
   async readUsageFilters(accessToken: string, timezone: string) {
@@ -340,6 +517,11 @@ function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[
       return [
         {
           platform,
+          groupIds: asArray(section.groups).flatMap((groupEntry) => {
+            const group = asRecord(groupEntry);
+            const groupId = stringOrUndefined(group.id ?? group.group_id);
+            return groupId && isSafeNumericId(groupId) ? [groupId] : [];
+          }),
           groupNames: asArray(section.groups).flatMap((groupEntry) => {
             const group = asRecord(groupEntry);
             const groupName = stringOrUndefined(group.name ?? group.group_name);
@@ -355,6 +537,131 @@ function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[
     });
     return platforms.length ? [{ name, platforms }] : [];
   });
+}
+
+function normalizeApiKeyPage(
+  value: unknown,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): ApiKeyListPayload {
+  const container = asRecord(value);
+  const items = asArray(value).map(normalizeManagedApiKey);
+  return {
+    items,
+    page: Math.max(1, Math.trunc(numberOrUndefined(container.page) ?? fallbackPage)),
+    pageSize: Math.max(
+      0,
+      Math.trunc(numberOrUndefined(container.page_size ?? container.pageSize) ?? fallbackPageSize),
+    ),
+    pages: Math.max(0, Math.trunc(numberOrUndefined(container.pages) ?? (items.length ? 1 : 0))),
+    total: Math.max(0, Math.trunc(numberOrUndefined(container.total) ?? items.length)),
+  };
+}
+
+function normalizeManagedApiKey(value: unknown): ManagedApiKey {
+  const parsed = upstreamApiKeySchema.parse(value);
+  const group = asRecord(parsed.group);
+  const id = String(parsed.id);
+  assertNumericId(id, 'API key');
+  const rawKey = parsed.key ?? '';
+  const groupId = stringOrUndefined(parsed.group_id ?? group.id);
+  const quota = nonnegativeNumberOrUndefined(parsed.quota);
+  const quotaUsed = nonnegativeNumberOrUndefined(parsed.quota_used);
+  const expiresAt = stringOrUndefined(parsed.expires_at);
+  const embeddedRate = nonnegativeNumberOrUndefined(group.rate_multiplier);
+  const rawStatus = String(parsed.status ?? '').toLowerCase();
+  const expiredAt = Date.parse(expiresAt ?? '');
+  const status: ManagedApiKey['status'] =
+    Number.isFinite(expiredAt) && expiredAt <= Date.now()
+      ? 'expired'
+      : quota !== undefined && quota > 0 && quotaUsed !== undefined && quotaUsed >= quota
+        ? 'quota-exhausted'
+        : rawStatus === 'active' || rawStatus === 'enabled'
+          ? 'active'
+          : rawStatus === 'inactive' || rawStatus === 'disabled'
+            ? 'disabled'
+            : 'unknown';
+  return {
+    id,
+    name: (parsed.name?.trim() || '未命名 Key').slice(0, 200),
+    maskedLabel: `sk-xxx...${(rawKey ? rawKey.slice(-4) : id.slice(-4)).padStart(4, 'x')}`,
+    status,
+    ...(groupId && isSafeNumericId(groupId) ? { groupId } : {}),
+    ...(stringOrUndefined(group.name) ? { groupName: stringOrUndefined(group.name) } : {}),
+    ...(stringOrUndefined(group.platform) ? { platform: stringOrUndefined(group.platform) } : {}),
+    ...(embeddedRate !== undefined ? { effectiveRate: embeddedRate } : {}),
+    ...(stringOrUndefined(group.subscription_type)
+      ? { subscriptionType: stringOrUndefined(group.subscription_type) }
+      : {}),
+    ...(nonnegativeNumberOrUndefined(parsed.current_concurrency) !== undefined
+      ? { currentConcurrency: nonnegativeNumberOrUndefined(parsed.current_concurrency) }
+      : {}),
+    ...(quota !== undefined ? { quota } : {}),
+    ...(quotaUsed !== undefined ? { quotaUsed } : {}),
+    ...(expiresAt ? { expiresAt } : {}),
+    ...(stringOrUndefined(parsed.created_at) ? { createdAt: parsed.created_at } : {}),
+  };
+}
+
+function normalizeGroupRates(value: unknown): Record<string, number> {
+  const rates: Record<string, number> = {};
+  for (const [id, rawRate] of Object.entries(asRecord(unwrapPayload(value)))) {
+    const rate = nonnegativeNumberOrUndefined(rawRate);
+    if (isSafeNumericId(id) && rate !== undefined) rates[id] = rate;
+  }
+  return rates;
+}
+
+const usageFilterKeys = [
+  'api_key_id',
+  'model',
+  'group_id',
+  'request_type',
+  'billing_type',
+  'billing_mode',
+  'start_date',
+  'end_date',
+  'period',
+  'timezone',
+] as const;
+
+function buildUsageParams(
+  query: Record<string, string | number | undefined>,
+  includePagination: boolean,
+): URLSearchParams {
+  const params = new URLSearchParams();
+  if (includePagination) {
+    for (const key of ['page', 'page_size', 'sort_by', 'sort_order'] as const) {
+      const value = query[key];
+      if (value !== undefined) params.set(key, String(value));
+    }
+  }
+  for (const key of usageFilterKeys) {
+    const value = query[key];
+    if (value !== undefined && String(value).trim()) params.set(key, String(value));
+  }
+  return params;
+}
+
+function assertNumericId(value: string, label: string): void {
+  if (!isSafeNumericId(value)) throw new Error(`Invalid ${label} ID`);
+}
+
+function isSafeNumericId(value: string): boolean {
+  return (
+    /^\d+$/.test(value) &&
+    value.length <= 128 &&
+    Number.isSafeInteger(Number(value)) &&
+    Number(value) > 0
+  );
+}
+
+function requireJsonMethod<T extends (...args: never[]) => Promise<unknown>>(
+  method: T | undefined,
+  verb: string,
+): T {
+  if (!method) throw new Error(`${verb} JSON is not supported by this client`);
+  return method;
 }
 
 function normalizeChannelSummary(input: Record<string, unknown>): NormalizedChannelSummary {
@@ -535,6 +842,11 @@ function numberOrUndefined(value: unknown): number | undefined {
     : typeof value === 'string' && value.trim() && Number.isFinite(Number(value))
       ? Number(value)
       : undefined;
+}
+
+function nonnegativeNumberOrUndefined(value: unknown): number | undefined {
+  const number = numberOrUndefined(value);
+  return number !== undefined && number >= 0 ? number : undefined;
 }
 
 function stringOrUndefined(value: unknown): string | undefined {

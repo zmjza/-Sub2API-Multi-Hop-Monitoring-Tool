@@ -1,5 +1,18 @@
 # Stitch 产物登记
 
+## 倍率对比增量项目（2026-07-21）
+
+- Project Title：`空间视觉优化方案`
+- Project ID：`15431967796154605995`
+- Screen Title：`中文标签版倍率对比卡片组`
+- Screen ID：`227212f94b9b427e887875644935ab9e`
+- 目录：`15431967796154605995/01-rate-comparison/`
+- HTML：`screen.html`，第一视觉事实来源。
+- 截图：`screenshot.png`，实际下载为 `2560×790` 的头部裁切，仅用于标题和控制区校对。
+- HTML 引用的 OpenAI、Claude、Gemini、Grok PNG 已下载到 `src/renderer/assets/rate-platforms/`，运行时不再访问远程资源；Antigravity 使用 Gemini 图标。
+
+该增量只承接“全部站点”的倍率对比带，不替换下方站点卡片或其他 Screen。原始 HTML 不修改；真实业务继续由现有 Renderer 数据流提供。
+
 项目：`Sub2API 桌面监控台`
 Project ID：`10340103531009759971`
 设备类型：Desktop

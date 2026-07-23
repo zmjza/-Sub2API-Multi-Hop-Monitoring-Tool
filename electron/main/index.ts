@@ -30,6 +30,7 @@ import {
   siteSummarySchema,
   dashboardSnapshotSchema,
   usagePayloadSchema,
+  usageStatsSchema,
   channelViewSchema,
   channelDetailViewSchema,
   apiKeySummarySchema,
@@ -37,6 +38,10 @@ import {
   rateContextsSchema,
   rateSiteContextSchema,
   rechargeRatioRequestSchema,
+  apiKeyListQuerySchema,
+  apiKeyGroupUpdateRequestSchema,
+  apiKeyManagementPayloadSchema,
+  managedApiKeySchema,
 } from '../shared/contracts.js';
 import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
@@ -179,6 +184,9 @@ function registerIpc() {
   ipcMain.handle('usage:list', async (_event, input: unknown) =>
     usagePayloadSchema.parse(await siteService.usage(usageQuerySchema.parse(input))),
   );
+  ipcMain.handle('usage:stats', async (_event, input: unknown) =>
+    usageStatsSchema.parse(await siteService.usageStats(usageQuerySchema.parse(input))),
+  );
   ipcMain.handle('usage:groups', async (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
     return usageFilterOptionsSchema.shape.groups.parse(await siteService.usageGroups(siteId));
@@ -204,7 +212,21 @@ function registerIpc() {
   });
   ipcMain.handle('channels:list', async (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
-    const result = channelViewSchema.parse(await siteService.channels(siteId));
+    let result;
+    try {
+      result = channelViewSchema.parse(await siteService.channels(siteId));
+    } catch (error) {
+      const retryAfterSeconds = safeRetryAfterSeconds(error);
+      const code = safeErrorCode(error);
+      throw new Error(
+        code === 'AUTH_REQUIRED'
+          ? 'CHANNEL_AUTH_REQUIRED'
+          : retryAfterSeconds === undefined
+            ? 'CHANNEL_REFRESH_FAILED'
+            : `CHANNEL_REFRESH_FAILED RETRY_AFTER=${retryAfterSeconds}`,
+        { cause: error },
+      );
+    }
     const settings = siteService.getNotificationSettings();
     const siteName =
       siteService.listSites().sites.find((site) => site.id === siteId)?.name ?? '当前站点';
@@ -231,6 +253,16 @@ function registerIpc() {
     apiKeySummarySchema
       .array()
       .parse(siteService.listKeys(refreshRequestSchema.parse({ siteId: input }).siteId)),
+  );
+  ipcMain.handle('api-keys:list', async (_event, input: unknown) =>
+    apiKeyManagementPayloadSchema.parse(
+      await siteService.apiKeys(apiKeyListQuerySchema.parse(input)),
+    ),
+  );
+  ipcMain.handle('api-keys:update-group', async (_event, input: unknown) =>
+    managedApiKeySchema.parse(
+      await siteService.updateApiKeyGroup(apiKeyGroupUpdateRequestSchema.parse(input)),
+    ),
   );
   ipcMain.handle('keys:contexts', () => siteKeyContextsSchema.parse(siteService.listKeyContexts()));
   ipcMain.handle('keys:preference:get', (_event, input: unknown) =>
@@ -291,6 +323,16 @@ function registerIpc() {
     if (!settings.floatingEnabled) floatingWindow?.hide();
     return settings;
   });
+}
+
+function safeRetryAfterSeconds(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('retryAfterSeconds' in error)) return undefined;
+  const value = Number(error.retryAfterSeconds);
+  return Number.isFinite(value) && value >= 0 ? Math.min(86_400, Math.ceil(value)) : undefined;
+}
+
+function safeErrorCode(error: unknown): string | undefined {
+  return error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined;
 }
 
 function scheduleRefreshLoops() {

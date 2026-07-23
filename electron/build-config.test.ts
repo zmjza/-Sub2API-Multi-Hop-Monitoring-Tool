@@ -10,7 +10,7 @@ interface PackageManifest {
     productName?: string;
     artifactName?: string;
     executableName?: string;
-    mac?: { icon?: string; target?: string | string[] };
+    mac?: { icon?: string; target?: string | string[]; identity?: string };
     win?: { icon?: string; target?: string | string[]; executableName?: string };
   };
 }
@@ -20,8 +20,8 @@ describe('electron-builder manifest', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
 
-    expect(manifest.version).toBe('1.3.5');
-    expect(preloadSource).toContain("shellVersion: '1.3.5'");
+    expect(manifest.version).toBe('1.4.1');
+    expect(preloadSource).toContain("shellVersion: '1.4.1'");
   });
 
   it('keeps Electron as a build-time dependency', () => {
@@ -41,7 +41,7 @@ describe('electron-builder manifest', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
 
     expect(manifest.build?.mac).toEqual(
-      expect.objectContaining({ icon: 'build/icon.icns', target: ['dmg'] }),
+      expect.objectContaining({ icon: 'build/icon.icns', target: ['dmg'], identity: '-' }),
     );
     expect(manifest.build?.win).toEqual(
       expect.objectContaining({ icon: 'build/icon.ico', target: ['nsis'] }),

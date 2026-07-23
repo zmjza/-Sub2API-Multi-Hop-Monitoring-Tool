@@ -2,6 +2,7 @@ import type {
   ChannelDetailPayload,
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
+import { channelPollingDelay, retryAfterSecondsFromError } from '../../channel-polling';
 
 interface ChannelStatusApi {
   readChannels(siteId: string): Promise<ChannelViewPayload>;
@@ -41,6 +42,8 @@ export class RateChannelStatusLoader {
   private readonly channelRequests = new Map<string, Promise<ChannelViewPayload>>();
   private readonly detailRequests = new Map<string, Promise<ChannelDetailPayload>>();
   private readonly revisions = new Map<string, number>();
+  private readonly channelFailures = new Map<string, number>();
+  private readonly channelBackoffUntil = new Map<string, number>();
 
   constructor(
     private readonly api: ChannelStatusApi,
@@ -59,6 +62,14 @@ export class RateChannelStatusLoader {
   }
 
   async loadChannels(siteId: string, force = false): Promise<ChannelViewPayload> {
+    const blockedUntil = this.channelBackoffUntil.get(siteId) ?? 0;
+    if (force && blockedUntil > Date.now()) {
+      const cached = this.channelCache.get(siteId);
+      if (cached?.state === 'unsupported') return cached;
+      if (blockedUntil === Number.POSITIVE_INFINITY) throw new Error('CHANNEL_AUTH_REQUIRED');
+      if (cached) return cached;
+      throw new Error('CHANNEL_REFRESH_BACKOFF');
+    }
     if (!force) {
       const cached = this.channelCache.get(siteId);
       if (cached) return cached;
@@ -71,8 +82,24 @@ export class RateChannelStatusLoader {
     this.channelRequests.set(siteId, request);
     try {
       const value = await request;
-      if (this.revisions.get(revisionKey) === revision) this.channelCache.set(siteId, value);
+      if (this.revisions.get(revisionKey) === revision) {
+        this.channelCache.set(siteId, value);
+        this.channelFailures.delete(siteId);
+        if (value.state === 'unsupported')
+          this.channelBackoffUntil.set(siteId, Number.POSITIVE_INFINITY);
+        else this.channelBackoffUntil.delete(siteId);
+      }
       return value;
+    } catch (error) {
+      const failures = this.channelFailures.get(siteId) ?? 0;
+      this.channelFailures.set(siteId, failures + 1);
+      this.channelBackoffUntil.set(
+        siteId,
+        error instanceof Error && error.message.includes('CHANNEL_AUTH_REQUIRED')
+          ? Number.POSITIVE_INFINITY
+          : Date.now() + channelPollingDelay(failures, retryAfterSecondsFromError(error)),
+      );
+      throw error;
     } finally {
       if (this.channelRequests.get(siteId) === request) this.channelRequests.delete(siteId);
     }
@@ -123,19 +150,22 @@ export class RateChannelStatusLoader {
 let desktopLoader: RateChannelStatusLoader | undefined;
 
 export function desktopRateChannelStatusLoader(): RateChannelStatusLoader {
-  desktopLoader ??= new RateChannelStatusLoader({
-    readChannels: async (siteId) => {
-      const value = await window.sub2apiDesktop?.sites.channels(siteId);
-      if (!value || typeof value !== 'object' || !('state' in value))
-        throw new Error('Invalid channel list response');
-      return value as ChannelViewPayload;
+  desktopLoader ??= new RateChannelStatusLoader(
+    {
+      readChannels: async (siteId) => {
+        const value = await window.sub2apiDesktop?.sites.channels(siteId);
+        if (!value || typeof value !== 'object' || !('state' in value))
+          throw new Error('Invalid channel list response');
+        return value as ChannelViewPayload;
+      },
+      readDetail: async (siteId, channelId) => {
+        const value = await window.sub2apiDesktop?.sites.channelStatus(siteId, channelId);
+        if (!value || typeof value !== 'object' || !('state' in value))
+          throw new Error('Invalid channel detail response');
+        return value as ChannelDetailPayload;
+      },
     },
-    readDetail: async (siteId, channelId) => {
-      const value = await window.sub2apiDesktop?.sites.channelStatus(siteId, channelId);
-      if (!value || typeof value !== 'object' || !('state' in value))
-        throw new Error('Invalid channel detail response');
-      return value as ChannelDetailPayload;
-    },
-  });
+    2,
+  );
   return desktopLoader;
 }

@@ -31,6 +31,31 @@ export const refreshResponseSchema = z.object({
   data: sessionDataSchema,
 });
 
+export const upstreamApiKeySchema = z
+  .object({
+    id: z.union([z.string(), z.number()]),
+    key: z.string().optional(),
+    name: z.string().optional(),
+    group_id: z.union([z.string(), z.number()]).nullish(),
+    status: z.string().optional(),
+    quota: z.union([z.string(), z.number()]).optional(),
+    quota_used: z.union([z.string(), z.number()]).optional(),
+    expires_at: z.string().nullish(),
+    created_at: z.string().optional(),
+    current_concurrency: z.union([z.string(), z.number()]).optional(),
+    group: z
+      .object({
+        id: z.union([z.string(), z.number()]).optional(),
+        name: z.string().optional(),
+        platform: z.string().optional(),
+        rate_multiplier: z.union([z.string(), z.number()]).optional(),
+        subscription_type: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
 export function normalizeApiKey(input: Record<string, unknown>): ApiKeySummary {
   const name = typeof input.name === 'string' && input.name ? input.name : '未命名 Key';
   const rawStatus = String(input.status ?? 'active').toLowerCase();
@@ -54,6 +79,10 @@ export function normalizeApiKey(input: Record<string, unknown>): ApiKeySummary {
         : undefined,
     quota: numberOrUndefined(input.quota),
     quotaUsed: numberOrUndefined(input.quota_used),
+    subscriptionType:
+      typeof group.subscription_type === 'string' && group.subscription_type.trim()
+        ? group.subscription_type.trim().slice(0, 100)
+        : undefined,
   };
 }
 

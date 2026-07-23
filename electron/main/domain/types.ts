@@ -21,6 +21,7 @@ export interface ApiKeySummary {
   groupName?: string;
   quota?: number;
   quotaUsed?: number;
+  subscriptionType?: string;
   rate?: number;
 }
 
@@ -44,5 +45,6 @@ export interface SafeError {
   message: string;
   capability?: string;
   httpStatus?: number;
+  retryAfterSeconds?: number;
   retryable: boolean;
 }

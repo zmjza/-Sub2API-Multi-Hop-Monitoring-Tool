@@ -292,3 +292,98 @@ Key context 事件、使用记录分阶段筛选、站点刷新和任何跨页�
 **适用范围**
 
 倍率、使用记录、渠道状态及后续任何独立于核心站点刷新的鉴权请求。
+
+## sub2api handler 注释不能替代真实路由注册事实
+
+**现象**
+
+上游部分 handler 注释或命名使用 `api-keys`，但普通用户 API Key 的真实注册路径是 `/api/v1/keys`；按注释拼接会得到 404。
+
+**根因**
+
+代码注释、handler 名称和 Router 注册路径不是同一证据层级，历史重命名后可能不同步。
+
+**正确做法**
+
+接口文档和 adapter 以固定上游提交的 Router 注册、请求 schema 和响应 schema 为准，并用授权站点真实请求复核。当前 Key 列表、详情和更新路径分别为 `/keys`、`/keys/{id}` 和 `/keys/{id}`。
+
+**验证方式**
+
+adapter 单测断言实际 URL；两个授权站点对 `/api/v1/keys` 完成分页读取，并对单 Key PUT、GET 回读及原分组恢复成功。
+
+**禁止事项**
+
+不要根据注释臆造 `/api/v1/api-keys`；不要因一个二开站 404 就静默改用 `/admin/*`。
+
+**相关文件或命令**
+
+- `electron/main/adapters/sub2api-adapter.ts`
+- `electron/main/adapters/sub2api-adapter.test.ts`
+- `scripts/verify-real-sites.mjs`
+
+**适用范围**
+
+sub2api 普通用户 API Key 列表、详情、更新和后续上游路由核对。
+
+## Turnstile 登录失败不能包装成接口不支持或真机通过
+
+**现象**
+
+某授权站首页可访问且用户现有浏览器会话中的 `/keys` 页面正常，但 API 密码登录返回 HTTP 400 `turnstile verification failed`，Electron 无法取得会话执行写入验证。
+
+**根因**
+
+该二开站在登录链路强制 Turnstile，人机验证属于站点认证策略，不代表 Key 接口缺失，也不能由普通 API 客户端安全绕过。
+
+**正确做法**
+
+把结果记录为认证受阻。可以使用用户已有登录会话只读确认页面与脱敏 Key 能力，但必须把 Electron 登录、分组写入和恢复标为未验证；其他可登录站点继续完成可恢复写入测试。
+
+**验证方式**
+
+记录 HTTP 400 的脱敏错误类别和已有浏览器会话的只读页面事实；最终报告明确区分两站 `verified-and-restored` 与该站 Turnstile 阻断。
+
+**禁止事项**
+
+不要绕过验证码、持久化浏览器凭据或复制完整 Key；不要把浏览器页面可见写成 Electron 登录或分组写入通过。
+
+**相关文件或命令**
+
+- `scripts/verify-real-sites.mjs`
+- `liran_docs/09-真机实测.md`
+
+**适用范围**
+
+带 Turnstile、验证码或其他交互式人机验证的 sub2api 二开站认证与真机结论。
+
+## 429 退避只应跨 IPC 传递安全 Retry-After 元数据
+
+**现象**
+
+Renderer 需要按站点的 `Retry-After` 调整渠道轮询，但若直接透传 HTTP 错误对象，响应体、请求上下文或认证细节可能越过 IPC。
+
+**根因**
+
+普通 Error 字符串不足以表达退避秒数，原始 HTTP 客户端错误又包含超出 Renderer 所需的敏感或不稳定字段。
+
+**正确做法**
+
+HTTP 层只解析合法的 `Retry-After` 秒数或日期并规范化为安全数值，主进程错误模型仅保留错误类别与该数值。Renderer 以其为优先退避依据，否则使用 2/4/8/15 分钟序列。
+
+**验证方式**
+
+HTTP client 单测覆盖秒数、日期、非法值和无 header；IPC/调度单测确认不包含响应体、Token、完整 URL 查询或 headers。
+
+**禁止事项**
+
+不要把原始 response、headers 或 body 传给 Renderer；不要在 429 时继续按 30/60 秒频率请求。
+
+**相关文件或命令**
+
+- `electron/main/adapters/http-client.ts`
+- `electron/main/adapters/http-client.test.ts`
+- `src/renderer/channel-polling.ts`
+
+**适用范围**
+
+渠道实时监控和后续任何需要跨 IPC 协调 HTTP 限流退避的轮询任务。

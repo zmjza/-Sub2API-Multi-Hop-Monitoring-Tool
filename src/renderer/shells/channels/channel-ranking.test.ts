@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  channelRatePresentation,
   channelSyncPresentation,
+  currentKeyGroup,
   currentKeyGroupName,
   detailForDisplayedChannel,
-  formatRateLabel,
-  groupRateForChannel,
   isChannelDataStale,
   latestChannelCheckedAt,
   latestTimelinePoint,
@@ -46,7 +44,7 @@ describe('rankChannels', () => {
       ),
     ).toMatchObject({ status: 'matched', channel: { id: 'exact' }, basis: 'name' });
     expect(matchGroupToChannel([{ id: 'contains', name: '高速目标分组备用' }], '目标分组')).toEqual(
-      { status: 'unmatched' },
+      { status: 'unmatched', basis: 'none' },
     );
   });
 
@@ -99,6 +97,62 @@ describe('rankChannels', () => {
     ).toMatchObject({ status: 'matched', channel: { id: 'codex' }, basis: 'relationship' });
   });
 
+  it('uses the key group id relationship before a misleading exact monitor name', () => {
+    const result = matchGroupToChannel(
+      [
+        { id: 'legacy', name: '同名分组', platform: 'anthropic', primaryModel: 'claude-opus-4' },
+        { id: 'linked', name: 'codex', platform: 'openai', primaryModel: 'gpt-5.4' },
+      ],
+      '同名分组',
+      [
+        {
+          name: 'codex',
+          platforms: [
+            {
+              platform: 'openai',
+              groupIds: ['group-42'],
+              groupNames: ['另一个显示名'],
+              modelNames: ['gpt-5.4'],
+            },
+          ],
+        },
+      ],
+      'group-42',
+    );
+
+    expect(result).toMatchObject({
+      status: 'matched',
+      channel: { id: 'linked' },
+      basis: 'group-id',
+    });
+  });
+
+  it('reports group-id relationship ambiguity instead of selecting the first monitor', () => {
+    const result = matchGroupToChannel(
+      [
+        { id: 'one', name: 'one', platform: 'openai', primaryModel: 'gpt-5.4' },
+        { id: 'two', name: 'two', platform: 'openai', primaryModel: 'gpt-5.4' },
+      ],
+      '新站分组',
+      [
+        {
+          name: 'codex',
+          platforms: [
+            {
+              platform: 'openai',
+              groupIds: ['group-42'],
+              groupNames: ['新站分组'],
+              modelNames: ['gpt-5.4'],
+            },
+          ],
+        },
+      ],
+      'group-42',
+    );
+
+    expect(result).toMatchObject({ status: 'ambiguous', basis: 'group-id' });
+  });
+
   it('does not invent an automatic current key when the default label is absent', () => {
     expect(
       currentKeyGroupName(
@@ -109,33 +163,6 @@ describe('rankChannels', () => {
     ).toBeUndefined();
   });
 
-  it('builds rate badge states from the channel own unique group and site ratio', () => {
-    const channel = { id: 'channel', name: '独立分组' };
-    expect(
-      channelRatePresentation(channel, [{ id: 'group', name: '独立分组', rate: 0.5 }], 10, [
-        channel,
-      ]),
-    ).toEqual({
-      state: 'ready',
-      label: '折算 0.05x',
-      title: '原始倍率 0.5x · 充值比例 1:10 · 折算结果 0.05x',
-      rawRate: 0.5,
-      effectiveRate: 0.05,
-    });
-    expect(channelRatePresentation(channel, undefined, 10, [channel])).toMatchObject({
-      state: 'loading',
-    });
-    expect(
-      channelRatePresentation(channel, [{ id: 'group', name: '独立分组', rate: 0.5 }], undefined, [
-        channel,
-      ]),
-    ).toMatchObject({ state: 'unset', label: '未设置倍率' });
-    expect(
-      channelRatePresentation(channel, [{ id: 'group', name: '其他分组', rate: 0.5 }], 10, [
-        channel,
-      ]),
-    ).toMatchObject({ state: 'unavailable', label: '倍率不可用' });
-  });
   it('reports app synchronization success even when the relay reports a failed channel', () => {
     const payload = {
       state: 'supported',
@@ -287,6 +314,16 @@ describe('rankChannels', () => {
     ).toBe('ChatGPT-Plus【高并发-特惠通道】');
   });
 
+  it('keeps the current key group id together with its display name', () => {
+    expect(
+      currentKeyGroup(
+        [{ id: 'key-1', maskedLabel: 'key-one', groupId: 'group-1' }],
+        [{ id: 'group-1', name: '结构化分组' }],
+        { mode: 'manual', keyId: 'key-1' },
+      ),
+    ).toEqual({ groupId: 'group-1', groupName: '结构化分组' });
+  });
+
   it('uses the group name embedded in the current key when group filters are unavailable', () => {
     expect(
       currentKeyGroupName(
@@ -303,30 +340,6 @@ describe('rankChannels', () => {
         'maok · ••••',
       ),
     ).toBe('ChatGPT-Plus【高并发-特惠通道】');
-  });
-
-  it('formats the current key group multiplier without duplicating the suffix', () => {
-    expect(formatRateLabel(0.2)).toBe('0.2x');
-    expect(formatRateLabel(undefined)).toBeUndefined();
-  });
-
-  it('maps a live group multiplier to its matching channel', () => {
-    expect(
-      groupRateForChannel({ name: 'ChatGPT-Plus【高并发-特惠通道】', groupName: '' }, [
-        { id: '25', name: 'ChatGPT-Plus【高并发-特惠通道】', rate: 0.2 },
-      ]),
-    ).toBe(0.2);
-  });
-
-  it('does not infer a group multiplier from semantic monitor words', () => {
-    const stationChannels = [
-      { id: 'sale', name: '特价分组监控' },
-      { id: 'plus', name: 'plus池监控' },
-    ];
-    const groups = [{ id: 'sale-group', name: '限时特价', rate: 0.025 }];
-
-    expect(groupRateForChannel(stationChannels[0], groups, stationChannels)).toBeUndefined();
-    expect(groupRateForChannel(stationChannels[1], groups, stationChannels)).toBeUndefined();
   });
 
   it('uses channel monitor timestamps instead of the site balance refresh time', () => {

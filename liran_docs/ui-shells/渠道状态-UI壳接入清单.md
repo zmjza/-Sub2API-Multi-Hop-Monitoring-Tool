@@ -1,5 +1,27 @@
 # 渠道状态 UI 壳接入清单
 
+## 2026-07-23 低频实时监控、结构化关联与去倍率增量
+
+本增量保留现有渠道列表/详情布局，只在主窗口相关页面可见时启用轮询；悬浮窗、隐藏、最小化或后台暂停。默认 `60s`，用户可选 `30/60/120s` 且不得低于 `30s`；恢复可见且缓存超过 `30s` 时立即刷新。定时只读取 `/channel-monitors` 概览，详情 `/channel-monitors/{id}/status` 仅为当前查看或已关联渠道按需读取。刷新保留旧数据，并显示最后更新时间、倒计时、暂停/退避/刷新中。
+
+关联优先链为 `Key.group_id → /groups/available → /channels/available 分组 ID → 渠道 → monitor`，本地关系必须保留 groupId；名称、平台、`monitor.group_name` 和模型只用于交叉确认，模糊匹配只接受唯一高置信结果。九态为正常、降级、异常、未知、数据过期、刷新失败、未关联、关联不明确和不支持；只有远程明确失败才显示异常。
+
+### 逐文件接入计划
+
+| 文件                                                                                                                                                                                                                                               | 计划修改                                                                                    | 接口、状态与事件入口                                                         | 边界与失败测试                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `src/renderer/shells/channels/ChannelsPage.tsx`                                                                                                                                                                                                    | 接入轮询反馈和间隔选择；删除 BadgePercent、倍率徽标、倍率不可用/折算文案、tooltip/占位      | visibility、countdown、lastUpdated、refreshing、backoff、九态                | hidden/minimized 不请求；刷新保留卡片；DOM 无渠道倍率展示                  |
+| `src/renderer/shells/channels/types.ts`                                                                                                                                                                                                            | 增加 monitor freshness、backoff、relation groupId 和九态联合；删除仅供渠道折算的 view props | 只接受主进程归一化状态                                                       | unknown/refresh-failed 不得映射 failed；关系对象不能丢 groupId             |
+| `src/renderer/shells/channels/channels.css`                                                                                                                                                                                                        | 删除 `.channel-rate-badge*` 与无用占位，稳定实时反馈栏                                      | 局部状态标签、倒计时和旧数据视觉                                             | 删除后卡片高度不塌陷；长状态不重叠                                         |
+| `src/renderer/shells/overview/ChannelStatusPopover.tsx` 及总览局部样式                                                                                                                                                                             | 同步删除快捷弹层倍率呈现；按关联结果加载详情                                                | open/close、linked monitor demand、refresh                                   | 关闭后不继续详情轮询；不得删除独立倍率入口                                 |
+| `electron/main/services/site-service.ts`、计划新增 `electron/main/services/channel-monitor-scheduler.ts`和 `electron/main/services/channel-monitor-scheduler.test.ts`、既有 `electron/main/services/refresh-scheduler.ts` 参考模式与窗口可见性桥接 | 站点请求继续由现有服务执行；独立渠道状态机合并同站概览、全局并发 2、多站错峰与小抖动        | 429 遵守 Retry-After，否则 2/4/8/15 分钟；auth/unsupported 停止              | fake clock 覆盖隐藏/恢复、单飞、退避复位、退出清理；不得改变余额调度器语义 |
+| `src/renderer/shells/overview/rate-channel-status-loader.ts`、`src/renderer/channel-load-coordinator.ts`                                                                                                                                           | 复用现有列表/详情 single-flight、缓存和 revision，接收调度器 seed                           | 列表按 siteId、详情按 siteId:monitorId                                       | 周期概览不得触发 N+1 详情；旧详情响应不得覆盖新选择                        |
+| `electron/main/adapters/sub2api-adapter.ts` 与 schema                                                                                                                                                                                              | 保留 groups/channels/monitor 的结构 ID，归一化真实状态                                      | `/groups/available`、`/channels/available`、`/channel-monitors`、按需 status | 空数组、缺字段、歧义和 unsupported 显式，不伪造 monitor ID                 |
+| `electron/shared/contracts.ts`、`electron/preload/index.ts`、`electron/preload/bridge.cts`、`src/renderer/env.d.ts`                                                                                                                                | 固定轮询配置、可见性和脱敏状态白名单，使用 Zod                                              | interval 只允许 30/60/120                                                    | 拒绝低于 30 秒、任意 channel 和非法站点 ID                                 |
+| 渠道页面、调度、关联、E2E 测试                                                                                                                                                                                                                     | 新增请求计数、九态、唯一高置信、去倍率与保留倍率回归                                        | mock server/fake timer/本地 fixture                                          | 不以真实站高频测试；独立 RatePopover/充值比例必须继续通过                  |
+
+允许删除仅被渠道健康 UI 消费的 `BadgePercent` 引用、折算辅助函数和局部样式。禁止删除 `RatePopover.tsx`、`RechargeRatioControl.tsx`、`rate-comparison.ts`、`/groups/rates`、倍率缓存、充值比例设置或总览独立“查看倍率”。上游没有普通用户主动探测接口，因此不得添加“立即探测/Ping 远程渠道”按钮或伪造请求。
+
 ## 审计回写（2026-07-14）
 
 本壳已接入真实站点下拉、渠道列表、选择、详情 IPC、unsupported 和空态；切换站点/渠道会清空旧对象数据并显示真实加载状态。获授权站点只读验证仅确认其实际返回字段，缺失的延迟/可用率显示“待查询”而不使用假值。Electron E2E 与 macOS 打包应用页面检查已通过。
@@ -13,7 +35,7 @@
 - 业务模块：M09、M16；对应 Stitch Screen `9ee4845a9bdc44ed8d9dec8d224bfd59`。
 - 依据：RQ-08/RQ-16/RQ-17；左侧渠道列表、右侧详情、延迟、Ping、7/15/30 日可用率和时间线。
 
-## 真实文件与白名单
+## 历史 Stitch 壳文件与白名单
 
 | 文件                                            | 职责                      |
 | ----------------------------------------------- | ------------------------- |
@@ -22,7 +44,7 @@
 | `src/renderer/shells/channels/types.ts`         | 渠道、事件类型            |
 | `src/renderer/shells/channels/data.ts`          | 非真实站点静态数据        |
 
-仅上表可修改。禁止全局样式、其他壳、Electron/preload、配置、依赖和任何真实网络接线；不得新增文件。
+本表只记录历史 Stitch 视觉承接白名单。2026-07-23 增量的合法修改范围以本文顶部“逐文件接入计划”为准，其中调度器和其测试是后续开发阶段计划新增的合法文件；仍禁止全局样式、无关壳、认证/凭据安全、版本、构建配置和新依赖。
 
 ## 入口与接线
 
@@ -62,7 +84,7 @@
 
 ## 2026-07-19 1.3.1 总览快捷弹窗
 
-- 复用同一渠道摘要字段和状态视觉，但入口位于总览站点卡片；弹窗展示整站全部渠道，不按当前 Key 或倍率分组过滤。
+- 历史实现曾展示整站全部渠道；2026-07-23 起目标改为按当前 Key 的结构化 groupId 关系展示关联渠道。无法唯一关联时显示未关联或关联不明确，不按名称猜测。
 - 首个详情与全部渠道卡在同一可滚动内容区；切换渠道只刷新详情，列表保持稳定。loading/error/unsupported/empty/success 状态均保留固定标题和关闭入口。
 - 首次点击才读取列表/详情；当前页面会话缓存已加载列表和详情，主动重试绕过缓存。
 - 局部样式限定在 `.rate-channel-popover`、`.rate-channel-content` 和 `.rate-channel-list`，没有修改渠道正式页面、全局主题或公共组件默认值。

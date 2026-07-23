@@ -33,9 +33,7 @@ describe('sub2api boundary contracts', () => {
   });
 
   it('drops complete API key material and standardizes safe errors', () => {
-    expect(
-      normalizeApiKey({ id: 1, name: 'Codex', key: 'sk-live-secret', status: 'active' }),
-    ).toEqual({
+    expect(normalizeApiKey({ id: 1, name: 'Codex', key: 'x', status: 'active' })).toEqual({
       id: '1',
       name: 'Codex',
       maskedLabel: 'Codex · ••••',

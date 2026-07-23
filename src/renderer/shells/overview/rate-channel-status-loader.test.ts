@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   ChannelDetailPayload,
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import { RateChannelStatusLoader } from './rate-channel-status-loader';
+
+afterEach(() => vi.useRealTimers());
 
 const channels = (siteId: string): ChannelViewPayload => ({
   state: 'supported',
@@ -146,5 +148,27 @@ describe('RateChannelStatusLoader', () => {
     await older;
 
     expect(loader.cacheForSite('site-a').details['channel-a']).toEqual(detail('channel-a', 99.5));
+  });
+
+  it('keeps cached channels and suppresses forced polling during rate-limit backoff', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-24T00:00:00Z'));
+    const readChannels = vi
+      .fn<(siteId: string) => Promise<ChannelViewPayload>>()
+      .mockResolvedValueOnce(channels('site-a'))
+      .mockRejectedValueOnce(new Error('CHANNEL_REFRESH_FAILED RETRY_AFTER=600'))
+      .mockResolvedValueOnce(channels('site-a'));
+    const loader = new RateChannelStatusLoader({
+      readChannels,
+      readDetail: async (_siteId, channelId) => detail(channelId),
+    });
+
+    await loader.loadChannels('site-a');
+    await expect(loader.loadChannels('site-a', true)).rejects.toThrow('RETRY_AFTER=600');
+    await expect(loader.loadChannels('site-a', true)).resolves.toEqual(channels('site-a'));
+    expect(readChannels).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(600_000);
+    await loader.loadChannels('site-a', true);
+    expect(readChannels).toHaveBeenCalledTimes(3);
   });
 });

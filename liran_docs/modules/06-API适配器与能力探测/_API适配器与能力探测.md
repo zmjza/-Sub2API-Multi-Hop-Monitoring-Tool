@@ -1,5 +1,14 @@
 # API 适配器与能力探测
 
+## 2026-07-23 规划影响
+
+- `/keys` 必须从第一页开始使用固定 page_size；现有第一页默认 10、后续 100 的策略可能产生分页偏移，列入 AK-02 修复。
+- 新增 GET 单 Key、PUT 最小分组负载、POST 批量消费、GET 每日消费和过滤 stats；当前 HTTP 客户端只有 GET 能力，POST/PUT 必须以固定路径、固定 JSON 和安全错误模型扩展，不能提供任意请求接口。
+- 上游 `request_type` 为 `unknown/sync/stream/ws_v2/cyber`，`billing_type` 为数值 0 钱包或 1 订阅，`billing_mode` 为 `token/per_request/image/video`。当前页面的 chat/embedding、token 字符串 billing type、standard billing mode 都是待替换旧值。
+- `/channels/available` 必须保留 groups[].id；空数组可能是功能关闭或无可见渠道，不能单凭空数组伪造 unsupported。
+- HttpClient 当前不保留 Retry-After；后续只能提取并校验安全的 retryAfter 时间，不透传完整响应头。
+- 上游缺口：无跨站汇总、无 Key 直连 monitor ID、无普通用户 run-now。管理员 run 接口禁止调用。
+
 > 2026-07-14 当前证据：有限多层 `data` 解包、Zod 边界、错误分类、核心/可选能力、模型/分组筛选和倍率来源优先级已落地。两个获授权站点已通过只读脚本与服务层复测，macOS 打包应用的本地完整业务流 E2E 已通过。
 
 上级：[[03-索引]]
@@ -36,7 +45,7 @@
 
 ## 当前实现证据
 
-已实现有限 URL 规范化、JSON HTTP 客户端、登录响应 Zod 校验、嵌套 `data` 解包、profile、keys、groups/available、groups/rates、usage stats、usage list、usage/dashboard/models 和渠道监控适配。上游接口依据固定到 2026-07-14 检查的 `Wei-Shaw/sub2api` commit `7d239d62e8f1c6aea79164f88903f4158cbf2f98`。获授权站点只读验证已确认核心能力；未返回的渠道扩展指标继续显示“待查询”，不得用静态值补齐。
+已实现有限 URL 规范化、JSON HTTP 客户端、登录响应 Zod 校验、嵌套 `data` 解包、profile、keys、groups/available、groups/rates、usage stats、usage list、usage/dashboard/models 和渠道监控适配。2026-07-23 的本轮规划以 `Wei-Shaw/sub2api` main 提交 `cb24522dd53f8f363d008e3afdc8e4baf9788cab` 为固定上游证据；既有获授权站点只读验证仅证明历史核心能力，不代表 RQ-22..27 已实现。未返回的渠道扩展指标继续显示“待查询”，不得用静态值补齐。
 
 ## 任务范围
 

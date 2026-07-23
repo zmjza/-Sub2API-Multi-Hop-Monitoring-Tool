@@ -22,6 +22,12 @@ describe('controlled UI shell preview', () => {
     });
   });
 
+  it('exposes the API key shell through the formal preview route', () => {
+    expect(parsePreviewLocation('?surface=main&shell=api-keys&state=success').shell).toBe(
+      'api-keys',
+    );
+  });
+
   it('falls back to the fixed-light safe defaults for unknown values', () => {
     expect(parsePreviewLocation('?surface=wrong&shell=wrong&state=wrong&theme=dark')).toEqual({
       surface: 'main',

@@ -1,0 +1,191 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">try{
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "secondary-container": "#7cf5cc",
+                "tertiary-container": "#2e3336",
+                "tertiary-fixed-dim": "#c3c7cb",
+                "on-tertiary": "#ffffff",
+                "inverse-primary": "#c1c7d0",
+                "tertiary": "#191e21",
+                "primary": "#181e25",
+                "on-tertiary-fixed-variant": "#43474b",
+                "on-secondary-container": "#007056",
+                "inverse-on-surface": "#ebf1ff",
+                "outline-variant": "#c5c6cb",
+                "surface-variant": "#dce2f3",
+                "surface": "#f9f9ff",
+                "on-primary": "#ffffff",
+                "primary-container": "#2d333a",
+                "primary-fixed": "#dde3ec",
+                "on-error-container": "#93000a",
+                "error": "#ba1a1a",
+                "on-primary-fixed": "#161c23",
+                "surface-container-lowest": "#ffffff",
+                "secondary-fixed-dim": "#61dbb4",
+                "on-tertiary-fixed": "#171c1f",
+                "secondary": "#006c52",
+                "secondary-fixed": "#7ff8cf",
+                "on-primary-fixed-variant": "#41474f",
+                "on-surface": "#151c27",
+                "on-primary-container": "#959ba4",
+                "surface-dim": "#d3daea",
+                "on-secondary-fixed": "#002117",
+                "tertiary-fixed": "#dfe3e7",
+                "surface-bright": "#f9f9ff",
+                "on-background": "#151c27",
+                "error-container": "#ffdad6",
+                "primary-fixed-dim": "#c1c7d0",
+                "on-tertiary-container": "#969b9f",
+                "surface-tint": "#595f67",
+                "background": "#f9f9ff",
+                "surface-container-low": "#f0f3ff",
+                "on-secondary": "#ffffff",
+                "inverse-surface": "#2a313d",
+                "surface-container-highest": "#dce2f3",
+                "on-secondary-fixed-variant": "#00513d",
+                "on-surface-variant": "#44474b",
+                "on-error": "#ffffff",
+                "outline": "#75777b",
+                "surface-container": "#e7eefe",
+                "surface-container-high": "#e2e8f8"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "container-padding-mobile": "16px",
+                "card-internal-padding": "24px",
+                "bento-gap": "24px",
+                "base": "4px",
+                "container-padding-desktop": "32px"
+            },
+            "fontFamily": {
+                "display-lg": ["Manrope"],
+                "stats-numeric": ["Manrope"],
+                "headline-md": ["Manrope"],
+                "label-caps": ["Inter"],
+                "body-lg": ["Inter"],
+                "body-sm": ["Inter"],
+                "headline-md-mobile": ["Manrope"]
+            },
+            "fontSize": {
+                "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                "stats-numeric": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                "headline-md-mobile": ["18px", { "lineHeight": "26px", "fontWeight": "600" }]
+            }
+          },
+        },
+      }
+    }catch(_e){}</script></head><body class="bg-background text-on-surface font-body-lg min-h-screen flex flex-col justify-center items-center p-container-padding-mobile md:p-container-padding-desktop">
+<div class="max-w-[1440px] w-full space-y-8">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface">倍率对比</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-1">按充值比例折算后，比较各平台最低分组</p>
+</div>
+<div class="flex items-center gap-3">
+<div class="relative">
+<select class="appearance-none bg-white border border-outline-variant rounded-lg px-4 py-2 pr-10 text-body-sm font-semibold focus:ring-2 focus:ring-primary focus:border-primary">
+<option>5 分钟</option>
+<option>15 分钟</option>
+<option>1 小时</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+<button class="p-2 bg-white border border-outline-variant rounded-lg hover:bg-surface-variant transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">refresh</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid / 4 Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-bento-gap w-full">
+<!-- OpenAI Card -->
+<div class="bento-card bg-white rounded-[32px] border border-outline-variant flex flex-col relative overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1 p-4">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<img alt="OpenAI Logo" class="w-10 h-10 rounded-md object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7C7i62HJlF78LAFeHyqyuddjuuef3SYzkJ4COVhrx4PZ2s1m7x8ZBlrgoDAogL6QpvchXpICEOYipsCXu8zXxXjDkZAOqbjmjCQ8ke03UILp_9Kxm9tlv75CprspgaDtukhDOGrJsEno-d1kRp18x35lzmpiQjf8ID0dUdKhP_7dOzQiizaIlPG-1hjPwfcyVP1Lr0sjAkes98BqMFPA6Stxe92KpVtIat1bKi0eqTGshdqepctznAiGRpnCxOfo3_Hw">
+<div>
+<h3 class="font-headline-md text-on-surface">OpenAI</h3>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#10a37f]/10 text-[#10a37f] text-[10px] font-bold uppercase tracking-wider">稳定</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-stats-numeric text-3xl text-on-surface">0.1<span class="text-sm ml-0.5 opacity-50">x</span></div>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold opacity-60">倍率</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center bg-surface-container-low/50 rounded-[24px] border border-dashed border-outline-variant/50 py-4"><div class="w-12 h-12 rounded-full bg-[#10a37f]/10 flex items-center justify-center mb-3 text-[#10a37f]"><span class="material-symbols-outlined text-2xl">check_circle</span></div><p class="font-body-sm text-on-surface font-semibold">推荐渠道: 寒鹤</p><div class="flex flex-col items-center gap-1 mt-2"><p class="text-[11px] text-on-surface-variant/80">价格 10.0 | 稳定 10.0</p><span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#10a37f]/10 text-[#10a37f] text-[10px] font-bold">5分钟稳定</span></div></div>
+</div>
+<!-- Claude Card -->
+<div class="bento-card bg-white rounded-[32px] border border-outline-variant flex flex-col relative overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1 p-4">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<img alt="Claude Logo" class="w-10 h-10 rounded-md object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7wKm4hvPXuReTX3HhY7X7wl3kuntzXj9Nkr7iPN1P2eE7S6WPXm8bYmFVDJ5R1nn3bdHnNLXDc-8leVU8QWx917Ys5DaDUsfmH_1LckrjlQ0m5hfhLPTXw52K9R79KRC7VHW15RSbJLRyz46pl05m-v78M-NUio-BG8nm7620G-1WfKeV2pFgAbEdlshz82J7htW2mrtwh69uATj4prBeXKyNcCvGbmA_ZvIDD45JvkRyR1EIk6jk4lAtlBQeYg0EMe8">
+<div>
+<h3 class="font-headline-md text-on-surface">Claude</h3>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#d97706]/10 text-[#d97706] text-[10px] font-bold uppercase tracking-wider">已验证</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-stats-numeric text-3xl text-on-surface">0.8<span class="text-sm ml-0.5 opacity-50">x</span></div>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold opacity-60">倍率</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center bg-surface-container-low/50 rounded-[24px] border border-dashed border-outline-variant/50 py-4">
+<div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 text-on-surface-variant/30">
+<span class="material-symbols-outlined text-2xl">search_off</span>
+</div>
+<p class="font-body-sm text-on-surface-variant font-medium">暂无稳定渠道</p>
+<p class="text-[11px] text-on-surface-variant/60 mt-1">正在持续核验中</p>
+</div>
+</div>
+<!-- Gemini Card -->
+<div class="bento-card bg-white rounded-[32px] border border-outline-variant flex flex-col relative overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1 p-4">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<img alt="Gemini Logo" class="w-10 h-10 rounded-md object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAS4GcPjbJGz_iZQEuAxg2HqZXGo6_PWTvZCFOFCH6-d-aFbquKfi2DDNMmWFLk-EdRggkm-bX9KK1AP9JBjBj1GCluLnQnySQzjSFXggEY6eql1IsKFzGSCbFKkhssEMUXuRoVQ2q30cXFXHP0gGAXx509cF3Pcvsp5zuOzJDm9P_67U29BTwZAG_i9Uy7XJIgBgk1JhfatPwctMUwH37nyDFhmnnO7i3DTy8x4Wgt2mDKALPFXbn8UGGlN_6-UdMhfHI">
+<div>
+<h3 class="font-headline-md text-on-surface">Gemini</h3>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#2563eb]/10 text-[#2563eb] text-[10px] font-bold uppercase tracking-wider">活跃</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-stats-numeric text-3xl text-on-surface">0.5<span class="text-sm ml-0.5 opacity-50">x</span></div>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold opacity-60">倍率</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center bg-surface-container-low/50 rounded-[24px] border border-dashed border-outline-variant/50 py-4">
+<div class="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-3 text-on-surface-variant/30">
+<span class="material-symbols-outlined text-2xl">link_off</span>
+</div>
+<p class="font-body-sm text-on-surface-variant font-medium">暂无稳定渠道</p>
+<p class="text-[11px] text-on-surface-variant/60 mt-1">正在持续核验中</p>
+</div>
+</div>
+<!-- Grok Card -->
+<div class="bento-card bg-white rounded-[32px] border border-outline-variant flex flex-col relative overflow-hidden group transition-all duration-300 hover:shadow-xl hover:-translate-y-1 p-4">
+<div class="flex justify-between items-start mb-3">
+<div class="flex items-center gap-3">
+<img alt="Grok Logo" class="w-10 h-10 rounded-md object-cover shadow-sm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjwMGH5Z1qSbSM4bByic3mHno15vqW0wXdA8zhSrsJLUAGw3Xaq2ZD1hfbc6khL_k25477Y9hu1Y9GCrQdqSDdmLctB6ri0FL7Tn__rkBt5_vN-Xp6kfBJF_WTn9nEkR3Ts2V8B3d_p7yxYJ69Lf8oOcsLgwIuB-eqF0dwwY9lRYwwyMdpzWfnaaaEsMNScSqpZmItShT1WQ8SU52gk4cFZdxyoEVYY98zV8a3-GZJo2aB3Vj1fr18RYTrtll4shb1Mm4">
+<div>
+<h3 class="font-headline-md text-on-surface">Grok</h3>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-[#4b5563]/10 text-[#4b5563] text-[10px] font-bold uppercase tracking-wider">测试中</span>
+</div>
+</div>
+<div class="text-right">
+<div class="font-stats-numeric text-3xl text-on-surface">1.2<span class="text-sm ml-0.5 opacity-50">x</span></div>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold opacity-60">倍率</p>
+</div>
+</div>
+</div></div></div></body></html>

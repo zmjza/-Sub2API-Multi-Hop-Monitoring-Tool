@@ -1,5 +1,160 @@
 # 更新说明
 
+## 1.4.1 - 2026-07-24
+
+### macOS 安装启动修复
+
+- 修复 `1.4.0` macOS 应用仅保留 Electron linker-generated 签名、bundle 资源未封装进签名，导致带下载隔离属性的安装副本可能被 macOS 判定为损坏或无法打开的问题。
+- macOS 构建改由 electron-builder 使用 `identity: "-"` 完成整包 ad-hoc 签名，不再依赖不完整的 linker 签名，也不对成品应用执行手工 `codesign --deep`。
+- 新增构建清单回归测试，固定 `1.4.1` 版本、preload 版本和 macOS 签名配置。
+
+### 验证与发布
+
+- DMG 通过 `hdiutil verify`；DMG 内应用和 `/Applications` 安装副本均通过 `codesign --verify --deep --strict`，标识为 `com.liran.sub2api.monitor`，版本为 `1.4.1`，主程序为 ARM64。
+- `/Applications` 安装副本使用原有用户数据经 LaunchServices 启动，前台窗口可见；开发 Electron E2E 与最终安装副本 E2E 均为 6/6。
+- Prettier、ESLint、TypeScript、Vitest 34 文件/210 项和官方 npm registry 审计通过，审计为 0 个漏洞。
+- Windows x64 NSIS 已重新交叉构建并完成 PE/asar/版本结构验证；未执行 Windows 真机。
+- macOS 仍不是 Apple Developer ID 签名且未公证，不能表述为 Apple 可信分发或无提示首次打开。
+
+### 1.4.1 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg`          | `e25a5a5ecdb1c5e0e9a598eabda5f8d205199b3c1b8f512e3dcc2b5e912081ce` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg.blockmap` | `dd0162b7d5356a841b6515186ed17864969c742d73eab3d9b187b63c9a1e6ee5` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe`            | `4455af60671d1633a45cdedebbf231c91e0aa7a8e8eca8d7f35863154e3aeb80` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe.blockmap`   | `c24ab8de965d8106f5cfb65fc58df2e786cd8c9b3f20856da8193b25a4cdd213` |
+
+## 1.4.0 - 2026-07-24
+
+### API 密钥与统计口径
+
+- 新增普通用户 API 密钥页面，支持安全分页、名称或脱敏摘要搜索、分组与状态筛选、今日和近 30 天实际消费展示，以及单 Key 分组切换。
+- 分组写入只发送 `group_id`，同 Key 单飞，成功后远程回读确认；完整 Key 仅在主进程适配器局部短暂读取，不进入 Renderer、IPC 返回、SQLite、日志、CSV、截图或夹具。
+- 使用记录六类筛选与有效日期约 300ms 自动请求，列表和顶部统计共用规范化查询；总请求、总 Token、实际消费和平均耗时来自服务端筛选统计。
+- 全部站点顶部与卡片改用每站实际当前 Key 口径，有限额、无限额和订阅分组分别使用明确额度规则，当前 Key 不确定时不回退整站数据。
+
+### 渠道监控与关联
+
+- 主窗口相关页面可见时以 60 秒默认周期低频刷新渠道概览，可选 30/60/120 秒；后台、隐藏和最小化暂停，429 遵守安全 `Retry-After` 或 2/4/8/15 分钟退避。
+- Key 与渠道优先使用 `group_id` 和普通用户可用关系链匹配，名称、平台和模型仅作唯一高置信回退；关联不明确不再误取首个候选。
+- 渠道状态页和总览渠道区域删除 BadgePercent、倍率不可用和折算文案；独立倍率比较、充值比例及底层倍率接口保持不变。
+- 使用精确 overrides 升级 `fast-uri` 与 `shell-quote` 的修复版本，官方 npm registry 高危审计为 0。
+
+### 验证与发布
+
+- TypeScript、ESLint、Vitest 34 文件/210 项、生产构建、开发 Electron E2E 6/6 和 macOS ARM64 打包应用 Electron E2E 6/6 通过。
+- 两个授权站点完成 Key 分组 PUT、GET 回读和原分组恢复；第三站凭据登录被 Turnstile 拦截，仅通过用户已有登录会话只读确认 API 密钥页面，未冒充 Electron 写入验证。
+- 15 张 macOS 打包应用证据位于 `real-test-evidence/macos-1.4.0/`，包含 API 密钥 1600px/720px、总览、使用记录、渠道状态、站点管理和悬浮窗。
+- DMG 校验有效，macOS 主程序为 Mach-O ARM64；Windows NSIS 为 PE32，解包主程序为 PE32+ x86-64；两端 asar 为 1.4.0。Windows 仅交叉构建与结构验证，未执行真机。
+
+### 1.4.0 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.0-mac-arm64.dmg`          | `23ff81cdf2669cec87fc74d1998ae06a11caef3da91e3d97c002a97a8b21a2d4` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.0-mac-arm64.dmg.blockmap` | `63ef32eb96c13a19f7659957877826c2d7b22db18b55cde00e93bffd2d5d83b6` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.0-win-x64.exe`            | `837ed245c4530dfa7990cabca2826506e922b401249d7ba8e6dff5e43fe5099a` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.0-win-x64.exe.blockmap`   | `44718563aa4ac7c46e667569640cc4918b04f2d7bccf173bf20a496628a99831` |
+
+## 1.3.9 - 2026-07-21
+
+### 倍率标题清理
+
+- 删除倍率区域的“倍率对比”主标题及其副标题，保留刷新周期下拉框和刷新按钮，卡片区域与业务逻辑不变。
+- 四平台官网 SVG 图标、40×40 图标槽位、单行横滑、Antigravity→Gemini 归类和真实倍率接口保持不变。
+
+### 验证与发布
+
+- TDD RED 确认旧主标题仍存在；Green 定向 Electron E2E 和完整开发 E2E 均通过，确认标题与副标题均不渲染。
+- Prettier、ESLint、TypeScript、Vitest 28 文件/171 项、生产构建和 macOS ARM64 打包应用 E2E 通过。
+- DMG 校验有效，macOS 主程序为 Mach-O ARM64；Windows NSIS 为 PE32，解包主程序为 PE32+ x86-64。Windows 仅交叉构建与结构验证，未执行真机。
+
+### 1.3.9 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.9-mac-arm64.dmg`          | `0a59b8addc14985bf048fe19bbe8964b2cb7b869326b77e1cce112967e77c4f7` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.9-mac-arm64.dmg.blockmap` | `8e8c7a06afee912dec3a7ce942cbef628979299bc8dc3526df1e1a6c6ecb87d6` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.9-win-x64.exe`            | `09cb07e483da2cc764daf17b2c7025e1fa797e38a5fa9556e461a02618a7cce5` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.9-win-x64.exe.blockmap`   | `ca4cf6114e393c72635a6347dc465b805716d3a46b4175ce3850bb884f5e88b6` |
+
+## 1.3.8 - 2026-07-21
+
+### 倍率标题与官网图标
+
+- 删除“倍率对比”标题下的“按充值比例折算后，比较各平台最低分组”副标题，只保留主标题、刷新周期和刷新按钮。
+- OpenAI、Claude、Gemini、Grok 改用官网公开 SVG：分别来自 `developers.openai.com`、`claude.ai`、Gemini 官网声明的 `gstatic.com` 资源和 `grok.com`。
+- 四个 SVG 全部保存为 Renderer 本地资源并离线打包；OpenAI、Claude 由 Vite 内联，Gemini、Grok 作为独立 SVG 文件输出，运行时不请求官网。
+- 不改变倍率、渠道稳定性、推荐排序、刷新、缓存或其他页面业务逻辑。
+
+### 验证与发布
+
+- TDD RED 确认旧副标题仍存在；Green E2E 验证副标题数量为 0、四个 40×40 图标均加载成功且资源类型为 SVG。
+- Prettier、ESLint、TypeScript、Vitest 28 文件/171 项、生产构建和最终 macOS ARM64 打包应用 Electron E2E 6/6 通过。
+- 1600px 与 720px 页面截图确认官网图标清晰，无模糊、裁切、重叠或布局偏移；13 张证据位于 `real-test-evidence/macos-1.3.8/`。
+- DMG 校验有效，macOS 主程序为 Mach-O ARM64；Windows NSIS 为 PE32，解包主程序为 PE32+ x86-64。Windows 仅交叉构建与结构验证，未执行真机。
+
+### 1.3.8 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.8-mac-arm64.dmg`          | `b54c0c4e4dfee4792894452a6692aa961fcd7bb75c5277776e90688eb3be1e73` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.8-mac-arm64.dmg.blockmap` | `bc2066e7dc660905901f3973fb4809f000cac0563b3fc55c9f3e8861fc096785` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.8-win-x64.exe`            | `f8c5105cb916d8a7c0d279f7f41ef718af48a3b1a73582c3459c7c46014e0be4` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.8-win-x64.exe.blockmap`   | `f747583ccd28c33db3a79c51c930ae62db244aed7e98958b60e2929508c88ea4` |
+
+## 1.3.7 - 2026-07-21
+
+### 倍率对比 Stitch 高保真优化
+
+- 按 Stitch Screen `227212f94b9b427e887875644935ab9e` 重做倍率对比：四平台固定为 OpenAI、Claude、Gemini、Grok，采用 32px 圆角、16px 内边距、24px 间距、40×40 品牌图标和统一推荐内容区。
+- 四张平台卡片始终保持单行；窄窗口继续支持触控板、触屏、Shift+滚轮和键盘横向滚动，但 WebKit 与 Firefox 均不显示滚动条。
+- OpenAI、Claude、Gemini、Grok 使用本地离线品牌图片和对应绿色、橙色、蓝色、黑灰色主题；加载、推荐、空态和刷新状态保持等高与稳定基线。
+- `antigravity` 及分组名、说明、主模型、附加模型和结构化关系中的独立 Antigravity 统一归入 Gemini；Gemini 与 Antigravity 共用候选池，相似子字符串不误判。
+- 继续复用现有倍率、充值比例、渠道状态、五分钟稳定门槛和缓存接口，不改变认证、IPC、Key、评分权重或渠道关系协议。
+
+### 验证与发布
+
+- TDD RED 首次确认 26 项倍率规则中 3 项失败，分别覆盖直接别名、文本证据和候选池合并；实现后倍率规则 26/26，完整 Vitest 28 文件/171 项通过。
+- 开发 Electron E2E 6/6、最终 macOS ARM64 打包应用 Electron E2E 6/6 通过；1600px 与 720px 页面检查确认四卡单行、品牌图标清晰、无可见滚动条、无重叠或第二行。
+- 13 张证据位于 `real-test-evidence/macos-1.3.7/`，新增倍率模块宽/窄截图为 `12-rate-comparison-stitch-wide.png` 和 `13-rate-comparison-stitch-narrow.png`。
+- DMG 校验有效，macOS 主程序为 Mach-O ARM64；Windows NSIS 为 PE32、解包主程序为 PE32+ x86-64。macOS 应用仅 adhoc 签名、未公证；Windows 仅交叉构建与结构验证，未执行真机。
+
+### 1.3.7 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.7-mac-arm64.dmg`          | `2d2e32994b70248c4e79eef9d724498e4ef94423d882017194207921e681f30a` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.7-mac-arm64.dmg.blockmap` | `f1fac2cb2dcb424e84b07741ce80677111793ab04f10468c0013b33dc37462b7` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.7-win-x64.exe`            | `df7a024b10dd603bdc5f069bde747a1312cbb0eb80258484e6a0e25f842a11fe` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.7-win-x64.exe.blockmap`   | `4b7a48ab10950b9b627231092d8e2b71dfea32b96cd80c19b4573bd077db82ba` |
+
+## 1.3.6 - 2026-07-21
+
+### 全部站点卡片布局
+
+- 站点卡片底部改为固定三列单行网格，充值比例可安全收缩，查看倍率和查看渠道状态保持完整文字；所有支持窗口宽度下禁止换行、重叠和横向滚动。
+- 当前渠道摘要改为固定 102px 槽位并承担正文后的自动剩余空间，加载、成功、无匹配、列表错误和详情错误外框等高且不裁切说明文字；同一网格行摘要与 footer 顶边误差不超过 1px。
+- 长站点名改为单行省略并保留 `title`，状态徽标不再被挤成竖排；720px 窄窗口使用局部紧凑间距，充值比例值和两个查看按钮均保持可读。
+- 本次不改变倍率推荐、渠道匹配、五分钟稳定门槛、评分、Key、接口、认证或刷新业务逻辑。
+
+### 验证与发布
+
+- TDD RED 复现了 footer 换行、摘要顶边相差 16px、摘要高度相差 14.5px 和长标题挤压状态徽标；Green E2E 覆盖五张临时站点卡片、1600px 四列首行、720px 单列及加载/成功/无匹配/错误状态。
+- Prettier、ESLint、TypeScript、Vitest 28 文件/168 项、生产构建、开发 Electron E2E 6/6 和最终 macOS ARM64 打包应用 E2E 6/6 通过。
+- macOS 页面样式检查确认宽/窄窗口 footer 单行、摘要基线、长内容截断、按钮文字和充值比例均无重叠或异常换行；11 张证据位于 `real-test-evidence/macos-1.3.6/`。
+- DMG 校验有效，macOS 主程序为 Mach-O ARM64；Windows NSIS 为 PE32、解包主程序为 PE32+ x86-64；两端 Info.plist/asar 版本和 Renderer/main/preload 入口均为 1.3.6。Windows 未执行真机。
+
+### 1.3.6 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.3.6-mac-arm64.dmg`          | `4faaf0ea901fa5d2ab8cd5951526eb02359d97ef81c7c7401bbfd53c8f4c0699` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.6-mac-arm64.dmg.blockmap` | `885beb7ca24468b3186738392d38c219bb762107c4deee6dd1435b78e7244690` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.3.6-win-x64.exe`            | `b0f3f4bfd121cc7930d72108d5703387966d231f8c06c54b38efb28b75620b74` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.3.6-win-x64.exe.blockmap`   | `b38fd9f137d03b22c43b1ca9a57a9ae2291b3ea6211cd52d205dcfb747f33025` |
+
 ## 1.3.5 - 2026-07-21
 
 ### 倍率推荐与当前渠道

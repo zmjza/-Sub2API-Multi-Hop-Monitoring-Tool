@@ -1,5 +1,5 @@
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -95,7 +95,7 @@ test('opens the controlled renderer preview', async () => {
     expect(geometry.bounds?.height ?? 0).toBeLessThanOrEqual(geometry.workArea.height);
   }
   await window.screenshot({ path: 'test-results/overview.png' });
-  for (const shell of ['usage', 'channels', 'sites', 'radar']) {
+  for (const shell of ['api-keys', 'usage', 'channels', 'sites', 'radar']) {
     let radarMode: 'success' | 'empty' | 'error' = 'success';
     if (shell === 'radar') {
       await window.route('https://codexradar.com/current.json*', async (route) => {
@@ -476,10 +476,12 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   const failingChannelDetails = new Set(['channel-e2e-1']);
   let channelDelayMs = 0;
   let channelListMode: 'success' | 'error' = 'success';
+  const channelErrorPorts = new Set<number>();
   let modelsRequestCount = 0;
   let floatingLatestHost: string | undefined;
   let floatingLatestSequence = 0;
   let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
+  let managedKeyGroupId = '101';
   const availableRateGroups = [
     {
       id: 'rate-openai-a',
@@ -535,7 +537,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     { name: 'Grok 通道', platform: 'xai', model: 'grok-e2e', status: 'normal' },
     { name: '本地模型通道', platform: 'Local-Lab', model: 'local-e2e', status: 'normal' },
   ] as const;
-  const server = createServer((request, response) => {
+  const handleRequest = (request: IncomingMessage, response: ServerResponse) => {
     response.setHeader('content-type', 'application/json');
     const url = request.url ?? '';
     if (url === '/api/v1/auth/login')
@@ -553,6 +555,53 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       );
     if (url === '/api/v1/user/profile')
       return response.end(JSON.stringify({ data: { balance: 8.5, status: 'active' } }));
+    if (request.method === 'GET' && url.startsWith('/api/v1/keys?page=1&page_size=20'))
+      return response.end(
+        JSON.stringify({
+          data: {
+            items: [
+              {
+                id: 101,
+                name: 'E2E Managed Key',
+                key: 'x',
+                status: 'active',
+                group_id: Number(managedKeyGroupId),
+                group: {
+                  id: Number(managedKeyGroupId),
+                  name: managedKeyGroupId === '101' ? 'E2E 管理分组' : 'E2E 高速分组',
+                },
+                current_concurrency: 2,
+                created_at: '2026-07-24T00:00:00Z',
+              },
+            ],
+            page: 1,
+            page_size: 20,
+            pages: 1,
+            total: 1,
+          },
+        }),
+      );
+    if (request.method === 'GET' && url === '/api/v1/keys/101')
+      return response.end(
+        JSON.stringify({
+          data: {
+            id: 101,
+            name: 'E2E Managed Key',
+            key: 'x',
+            status: 'active',
+            group_id: Number(managedKeyGroupId),
+            group: {
+              id: Number(managedKeyGroupId),
+              name: managedKeyGroupId === '101' ? 'E2E 管理分组' : 'E2E 高速分组',
+            },
+            created_at: '2026-07-24T00:00:00Z',
+          },
+        }),
+      );
+    if (request.method === 'PUT' && url === '/api/v1/keys/101') {
+      managedKeyGroupId = '202';
+      return response.end(JSON.stringify({ data: { id: 101 } }));
+    }
     if (url === '/api/v1/keys' || url.startsWith('/api/v1/keys?')) {
       keysRequestCount += 1;
       return response.end(
@@ -613,10 +662,21 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           data: [
             { id: 'g1', name: 'E2E 分组', ratio: 1.2 },
             { id: 'g2', name: '独立分组', ratio: 0.8 },
+            { id: 101, name: 'E2E 管理分组', platform: 'openai', ratio: 1 },
+            { id: 202, name: 'E2E 高速分组', platform: 'openai', ratio: 0.5 },
           ],
         }),
       );
-    if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: { g1: 1.4 } }));
+    if (url === '/api/v1/groups/rates')
+      return response.end(JSON.stringify({ data: { g1: 1.4, 101: 1, 202: 0.5 } }));
+    if (request.method === 'POST' && url === '/api/v1/usage/dashboard/api-keys-usage')
+      return response.end(
+        JSON.stringify({ data: { stats: { 101: { api_key_id: 101, today_actual_cost: 0.25 } } } }),
+      );
+    if (url.startsWith('/api/v1/user/api-keys/101/usage/daily'))
+      return response.end(
+        JSON.stringify({ data: { items: [{ date: '2026-07-24', actual_cost: 0.75 }] } }),
+      );
     if (url.startsWith('/api/v1/usage/dashboard/models')) {
       modelsRequestCount += 1;
       setTimeout(() => response.end(JSON.stringify({ data: { models: ['test-model'] } })), 1_200);
@@ -666,7 +726,12 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     }
     if (url === '/api/v1/channel-monitors') {
       channelRequestCount += 1;
-      if (channelListMode === 'error') {
+      const requestPort = Number(
+        String(request.headers.host ?? '')
+          .split(':')
+          .at(-1),
+      );
+      if (channelListMode === 'error' || channelErrorPorts.has(requestPort)) {
         response.statusCode = 503;
         return response.end(JSON.stringify({ message: 'temporarily unavailable' }));
       }
@@ -712,7 +777,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
         JSON.stringify({
           data: {
             id: channelId,
-            name: fixture.name,
+            name:
+              channelId === 'channel-e2e-1'
+                ? '用于验证超长渠道名称不会撑高当前渠道摘要固定槽位的渠道'
+                : fixture.name,
             platform: fixture.platform,
             group_name: fixture.name,
             models: [
@@ -728,10 +796,21 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     }
     response.statusCode = 404;
     response.end(JSON.stringify({ message: 'missing' }));
-  });
+  };
+  const server = createServer(handleRequest);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('E2E mock server unavailable');
+  const layoutServers = Array.from({ length: 3 }, () => createServer(handleRequest));
+  for (const layoutServer of layoutServers)
+    await new Promise<void>((resolve) => layoutServer.listen(0, '127.0.0.1', resolve));
+  const layoutPorts = layoutServers.map((layoutServer) => {
+    const layoutAddress = layoutServer.address();
+    if (!layoutAddress || typeof layoutAddress === 'string')
+      throw new Error('E2E layout server unavailable');
+    return layoutAddress.port;
+  });
+  channelErrorPorts.add(layoutPorts.at(-1)!);
   const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-e2e-'));
   const exportPath = path.join(userData, 'usage.csv');
   const application = await launchApplication(userData, {
@@ -752,6 +831,50 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByLabel('密码', { exact: true }).fill('runtime-only');
   await main.getByRole('button', { name: '添加并验证' }).click();
   await expect(main.getByText('站点验证成功')).toBeVisible({ timeout: 15_000 });
+  expect(await main.locator('.app-sidebar nav .nav-item span').allTextContents()).toEqual([
+    '全部站点',
+    'API 密钥',
+    '使用记录',
+    '渠道状态',
+    '站点管理',
+    '雷达',
+  ]);
+  await main.getByRole('button', { name: 'API 密钥', exact: true }).click();
+  await expect(main.getByRole('heading', { name: 'API 密钥', exact: true })).toBeVisible();
+  await expect(main.getByText('E2E Managed Key', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(main.locator('.api-keys-masked')).toContainText('sk-xxx...');
+  await main.getByLabel('切换E2E Managed Key的分组').selectOption('202');
+  await expect(main.getByText('分组已同步到远程站点', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(main.getByLabel('切换E2E Managed Key的分组')).toHaveValue('202');
+  const apiKeysWindowBounds = await application.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.getBounds(),
+  );
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 1600, height: 900 });
+  });
+  await expect(main.locator('.api-keys-table-wrap')).toBeVisible();
+  await captureEvidence(main, '14-api-keys-wide');
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 720, height: 800 });
+  });
+  await expect(main.locator('.api-keys-table-wrap')).toHaveCSS('overflow-x', 'auto');
+  await captureEvidence(main, '15-api-keys-narrow');
+  if (apiKeysWindowBounds)
+    await application.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows()
+        .find((candidate) => candidate.getBounds().width > 500)
+        ?.setBounds(bounds);
+    }, apiKeysWindowBounds);
+  await main.getByRole('button', { name: '站点管理', exact: true }).click();
+  await main.getByLabel('用户名', { exact: true }).fill('e2e@example.invalid');
   await main.getByLabel('密码', { exact: true }).fill('runtime-only');
   await main.getByText('批量添加站点', { exact: true }).click();
   await main.locator('.batch-entry textarea').fill(`http://localhost:${address.port}\nnot-a-url`);
@@ -762,8 +885,53 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   });
   await expect(main.locator('.batch-progress-panel')).toContainText('100%');
   await captureEvidence(main, '07-batch-progress');
+  channelDelayMs = 1_200;
+  const additionalSites = await main.evaluate(async (ports) => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) throw new Error('Desktop bridge unavailable');
+    const inputs = [
+      { port: ports[0], name: '用于验证超长站点名称不会挤压底部操作区的测试站点' },
+      { port: ports[1], name: '布局密度测试站点' },
+      { port: ports[2], name: '第五个布局测试站点' },
+    ];
+    const sites = [];
+    for (const input of inputs)
+      sites.push(
+        await desktop.addAndVerify({
+          name: input.name,
+          url: `http://127.0.0.1:${input.port}`,
+          account: 'e2e@example.invalid',
+          password: 'runtime-only',
+        }),
+      );
+    await desktop.setNote(
+      sites[0]!.id,
+      '这是一段用于验证长备注不会改变当前渠道摘要和底部操作区基线的测试备注',
+    );
+    return sites.map((site) => site.id);
+  }, layoutPorts);
+  expect(additionalSites).toHaveLength(3);
   await main.getByRole('button', { name: '全部站点', exact: true }).click();
+  await expect(main.locator('.site-card')).toHaveCount(5);
+  await expect(main.locator('.site-card > .rate-inline-channel')).toHaveCount(5);
   await expect(main.getByText('正在获取余额', { exact: false })).toHaveCount(0);
+  expect(
+    await main
+      .locator('.site-card > .rate-inline-channel')
+      .evaluateAll((summaries) =>
+        summaries.every(
+          (summary) =>
+            Math.abs(
+              summary.getBoundingClientRect().height - summaries[0]!.getBoundingClientRect().height,
+            ) <= 1,
+        ),
+      ),
+  ).toBe(true);
+  channelDelayMs = 0;
+  await expect(main.locator('.site-card > .rate-inline-channel.is-error')).toHaveCount(1);
+  await expect(
+    main.locator('.site-card > .rate-inline-channel').filter({ hasText: '当前渠道' }),
+  ).toHaveCount(4);
   await expect(main.locator('.site-card').getByText('本地集成站点', { exact: true })).toBeVisible();
   await main.locator('.site-card').filter({ hasText: '本地集成站点' }).dblclick();
   await main.getByLabel('站点备注').fill('本地集成备注');
@@ -787,15 +955,28 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await captureEvidence(main, '01-overview');
   const firstSiteCard = main.locator('.site-card').filter({ hasText: '本地集成备注' });
   await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e-manual');
-  await expect(main.locator('.quota-summary')).toContainText('总额 $20.00');
+  await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $20.00');
+  await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText(
+    '当前分组未关联到具体渠道',
+  );
+  expect(
+    await firstSiteCard.locator('.rate-inline-channel').evaluate((summary) => {
+      const sibling = Array.from(
+        document.querySelectorAll<HTMLElement>('.rate-inline-channel'),
+      ).find((candidate) => candidate !== summary);
+      return sibling
+        ? Math.abs(summary.getBoundingClientRect().height - sibling.getBoundingClientRect().height)
+        : Number.POSITIVE_INFINITY;
+    }),
+  ).toBeLessThanOrEqual(1);
   await main.getByLabel('本地集成站点 默认 Key').selectOption('auto');
-  await expect(firstSiteCard.locator('.quota-summary')).toHaveCount(0);
+  await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $80.88');
   await expect(firstSiteCard.locator('.site-card-balance')).toContainText('$8.50');
   await expect(firstSiteCard.locator('.site-card-meta')).toContainText('1.4x');
   await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e-manual');
-  await expect(main.locator('.quota-summary')).toContainText('总额 $20.00');
+  await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $20.00');
   await main.getByLabel('本地集成站点 默认 Key').selectOption('auto');
-  await expect(firstSiteCard.locator('.quota-summary')).toHaveCount(0);
+  await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $80.88');
   const secondSiteCard = main.locator('.site-card').filter({ hasText: 'localhost' });
   const selectedSiteIdBeforeRates = await main.evaluate(async () => {
     const dashboard = await window.sub2apiDesktop?.sites.list();
@@ -826,7 +1007,22 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .poll(() => channelDetailRequestCountById.get('channel-e2e-1') ?? 0)
     .toBeGreaterThan(currentDetailRequestsBeforeRetry);
   await expect(firstSiteCard).not.toContainText('详情加载失败，可单独重试');
+  await expect(firstSiteCard.locator('.rate-inline-channel-heading > b')).toHaveAttribute(
+    'title',
+    '用于验证超长渠道名称不会撑高当前渠道摘要固定槽位的渠道',
+  );
+  expect(
+    await firstSiteCard.locator('.rate-inline-channel-heading > b').evaluate((name) => ({
+      whiteSpace: getComputedStyle(name).whiteSpace,
+      contained: name.scrollWidth > name.clientWidth,
+      summaryHeight: name.closest('.rate-inline-channel')?.getBoundingClientRect().height,
+    })),
+  ).toEqual({ whiteSpace: 'nowrap', contained: true, summaryHeight: 102 });
   await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
+  await expect(main.getByRole('heading', { name: '倍率对比', exact: true })).toHaveCount(0);
+  await expect(main.getByText('按充值比例折算后，比较各平台最低分组', { exact: true })).toHaveCount(
+    0,
+  );
   await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
   await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
   await expect(main.getByLabel('倍率对比自动刷新周期')).toHaveValue('5');
@@ -837,18 +1033,42 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(openAiRateCard).not.toContainText('OpenAI 便宜 B');
   await expect(openAiRateCard.locator('.rate-inline-channel')).toHaveCount(0);
   await expect(openAiRateCard).toContainText('5 分钟稳定');
+  await expect(main.locator('.rate-platform-logo')).toHaveCount(4);
+  await expect(main.locator('.rate-platform-content')).toHaveCount(5);
   expect(
     await main.locator('.rate-comparison-list').evaluate((list) => {
       const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
-      const listRect = list.getBoundingClientRect();
+      const listStyle = getComputedStyle(list);
+      const cardRects = cards.slice(0, 4).map((card) => card.getBoundingClientRect());
       return {
         order: cards.map((card) => card.dataset.platform),
-        oneRow:
-          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
-        firstFourVisible: cards
-          .slice(0, 4)
-          .every((card) => card.getBoundingClientRect().right <= listRect.right + 1),
+        oneRow: new Set(cards.map((card) => card.offsetTop)).size === 1,
         scrollable: list.scrollWidth > list.clientWidth,
+        overflowX: listStyle.overflowX,
+        gap: listStyle.columnGap,
+        scrollbarWidth: listStyle.scrollbarWidth,
+        webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
+        equalCardHeights:
+          Math.max(...cardRects.map((rect) => rect.height)) -
+            Math.min(...cardRects.map((rect) => rect.height)) <=
+          1,
+        cardRadius: getComputedStyle(cards[0]!).borderRadius,
+        cardPadding: getComputedStyle(cards[0]!).paddingTop,
+        contentRadius: getComputedStyle(
+          cards[0]!.querySelector<HTMLElement>('.rate-platform-content')!,
+        ).borderRadius,
+        logoSizes: cards.slice(0, 4).map((card) => {
+          const logo = card.querySelector<HTMLImageElement>('.rate-platform-logo')!;
+          const rect = logo.getBoundingClientRect();
+          return {
+            width: rect.width,
+            height: rect.height,
+            loaded: logo.complete && logo.naturalWidth > 0,
+            svg:
+              logo.src.startsWith('data:image/svg+xml') ||
+              new URL(logo.src).pathname.endsWith('.svg'),
+          };
+        }),
         colors: Object.fromEntries(
           cards
             .slice(0, 4)
@@ -859,36 +1079,272 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   ).toEqual({
     order: ['openai', 'claude', 'gemini', 'grok', 'local-lab'],
     oneRow: true,
-    firstFourVisible: true,
     scrollable: true,
+    overflowX: 'auto',
+    gap: '24px',
+    scrollbarWidth: 'none',
+    webkitScrollbarDisplay: 'none',
+    equalCardHeights: true,
+    cardRadius: '32px',
+    cardPadding: '16px',
+    contentRadius: '24px',
+    logoSizes: [
+      { width: 40, height: 40, loaded: true, svg: true },
+      { width: 40, height: 40, loaded: true, svg: true },
+      { width: 40, height: 40, loaded: true, svg: true },
+      { width: 40, height: 40, loaded: true, svg: true },
+    ],
     colors: {
-      openai: 'rgb(241, 251, 244)',
-      claude: 'rgb(255, 248, 239)',
-      gemini: 'rgb(241, 248, 255)',
-      grok: 'rgb(241, 243, 245)',
+      openai: 'rgb(255, 255, 255)',
+      claude: 'rgb(255, 255, 255)',
+      gemini: 'rgb(255, 255, 255)',
+      grok: 'rgb(255, 255, 255)',
     },
   });
   expect(
     await main.locator('.site-card').evaluateAll((cards) => {
-      const footers = cards.map((card) =>
-        card.querySelector('.site-card-actions')?.getBoundingClientRect(),
+      const measurements = cards.map((card) => {
+        const cardRect = card.getBoundingClientRect();
+        const footer = card.querySelector<HTMLElement>('.site-card-actions');
+        const summary = card.querySelector<HTMLElement>('.rate-inline-channel');
+        const controls = footer ? Array.from(footer.children) : [];
+        const controlRects = controls.map((control) => control.getBoundingClientRect());
+        const footerRect = footer?.getBoundingClientRect();
+        const summaryRect = summary?.getBoundingClientRect();
+        return {
+          controlCount: controls.length,
+          display: footer ? getComputedStyle(footer).display : '',
+          flexWrap: footer ? getComputedStyle(footer).flexWrap : '',
+          oneRow:
+            controlRects.length === 3 &&
+            Math.max(...controlRects.map((rect) => rect.top)) -
+              Math.min(...controlRects.map((rect) => rect.top)) <=
+              1 &&
+            Math.max(...controlRects.map((rect) => rect.bottom)) -
+              Math.min(...controlRects.map((rect) => rect.bottom)) <=
+              1,
+          insideBounds: Boolean(
+            footer &&
+            footerRect &&
+            controlRects.every(
+              (rect) =>
+                rect.left >= footerRect.left - 1 &&
+                rect.right <= footerRect.right + 1 &&
+                rect.right <= cardRect.right + 1,
+            ),
+          ),
+          noOverflow: Boolean(
+            footer &&
+            footer.scrollWidth <= footer.clientWidth + 1 &&
+            footer.scrollHeight <= footer.clientHeight + 1,
+          ),
+          cardTop: cardRect.top,
+          cardBottom: cardRect.bottom,
+          footerTop: footerRect?.top,
+          footerBottom: footerRect?.bottom,
+          summaryTop: summaryRect?.top,
+          summaryBottom: summaryRect?.bottom,
+          summaryHeight: summaryRect?.height,
+          summaryNoOverflow: Boolean(summary && summary.scrollHeight <= summary.clientHeight + 1),
+          summaryBeforeFooter: Boolean(
+            summaryRect && footerRect && summaryRect.bottom <= footerRect.top + 1,
+          ),
+        };
+      });
+      const rows = Object.values(
+        Object.groupBy(measurements, (measurement) => Math.round(measurement.cardTop)),
+      ).filter((row): row is typeof measurements => Boolean(row));
+      const summaryHeights = measurements.flatMap((measurement) =>
+        measurement.summaryHeight === undefined ? [] : [measurement.summaryHeight],
       );
-      const summaries = cards.map((card) =>
-        card.querySelector('.rate-inline-channel')?.getBoundingClientRect(),
+      const footerBottomOffsets = measurements.flatMap((measurement) =>
+        measurement.footerBottom === undefined
+          ? []
+          : [measurement.cardBottom - measurement.footerBottom],
+      );
+      const summaryBottomOffsets = measurements.flatMap((measurement) =>
+        measurement.summaryBottom === undefined
+          ? []
+          : [measurement.cardBottom - measurement.summaryBottom],
       );
       return {
-        aligned: footers.every(
-          (footer) => footer && Math.abs(footer.bottom - footers[0]!.bottom) <= 1,
+        allControlsValid: measurements.every(
+          ({
+            controlCount,
+            display,
+            flexWrap,
+            oneRow,
+            insideBounds,
+            noOverflow,
+            summaryBeforeFooter,
+            summaryNoOverflow,
+          }) =>
+            controlCount === 3 &&
+            display === 'grid' &&
+            flexWrap === 'nowrap' &&
+            oneRow &&
+            insideBounds &&
+            noOverflow &&
+            summaryBeforeFooter &&
+            summaryNoOverflow,
         ),
-        summariesBeforeFooter: summaries.every(
-          (summary, index) => !summary || summary.bottom <= footers[index]!.top,
-        ),
+        footerTopsAligned: rows.every((row) => {
+          const tops = row.flatMap((measurement) =>
+            measurement.footerTop === undefined ? [] : [measurement.footerTop],
+          );
+          return Math.max(...tops) - Math.min(...tops) <= 1;
+        }),
+        summaryTopsAligned: rows.every((row) => {
+          const tops = row.flatMap((measurement) =>
+            measurement.summaryTop === undefined ? [] : [measurement.summaryTop],
+          );
+          return Math.max(...tops) - Math.min(...tops) <= 1;
+        }),
+        summaryHeightsAligned: Math.max(...summaryHeights) - Math.min(...summaryHeights) <= 1,
+        footerBottomOffsetsAligned:
+          Math.max(...footerBottomOffsets) - Math.min(...footerBottomOffsets) <= 1,
+        summaryBottomOffsetsAligned:
+          Math.max(...summaryBottomOffsets) - Math.min(...summaryBottomOffsets) <= 1,
       };
     }),
-  ).toEqual({ aligned: true, summariesBeforeFooter: true });
+  ).toEqual({
+    allControlsValid: true,
+    footerTopsAligned: true,
+    summaryTopsAligned: true,
+    summaryHeightsAligned: true,
+    footerBottomOffsetsAligned: true,
+    summaryBottomOffsetsAligned: true,
+  });
+  const originalMainBounds = await application.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows().find(
+      (candidate) => candidate.getBounds().width > 500,
+    );
+    const bounds = window?.getBounds();
+    window?.setBounds({ x: 0, y: 0, width: 1600, height: 900 });
+    return bounds;
+  });
+  await main.waitForTimeout(200);
+  await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
+  await captureEvidence(main, '12-rate-comparison-stitch-wide');
+  expect(
+    await main.locator('.rate-comparison-list').evaluate((list) => {
+      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+      const listRect = list.getBoundingClientRect();
+      return {
+        firstFourVisible: cards
+          .slice(0, 4)
+          .every(
+            (card) =>
+              card.getBoundingClientRect().left >= listRect.left - 1 &&
+              card.getBoundingClientRect().right <= listRect.right + 1,
+          ),
+        oneRow:
+          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
+      };
+    }),
+  ).toEqual({ firstFourVisible: true, oneRow: true });
+  const longNameCard = main.locator('.site-card').filter({
+    hasText: '用于验证超长站点名称不会挤压底部操作区的测试站点',
+  });
+  expect(
+    await longNameCard.locator('.site-card-header').evaluate((header) => {
+      const name = header.querySelector<HTMLElement>('.site-name');
+      const status = header.querySelector<HTMLElement>('.status-pill');
+      return {
+        nameTitle: name?.getAttribute('title'),
+        nameWhiteSpace: name ? getComputedStyle(name).whiteSpace : '',
+        statusWhiteSpace: status ? getComputedStyle(status).whiteSpace : '',
+        statusSingleLine: status
+          ? status.getBoundingClientRect().height <= 30 &&
+            status.scrollWidth <= status.clientWidth + 1
+          : false,
+      };
+    }),
+  ).toEqual({
+    nameTitle: '用于验证超长站点名称不会挤压底部操作区的测试站点',
+    nameWhiteSpace: 'nowrap',
+    statusWhiteSpace: 'nowrap',
+    statusSingleLine: true,
+  });
+  expect(
+    await main.locator('.site-card-grid').evaluate((grid) => {
+      const cards = Array.from(grid.querySelectorAll<HTMLElement>('.site-card'));
+      const firstTop = cards[0]?.getBoundingClientRect().top;
+      return {
+        count: cards.length,
+        firstRowCount: cards.filter(
+          (card) => Math.abs(card.getBoundingClientRect().top - (firstTop ?? 0)) <= 1,
+        ).length,
+      };
+    }),
+  ).toEqual({ count: 5, firstRowCount: 4 });
+  await captureEvidence(main, '10-overview-wide-footer-layout');
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 720, height: 800 });
+  });
+  await main.waitForTimeout(200);
+  await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
+  await captureEvidence(main, '13-rate-comparison-stitch-narrow');
+  expect(
+    await main.locator('.rate-comparison-list').evaluate((list) => {
+      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+      const style = getComputedStyle(list);
+      return {
+        oneRow:
+          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
+        scrollable: list.scrollWidth > list.clientWidth,
+        scrollbarWidth: style.scrollbarWidth,
+        webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
+      };
+    }),
+  ).toEqual({
+    oneRow: true,
+    scrollable: true,
+    scrollbarWidth: 'none',
+    webkitScrollbarDisplay: 'none',
+  });
+  expect(
+    await main.locator('.site-card').evaluateAll((cards) =>
+      cards.every((card) => {
+        const footer = card.querySelector<HTMLElement>('.site-card-actions');
+        const controls = footer ? Array.from(footer.children) : [];
+        const rects = controls.map((control) => control.getBoundingClientRect());
+        return Boolean(
+          footer &&
+          controls.length === 3 &&
+          Math.max(...rects.map((rect) => rect.top)) - Math.min(...rects.map((rect) => rect.top)) <=
+            1 &&
+          footer.scrollWidth <= footer.clientWidth + 1 &&
+          footer.scrollHeight <= footer.clientHeight + 1,
+        );
+      }),
+    ),
+  ).toBe(true);
+  expect(
+    await main
+      .locator('.site-card-actions .recharge-ratio-control select')
+      .first()
+      .evaluate((select) => select.getBoundingClientRect().width),
+  ).toBeGreaterThanOrEqual(105);
+  await main.locator('.site-card-actions').first().scrollIntoViewIfNeeded();
+  await captureEvidence(main, '11-overview-narrow-footer-layout');
+  if (originalMainBounds)
+    await application.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows()
+        .find((candidate) => candidate.getBounds().width > 500)
+        ?.setBounds(bounds);
+    }, originalMainBounds);
+  await main.waitForTimeout(200);
+  await main.evaluate(async (siteIds) => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) throw new Error('Desktop bridge unavailable');
+    for (const siteId of siteIds) await desktop.delete(siteId);
+  }, additionalSites);
+  await expect(main.locator('.site-card')).toHaveCount(2);
   await captureEvidence(main, '08-rate-comparison');
   const ratesBeforePopoverRefresh = availableRatesRequestCount;
-  const keysBeforePopoverRefresh = keysRequestCount;
   await firstSiteCard.getByRole('button', { name: '查看倍率' }).click();
   await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toBeVisible();
   await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toContainText(
@@ -926,7 +1382,6 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect
     .poll(() => availableRatesRequestCount, { timeout: 15_000 })
     .toBeGreaterThan(ratesBeforePopoverRefresh);
-  expect(keysRequestCount).toBe(keysBeforePopoverRefresh);
 
   availableRatesMode = 'error';
   await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
@@ -960,8 +1415,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
     '本地模型通道',
   );
-  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
-    '折算 0.04x',
+  await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).not.toContainText(
+    /折算|倍率不可用/,
   );
   await captureEvidence(main, '09-channel-status-popover');
   expect(channelRequestCount).toBe(channelsBeforeShortcut);
@@ -1087,9 +1542,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.locator('.channel-card')).toHaveCount(7);
   await expect(main.getByText('E2E 分组', { exact: true }).first()).toBeVisible();
   await expect(main.locator('.channel-card-status-stack')).toHaveCount(7);
-  await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(7);
-  await expect(main.locator('.channel-card').filter({ hasText: '折算 0.04x' })).toHaveCount(2);
-  await expect(main.locator('.channel-card').filter({ hasText: '倍率不可用' })).toHaveCount(1);
+  await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(0);
+  await expect(main.locator('.channel-card').filter({ hasText: /折算|倍率不可用/ })).toHaveCount(0);
   expect(
     await main.locator('.channel-cards').evaluate((node) => getComputedStyle(node).overflowY),
   ).toBe('auto');
@@ -1173,4 +1627,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   }
   await application.close();
   await new Promise<void>((resolve) => server.close(() => resolve()));
+  await Promise.all(
+    layoutServers.map(
+      (layoutServer) => new Promise<void>((resolve) => layoutServer.close(() => resolve())),
+    ),
+  );
 });

@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.3.5',
+  shellVersion: '1.4.1',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -19,6 +19,7 @@ const desktopBridge: DesktopBridge = {
     refreshAllRateGroups: () => ipcRenderer.invoke('rates:refresh-all'),
     setRechargeRatio: (siteId, ratio) => ipcRenderer.invoke('rates:ratio:set', { siteId, ratio }),
     usage: (query) => ipcRenderer.invoke('usage:list', query),
+    usageStats: (query) => ipcRenderer.invoke('usage:stats', query),
     usageGroups: (siteId) => ipcRenderer.invoke('usage:groups', siteId),
     usageModels: (siteId) => ipcRenderer.invoke('usage:models', siteId),
     usageCsv: (query) => ipcRenderer.invoke('usage:csv', query),
@@ -26,6 +27,8 @@ const desktopBridge: DesktopBridge = {
     channelStatus: (siteId, channelId) =>
       ipcRenderer.invoke('channels:status', { siteId, channelId }),
     keys: (siteId) => ipcRenderer.invoke('keys:list', siteId),
+    apiKeys: (query) => ipcRenderer.invoke('api-keys:list', query),
+    updateApiKeyGroup: (input) => ipcRenderer.invoke('api-keys:update-group', input),
     keyContexts: () => ipcRenderer.invoke('keys:contexts'),
     keyPreference: (siteId) => ipcRenderer.invoke('keys:preference:get', siteId),
     setKeyPreference: (siteId, value) =>

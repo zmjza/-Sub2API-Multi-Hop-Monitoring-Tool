@@ -1,7 +1,6 @@
 import {
   Activity,
   AlertTriangle,
-  BadgePercent,
   CheckCircle2,
   Clock3,
   Globe2,
@@ -12,12 +11,10 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
-  AvailableRateGroup,
   ChannelDetailPayload,
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
-import { channelRatePresentation } from '../channels/channel-ranking';
 
 type Channel = ChannelViewPayload['channels'][number];
 
@@ -31,8 +28,6 @@ export function ChannelStatusPopover(props: {
   siteId: string;
   siteName: string;
   cache?: ChannelStatusCache;
-  rateGroups?: AvailableRateGroup[];
-  ratio?: number;
   loadChannels?: (force?: boolean) => Promise<ChannelViewPayload>;
   loadDetail?: (channelId: string, force?: boolean) => Promise<ChannelDetailPayload>;
   onCacheChange?: (cache: ChannelStatusCache) => void;
@@ -191,10 +186,6 @@ export function ChannelStatusPopover(props: {
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
   const model = detail?.models[0];
   const checkedAt = selected?.timeline.at(-1)?.checkedAt;
-  const relationships = cacheRef.current?.channels?.availableChannels ?? [];
-  const selectedRate = selected
-    ? channelRatePresentation(selected, props.rateGroups, props.ratio, channels, relationships)
-    : undefined;
   return createPortal(
     <div
       ref={panelRef}
@@ -241,7 +232,7 @@ export function ChannelStatusPopover(props: {
         <div className="rate-channel-state">
           <Activity size={24} />
           <strong>该站点不支持渠道状态</strong>
-          <span>渠道能力缺失不会影响倍率、余额和用量查询</span>
+          <span>渠道能力缺失不会影响余额和用量查询</span>
         </div>
       ) : state === 'no-data' ? (
         <div className="rate-channel-state">
@@ -270,15 +261,6 @@ export function ChannelStatusPopover(props: {
             </div>
             <div className="rate-channel-hero-status">
               <span className={`rate-channel-status ${status}`}>{statusLabel(status)}</span>
-              {selectedRate && (
-                <span
-                  className={`channel-rate-badge is-${selectedRate.state}`}
-                  title={selectedRate.title}
-                >
-                  <BadgePercent size={12} />
-                  {selectedRate.label}
-                </span>
-              )}
             </div>
           </div>
           {detailLoading ? (
@@ -339,13 +321,6 @@ export function ChannelStatusPopover(props: {
           </div>
           <div className="rate-channel-list" aria-label="全部渠道状态">
             {channels.map((channel) => {
-              const rate = channelRatePresentation(
-                channel,
-                props.rateGroups,
-                props.ratio,
-                channels,
-                relationships,
-              );
               return (
                 <button
                   type="button"
@@ -361,10 +336,6 @@ export function ChannelStatusPopover(props: {
                     <em className={`rate-channel-status ${channel.status}`}>
                       {statusLabel(channel.status)}
                     </em>
-                  </span>
-                  <span className={`channel-rate-badge is-${rate.state}`} title={rate.title}>
-                    <BadgePercent size={11} />
-                    {rate.label}
                   </span>
                   <small>
                     {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
