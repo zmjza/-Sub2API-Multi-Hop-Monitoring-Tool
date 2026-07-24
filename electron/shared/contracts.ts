@@ -278,6 +278,7 @@ export const managedApiKeySchema = z
     id: numericEntityIdSchema,
     name: z.string().min(1).max(200),
     maskedLabel: z.string().min(1).max(80),
+    apiKey: z.string().min(1).max(512).optional(),
     status: z.enum(['active', 'disabled', 'quota-exhausted', 'expired', 'unknown']),
     groupId: numericEntityIdSchema.optional(),
     groupName: z.string().max(300).optional(),
@@ -360,6 +361,7 @@ export const usageStatsSchema = z
   })
   .strict();
 export type ApiKeyListQuery = z.input<typeof apiKeyListQuerySchema>;
+export type ApiKeyDetailRequest = z.infer<typeof apiKeyDetailRequestSchema>;
 export type ApiKeyGroupUpdateRequest = z.infer<typeof apiKeyGroupUpdateRequestSchema>;
 export type ManagedApiKey = z.infer<typeof managedApiKeySchema>;
 export type ApiKeyListPayload = z.infer<typeof apiKeyListPayloadSchema>;

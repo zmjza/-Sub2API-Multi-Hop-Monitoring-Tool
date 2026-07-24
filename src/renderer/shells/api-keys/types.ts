@@ -26,6 +26,7 @@ export interface ApiKeyRow {
   id: string;
   name: string;
   maskedLabel: string;
+  apiKey?: string;
   groupId?: string;
   groupName?: string;
   platform?: string;
@@ -33,6 +34,7 @@ export interface ApiKeyRow {
   currentConcurrency?: number;
   todayActualCost?: number;
   last30DaysActualCost?: number;
+  /** Upstream compatibility field; intentionally not rendered. */
   expiresAt?: string;
   status: ApiKeyStatus;
   createdAt: string;
@@ -63,6 +65,7 @@ export interface ApiKeysPageProps {
   onGroupFilterChange?: (groupId: string) => void;
   onStatusFilterChange?: (status: '' | ApiKeyStatus) => void;
   onRefresh?: () => void;
+  onCopyKey?: (keyId: string) => void;
   onGroupChange?: (keyId: string, groupId: string) => void;
   onPageChange?: (page: number) => void;
   onOpenSiteManagement?: () => void;

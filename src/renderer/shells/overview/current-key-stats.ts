@@ -6,8 +6,7 @@ export interface CurrentKeyLike {
   subscriptionType?: string;
 }
 
-export type AvailableCredit =
-  { kind: 'amount'; value: number } | { kind: 'subscription' } | { kind: 'unknown' };
+export type AvailableCredit = { kind: 'amount'; value: number } | { kind: 'unknown' };
 
 export type CurrentKeyStatsState =
   | { state: 'loading' | 'unknown'; keyId?: string }
@@ -36,7 +35,6 @@ export function availableCreditForKey(
   accountBalance: number | undefined,
 ): AvailableCredit {
   if (!key) return { kind: 'unknown' };
-  if (key.subscriptionType?.trim()) return { kind: 'subscription' };
   if (typeof accountBalance !== 'number' || !Number.isFinite(accountBalance))
     return { kind: 'unknown' };
   const balance = Math.max(0, accountBalance);
@@ -60,19 +58,20 @@ export function aggregateCurrentKeyStats(states: CurrentKeyStatsState[]) {
       totals.totalTokens += state.totalTokens;
       totals.totalActualCost += state.totalActualCost;
       totals.counted += 1;
-      if (state.availableCredit.kind === 'amount')
+      if (state.availableCredit.kind === 'amount') {
         totals.availableCredit += state.availableCredit.value;
-      if (state.availableCredit.kind === 'subscription') totals.subscriptionCount += 1;
+        totals.availableCreditCount += 1;
+      }
       return totals;
     },
     {
       availableCredit: 0,
+      availableCreditCount: 0,
       totalRequests: 0,
       totalTokens: 0,
       totalActualCost: 0,
       counted: 0,
       total: states.length,
-      subscriptionCount: 0,
     },
   );
 }

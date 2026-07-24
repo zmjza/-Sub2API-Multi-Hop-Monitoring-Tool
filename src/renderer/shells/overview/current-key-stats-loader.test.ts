@@ -22,7 +22,7 @@ describe('CurrentKeyStatsLoader', () => {
     const result = await loader.load([
       { siteId: 'a', keyId: '1', availableCredit: { kind: 'amount', value: 2 } },
       { siteId: 'b', keyId: '2', availableCredit: { kind: 'amount', value: 3 } },
-      { siteId: 'c', keyId: '3', availableCredit: { kind: 'subscription' } },
+      { siteId: 'c', keyId: '3', availableCredit: { kind: 'amount', value: 4 } },
     ]);
 
     expect(maximum).toBe(2);

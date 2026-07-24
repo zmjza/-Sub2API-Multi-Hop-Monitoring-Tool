@@ -3,16 +3,16 @@
 上级：[[03-索引]]、[[_全站总览与汇总]]
 依赖：M07、M08、M09、M11、M14、M16
 需求：RQ-24、RQ-27
-状态：已完成；自动/手动当前 Key、额度公式、跨站受控聚合和总览页面检查通过
+状态：已完成；1.4.2 已统一自动/手动当前 Key 金额口径、顶部求和和总览页面检查
 
 ## 口径
 
-每个站点只贡献一个实际当前 Key。有限额 Key 的可用额度为 `max(0, min(账号余额, quota - quota_used))`；无限额 Key 使用账号余额；订阅分组只显示“按订阅规则”。无法解析当前 Key 的站点不使用整站用量兜底。
+每个站点只贡献一个实际当前 Key。有限额 Key 的可用额度为 `max(0, min(账号余额, quota - quota_used))`；quota 缺失、0 或无效代表无限额度并使用账号余额；`subscriptionType` 不覆盖金额语义。顶部把所有已确认金额相加，金额未知的站点不计入且不伪造为零。无法解析当前 Key 的站点不使用整站用量兜底。
 
 ## 微观任务
 
 - **OK-01 当前 Key 解析契约**：目标是把自动/手动偏好解析成可审计结果；输入为 SiteKeyContext、默认 Key 规则；文件为 domain key-policy/contracts/tests；边界为 manual 失效时保留偏好并标 fallback；RED 覆盖无 Key、全停用、手动失效、自动未确定；步骤为领域测试后实现；验证 core/key-policy 测试；完成条件是结果含 keyId 与 basis；依赖 AK-03；禁止静默切 auto。
-- **OK-02 可用额度领域函数**：目标是实现有限额、无限额、订阅和缺失值口径；输入为余额/quota/quotaUsed/subscriptionType；文件为 domain snapshot 或独立函数及测试；边界为负数夹 0、货币精度、undefined；RED 覆盖 quota 0、quotaUsed 超额、余额更小、订阅；步骤为纯函数 TDD；验证定向测试；完成条件是公式和展示态一致；依赖 AK-01；禁止把账号余额称分组余额。
+- **OK-02 可用额度领域函数**：目标是实现有限额、无限额和缺失值口径；输入为余额/quota/quotaUsed/subscriptionType；文件为 current-key-stats 及测试；边界为负数夹 0、货币精度、undefined，订阅元数据不改变金额；RED 覆盖 quota 0、quotaUsed 超额、余额更小、订阅元数据；步骤为纯函数 TDD；验证定向测试；完成条件是公式和展示态一致；依赖 AK-01；禁止把账号余额称分组余额或显示“按订阅规则”。
 - **OK-03 单 Key 今日 stats 服务**：目标是每站按当前 keyId 读取请求、Token、消费；输入为 `/usage/stats?period=today&api_key_id`；文件为 adapter/site-service/tests；边界为 IANA 时区、并发与认证；RED 覆盖单站失败、0 值、切 Key；步骤为 adapter/helper 后服务；验证集成测试；完成条件是每个 snapshot 带 siteId/keyId/date；依赖 UF-02、OK-01；禁止用站点整体 stats 回退。
 - **OK-04 跨站聚合与缓存**：目标是受控并发合并所选 Key 指标；输入为各站 SelectedKeySnapshot；文件为 site-service/domain snapshot/tests；边界为缓存键含 siteId/keyId/date/revision，单站失败隔离；RED 覆盖部分成功、重复站点、跨日、Key 变更；步骤为聚合测试、缓存、失效；验证 service/domain 测试；完成条件是 counted/total 与纳入站点明确；依赖 OK-02/03；禁止跨站共享 Token 或余额。
 - **OK-05 Dashboard 契约与 IPC**：目标是扩展总览 ViewModel 为所选 Key 指标和口径状态；输入为 OK-04；文件为 contracts/main/preload/tests；边界为兼容悬浮窗现有站点快照，不向悬浮窗启用渠道轮询；RED 覆盖 extra fields、订阅态、未确定 Key；步骤为契约测试再 handler；验证 contracts/integration；完成条件是 Renderer 无需自行聚合；依赖 OK-04；禁止破坏旧窗口 API。

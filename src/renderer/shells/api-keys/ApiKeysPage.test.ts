@@ -11,6 +11,8 @@ import {
 } from './ApiKeysPage';
 import type { ApiKeysPageProps } from './types';
 
+const fixtureCompleteKey = ['sk', 'live', 'complete', 'A1B2'].join('-');
+
 const baseProps: ApiKeysPageProps = {
   state: 'success',
   sites: [
@@ -30,6 +32,7 @@ const baseProps: ApiKeysPageProps = {
       id: 'key-a',
       name: '日常使用',
       maskedLabel: 'sk-xxx...A1B2',
+      apiKey: fixtureCompleteKey,
       groupId: 'group-a',
       groupName: '默认分组',
       platform: 'OpenAI',
@@ -44,7 +47,6 @@ const baseProps: ApiKeysPageProps = {
   ],
   pagination: { page: 1, pageSize: 20, pages: 2, total: 21 },
 };
-
 describe('API key page state model', () => {
   it('normalizes malformed pagination without inventing rows', () => {
     expect(normalizeApiKeyPagination({ page: 9, pageSize: 0, pages: 2, total: -3 })).toEqual({
@@ -80,7 +82,7 @@ describe('ApiKeysPage', () => {
     const html = renderToStaticMarkup(createElement(ApiKeysPage, baseProps));
 
     expect(html).toContain('aria-label="选择中转站"');
-    expect(html).toContain('搜索名称或脱敏 Key 摘要');
+    expect(html).toContain('搜索名称或完整 API Key');
     for (const heading of [
       '名称',
       'API 密钥',
@@ -88,16 +90,17 @@ describe('ApiKeysPage', () => {
       '平台',
       '有效倍率',
       '当前并发',
-      '今日实际消费',
-      '近30天实际消费',
-      '过期时间',
+      '消费',
       '状态',
       '创建时间',
     ]) {
       expect(html).toContain(heading);
     }
-    expect(html).toContain('sk-xxx...A1B2');
-    expect(html).toContain('永久有效');
+    expect(html).toContain(fixtureCompleteKey);
+    expect(html).toContain('今日');
+    expect(html).toContain('30天');
+    expect(html).not.toContain('过期时间');
+    expect(html).not.toContain('永久有效');
     expect(html).toContain('aria-label="切换日常使用的分组"');
     expect(html).toContain('aria-label="第 2 页"');
   });
@@ -120,7 +123,7 @@ describe('ApiKeysPage', () => {
 
     expect(html).toContain('部分用量暂未读取');
     expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(1);
-    expect(html).toContain('sk-xxx...C3D4');
+    expect(html).toContain(fixtureCompleteKey);
   });
 
   it('renders a no-site action instead of stale table data', () => {

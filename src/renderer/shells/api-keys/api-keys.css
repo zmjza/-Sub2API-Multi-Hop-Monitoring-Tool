@@ -142,7 +142,7 @@
 
 .api-keys-table {
   width: 100%;
-  min-width: 1420px;
+  min-width: 1260px;
   border-collapse: collapse;
   white-space: nowrap;
   font-size: 12px;
@@ -155,6 +155,11 @@
   color: #777587;
   text-align: left;
   font-weight: 700;
+}
+
+.api-keys-table th:first-child,
+.api-keys-name-cell {
+  text-align: center;
 }
 
 .api-keys-table td {
@@ -173,7 +178,7 @@
 }
 
 .api-keys-truncate,
-.api-keys-masked {
+.api-keys-full-key {
   display: block;
   max-width: 180px;
   overflow: hidden;
@@ -181,9 +186,34 @@
   white-space: nowrap;
 }
 
-.api-keys-masked {
+.api-keys-full-key {
   color: #4f46e5;
   font-size: 12px;
+}
+
+.api-keys-copy-key {
+  display: inline-flex;
+  max-width: 290px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #4f46e5;
+  cursor: pointer;
+  text-align: left;
+}
+
+.api-keys-copy-key:hover,
+.api-keys-copy-key:focus-visible {
+  border-color: #d8d4f5;
+  background: #f5f2ff;
+  outline: none;
+}
+
+.api-keys-copy-key svg {
+  flex: 0 0 auto;
 }
 
 .api-keys-group-cell {
@@ -217,6 +247,57 @@
 .api-keys-cost {
   color: #047857;
   font-weight: 700;
+}
+
+.api-keys-cost-stack {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.api-keys-cost-stack span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-keys-cost-stack small {
+  color: #777587;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.api-keys-platform,
+.api-keys-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.api-keys-platform-claude {
+  color: #ea580c;
+}
+.api-keys-platform-openai {
+  color: #059669;
+}
+.api-keys-platform-grok {
+  color: #374151;
+}
+.api-keys-platform-gemini {
+  color: #2563eb;
+}
+.api-keys-platform-unknown {
+  color: #777587;
+}
+
+.api-keys-rate {
+  color: #7c3aed;
+}
+.api-keys-rate-unknown {
+  color: #777587;
+  font-weight: 500;
 }
 
 .api-keys-status {

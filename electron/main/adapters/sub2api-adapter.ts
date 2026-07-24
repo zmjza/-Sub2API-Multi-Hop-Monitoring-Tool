@@ -585,6 +585,7 @@ function normalizeManagedApiKey(value: unknown): ManagedApiKey {
     id,
     name: (parsed.name?.trim() || '未命名 Key').slice(0, 200),
     maskedLabel: `sk-xxx...${(rawKey ? rawKey.slice(-4) : id.slice(-4)).padStart(4, 'x')}`,
+    ...(rawKey ? { apiKey: rawKey } : {}),
     status,
     ...(groupId && isSafeNumericId(groupId) ? { groupId } : {}),
     ...(stringOrUndefined(group.name) ? { groupName: stringOrUndefined(group.name) } : {}),

@@ -9,6 +9,7 @@ import {
   latestTimelinePoint,
   matchGroupToChannel,
   normalizeChannelIdentity,
+  resolveOverviewChannelMatch,
   resolveKeyGroupChannel,
   rankChannels,
   selectDisplayedChannel,
@@ -151,6 +152,137 @@ describe('rankChannels', () => {
     );
 
     expect(result).toMatchObject({ status: 'ambiguous', basis: 'group-id' });
+  });
+
+  it('resolves overview ambiguity only inside the structured candidate set by closest name', () => {
+    const outsider = {
+      id: 'outside',
+      name: 'Codex 高速专线',
+      platform: 'openai',
+      primaryModel: 'gpt-5.4',
+      status: 'normal' as const,
+      availability7d: 100,
+    };
+    const candidates = [
+      {
+        id: 'near',
+        name: 'Codex 高速专线 A',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'normal' as const,
+        availability7d: 98,
+      },
+      {
+        id: 'far',
+        name: 'Codex 普通备用池',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'normal' as const,
+        availability7d: 99,
+      },
+    ];
+    const result = resolveOverviewChannelMatch(
+      { status: 'ambiguous', candidates, basis: 'group-id' },
+      'Codex 高速专线',
+      [],
+      '42',
+    );
+
+    expect(result).toMatchObject({ status: 'matched', channel: { id: 'near' } });
+    expect(result.status === 'matched' && result.channel).not.toBe(outsider);
+  });
+
+  it('uses relationship platform and models after equal names', () => {
+    const candidates = [
+      {
+        id: 'claude',
+        name: '共享池',
+        platform: 'anthropic',
+        primaryModel: 'claude-opus-4',
+        status: 'normal' as const,
+      },
+      {
+        id: 'openai',
+        name: '共享池',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'degraded' as const,
+      },
+    ];
+    const result = resolveOverviewChannelMatch(
+      { status: 'ambiguous', candidates, basis: 'group-id' },
+      '共享分组',
+      [
+        {
+          name: '共享池',
+          platforms: [
+            {
+              platform: 'openai',
+              groupIds: ['42'],
+              groupNames: ['共享分组'],
+              modelNames: ['gpt-5.4'],
+            },
+          ],
+        },
+      ],
+      '42',
+    );
+
+    expect(result).toMatchObject({ status: 'matched', channel: { id: 'openai' } });
+  });
+
+  it('uses health, freshness, availability, and stable id as deterministic late tie-breakers', () => {
+    const candidates = [
+      {
+        id: 'z-stale',
+        name: '共享池',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'normal' as const,
+        availability7d: 99.9,
+        timeline: [{ status: 'normal' as const, checkedAt: '2026-07-20T00:00:00Z' }],
+      },
+      {
+        id: 'b-fresh',
+        name: '共享池',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'normal' as const,
+        availability7d: 99.5,
+        timeline: [{ status: 'normal' as const, checkedAt: '2026-07-21T00:00:00Z' }],
+      },
+      {
+        id: 'a-degraded',
+        name: '共享池',
+        platform: 'openai',
+        primaryModel: 'gpt-5.4',
+        status: 'degraded' as const,
+        availability7d: 100,
+        timeline: [{ status: 'normal' as const, checkedAt: '2026-07-22T00:00:00Z' }],
+      },
+    ];
+    const resolve = (items: typeof candidates) =>
+      resolveOverviewChannelMatch(
+        { status: 'ambiguous', candidates: items, basis: 'relationship' },
+        '共享分组',
+        [],
+      );
+
+    expect(resolve(candidates)).toMatchObject({ status: 'matched', channel: { id: 'b-fresh' } });
+    expect(resolve([...candidates].reverse())).toMatchObject({
+      status: 'matched',
+      channel: { id: 'b-fresh' },
+    });
+
+    const stableIdTie = candidates.slice(0, 2).map((candidate) => ({
+      ...candidate,
+      availability7d: 99,
+      timeline: [{ status: 'normal' as const, checkedAt: '2026-07-21T00:00:00Z' }],
+    }));
+    expect(resolve(stableIdTie)).toMatchObject({
+      status: 'matched',
+      channel: { id: 'b-fresh' },
+    });
   });
 
   it('does not invent an automatic current key when the default label is absent', () => {

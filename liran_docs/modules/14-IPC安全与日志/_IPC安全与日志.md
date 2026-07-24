@@ -22,6 +22,7 @@
 - 拒绝任意导航、任意新窗口和任意 shell 打开；外部 URL 使用协议/域名策略。
 - CSP 限制脚本、样式、连接和资源；开发与生产策略分开。
 - 日志 redactor 处理 password、token、authorization、apiKey、secretRef 和敏感嵌套字段。
+- 1.4.3 管理页允许完整 Key 在 Renderer 会话内存中短暂展示，但任何 IPC 日志、错误日志、数据库、缓存、截图和测试证据仍必须脱敏；复制 IPC 只返回成功布尔值。
 
 ## 验收
 

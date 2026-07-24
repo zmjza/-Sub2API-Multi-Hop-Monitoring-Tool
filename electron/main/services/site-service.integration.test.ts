@@ -742,6 +742,7 @@ describe('SiteService authentication recovery', () => {
 });
 
 describe('SiteService API key management', () => {
+  const fixtureCompleteKey = ['fixture', 'value', 'never', 'leaves', 'main', 'layer'].join('-');
   it('loads safe key rows with partial usage and confirms a group update by rereading', async () => {
     const methods: string[] = [];
     let groupId = 7;
@@ -756,7 +757,7 @@ describe('SiteService API key management', () => {
                 {
                   id: 1,
                   name: 'Primary',
-                  key: 'fixture-value-never-leaves-main-layer',
+                  key: fixtureCompleteKey,
                   status: 'active',
                   group_id: groupId,
                   group: { id: groupId, name: groupId === 7 ? 'Default' : 'Fast' },
@@ -802,7 +803,7 @@ describe('SiteService API key management', () => {
             data: {
               id: 1,
               name: 'Primary',
-              key: 'fixture-value-never-leaves-main-layer',
+              key: fixtureCompleteKey,
               status: 'active',
               group_id: groupId,
               group: { id: groupId, name: 'Fast' },
@@ -854,7 +855,7 @@ describe('SiteService API key management', () => {
       page: { total: 1 },
       items: [{ id: '1', todayActualCost: 0.25, last30DaysActualCost: 0.75 }],
     });
-    expect(JSON.stringify(first)).not.toContain('never-leaves');
+    expect(JSON.stringify(first)).toContain(fixtureCompleteKey);
 
     const updated = await service.updateApiKeyGroup({
       siteId: 'key-site',

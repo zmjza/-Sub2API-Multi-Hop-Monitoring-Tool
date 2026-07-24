@@ -20,6 +20,7 @@ import type {
   RateContexts,
   RateSiteContext,
   ApiKeyListQuery,
+  ApiKeyDetailRequest,
   ApiKeyGroupUpdateRequest,
   ApiKeyManagementPayload,
   ManagedApiKey,
@@ -683,6 +684,11 @@ export class SiteService {
       page: { page: page.page, pageSize: page.pageSize, pages: page.pages, total: page.total },
       state: partial ? 'partial' : 'success',
     };
+  }
+
+  async apiKeyDetail(input: ApiKeyDetailRequest): Promise<ManagedApiKey> {
+    const { adapter, accessToken } = this.apiKeySession(input.siteId);
+    return adapter.readApiKeyDetail(accessToken, input.keyId);
   }
 
   updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey> {

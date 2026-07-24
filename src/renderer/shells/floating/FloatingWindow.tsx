@@ -17,6 +17,13 @@ export function FloatingWindow(props: FloatingProps) {
   const failed =
     props.state === 'error' || props.state === 'auth-required' || props.state === 'unsupported';
   const liveBalance = props.selectedSite?.balance;
+  const currentKeyStats = props.selectedSite
+    ? props.currentKeyStatsBySite?.[props.selectedSite.id]
+    : undefined;
+  const keyTodayTokens =
+    currentKeyStats?.state === 'success' ? currentKeyStats.totalTokens : undefined;
+  const keyTodayCost =
+    currentKeyStats?.state === 'success' ? currentKeyStats.totalActualCost : undefined;
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];
   const phaseLabel =
     (
@@ -86,8 +93,8 @@ export function FloatingWindow(props: FloatingProps) {
         <span>
           今日 Token
           <b>
-            {props.selectedSite?.todayTokens !== undefined
-              ? formatTokenCount(props.selectedSite.todayTokens)
+            {keyTodayTokens !== undefined
+              ? formatTokenCount(keyTodayTokens)
               : runtime
                 ? '—'
                 : data.todayTokens}
@@ -96,8 +103,8 @@ export function FloatingWindow(props: FloatingProps) {
         <span>
           今日消费
           <b>
-            {props.selectedSite?.todayActualCost !== undefined
-              ? `$${props.selectedSite.todayActualCost.toFixed(4)}`
+            {keyTodayCost !== undefined
+              ? `$${keyTodayCost.toFixed(4)}`
               : runtime
                 ? '—'
                 : data.todayCost}

@@ -169,6 +169,12 @@ Key 与渠道监控关联口径：`/keys` 的 `group_id/group.id` 不能与监�
 
 - `sites:refresh-all`：主窗口总览触发全部站点调度刷新；当前站点优先、受控并发、同批去重、单站失败隔离。
 - `keys:contexts`：一次返回按 site ID 分组的脱敏 Key 摘要与偏好，不包含完整 Key。
+
+### 1.4.3 API 密钥管理页补充
+
+- `api-keys:list` 返回当前管理页短期使用的完整 Key 字段时，只允许在当前 Renderer 会话内存中显示，不得写入缓存、数据库或日志。
+- `api-keys:copy` 在 IPC 边界校验 `siteId/keyId`，主进程重新读取 Key 详情并调用 Electron `clipboard.writeText`；Renderer 不直接访问系统剪贴板。
+- 复制接口不返回完整 Key 文本，只返回 `{ copied: true }`；复制失败使用普通错误码。
 - `keys:changed`：站点级 Key context 更新事件；Renderer 仅重载对应 site ID，旧异步结果不得覆盖其他站点。
 - `usage:groups`：按 site ID 独立读取 `/groups/available` 并返回使用记录分组选项，不等待模型接口。
 - `usage:models`：按 site ID 独立读取 `/usage/dashboard/models` 并返回模型选项；失败或延迟不得清空已成功的分组和 Key。

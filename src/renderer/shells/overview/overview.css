@@ -933,7 +933,6 @@
     border-color 180ms ease;
 }
 .rate-comparison-list > article.rate-platform-card:hover {
-  transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--rate-accent) 45%, #c5c6cb);
   box-shadow: 0 18px 34px rgba(21, 28, 39, 0.12);
 }

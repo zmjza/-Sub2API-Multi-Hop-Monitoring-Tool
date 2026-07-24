@@ -529,7 +529,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     },
   ];
   const channelFixtures = [
-    { name: 'E2E 分组', platform: 'openai', model: 'gpt-e2e', status: 'normal' },
+    { name: 'E2E 分组精准通道', platform: 'openai', model: 'gpt-e2e', status: 'normal' },
     { name: 'OpenAI 便宜 A', platform: 'openai', model: 'gpt-e2e', status: 'normal' },
     { name: 'OpenAI 便宜 B', platform: 'openai', model: 'gpt-e2e', status: 'degraded' },
     { name: 'Claude 通道', platform: 'anthropic', model: 'claude-e2e', status: 'normal' },
@@ -669,6 +669,23 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       );
     if (url === '/api/v1/groups/rates')
       return response.end(JSON.stringify({ data: { g1: 1.4, 101: 1, 202: 0.5 } }));
+    if (url === '/api/v1/channels/available')
+      return response.end(
+        JSON.stringify({
+          data: [
+            {
+              name: 'E2E 分组精准通道',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groups: [{ name: 'E2E 分组' }],
+                  supported_models: [{ name: 'gpt-e2e' }],
+                },
+              ],
+            },
+          ],
+        }),
+      );
     if (request.method === 'POST' && url === '/api/v1/usage/dashboard/api-keys-usage')
       return response.end(
         JSON.stringify({ data: { stats: { 101: { api_key_id: 101, today_actual_cost: 0.25 } } } }),
@@ -842,7 +859,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByRole('button', { name: 'API 密钥', exact: true }).click();
   await expect(main.getByRole('heading', { name: 'API 密钥', exact: true })).toBeVisible();
   await expect(main.getByText('E2E Managed Key', { exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(main.locator('.api-keys-masked')).toContainText('sk-xxx...');
+  await expect(main.locator('.api-keys-full-key')).toContainText('x');
   await main.getByLabel('切换E2E Managed Key的分组').selectOption('202');
   await expect(main.getByText('分组已同步到远程站点', { exact: true })).toBeVisible({
     timeout: 15_000,
@@ -915,6 +932,12 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.locator('.site-card')).toHaveCount(5);
   await expect(main.locator('.site-card > .rate-inline-channel')).toHaveCount(5);
   await expect(main.getByText('正在获取余额', { exact: false })).toHaveCount(0);
+  const currentKeyCreditMetric = main.locator('.metric-card').filter({
+    hasText: '所选 Key 可用额度',
+  });
+  await expect(currentKeyCreditMetric).toContainText('$42.50');
+  await currentKeyCreditMetric.scrollIntoViewIfNeeded();
+  await captureEvidence(main, '16-overview-credit-sum');
   expect(
     await main
       .locator('.site-card > .rate-inline-channel')
@@ -998,6 +1021,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect
     .poll(() => channelDetailRequestCountById.get('channel-e2e-1') ?? 0, { timeout: 15_000 })
     .toBeGreaterThan(0);
+  await expect(firstSiteCard).not.toContainText('当前分组匹配到多个渠道');
+  expect(channelDetailRequestCountById.get('channel-e2e-2') ?? 0).toBe(0);
   await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText('E2E 分组');
   await expect(firstSiteCard).toContainText('详情加载失败，可单独重试');
   const currentDetailRequestsBeforeRetry = channelDetailRequestCountById.get('channel-e2e-1') ?? 0;
@@ -1540,7 +1565,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   expect((await stat(exportPath)).mode & 0o077).toBe(0);
   await main.getByRole('button', { name: '渠道状态', exact: true }).click();
   await expect(main.locator('.channel-card')).toHaveCount(7);
-  await expect(main.getByText('E2E 分组', { exact: true }).first()).toBeVisible();
+  await expect(main.getByText('E2E 分组精准通道', { exact: true }).first()).toBeVisible();
   await expect(main.locator('.channel-card-status-stack')).toHaveCount(7);
   await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(0);
   await expect(main.locator('.channel-card').filter({ hasText: /折算|倍率不可用/ })).toHaveCount(0);

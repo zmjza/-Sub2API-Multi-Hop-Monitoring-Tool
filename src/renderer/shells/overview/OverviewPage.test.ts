@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { formatSiteBalance, quotaForSite } from './OverviewPage';
 import type { OverviewProps } from './types';
 
-const props = (key: { quota?: number; quotaUsed?: number } | undefined): OverviewProps => ({
+const props = (
+  key: { quota?: number; quotaUsed?: number; subscriptionType?: string } | undefined,
+): OverviewProps => ({
   state: 'success',
   theme: 'light',
   reducedTransparency: false,
@@ -37,6 +39,16 @@ describe('overview quota display', () => {
     expect(quotaForSite(site, props({ quota: Number.NaN, quotaUsed: 4 }))).toBeUndefined();
     expect(formatSiteBalance(site, props({ quota: 0 }))).toBe('$12.00');
     expect(formatSiteBalance(site, props(undefined))).toBe('待查询');
+  });
+
+  it('does not let subscription metadata replace the finite or unlimited amount display', () => {
+    expect(
+      quotaForSite(site, props({ quota: 20, quotaUsed: 5, subscriptionType: 'monthly' })),
+    ).toMatchObject({ total: 20, used: 5, remaining: 12 });
+    expect(
+      formatSiteBalance(site, props({ quota: 20, quotaUsed: 5, subscriptionType: 'monthly' })),
+    ).toBe('$12.00');
+    expect(formatSiteBalance(site, props({ subscriptionType: 'monthly' }))).toBe('$12.00');
   });
 
   it('resolves the actual effective key in automatic mode', () => {

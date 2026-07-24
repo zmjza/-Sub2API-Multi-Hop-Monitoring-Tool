@@ -8,7 +8,7 @@
 
 ### 全部站点
 
-- 按每站实际当前 API Key 汇总可用额度、今日 Token、今日消费和状态覆盖；当前 Key 未确定时不回退整站统计。
+- 按每站实际当前 API Key 汇总可用额度、今日 Token、今日消费和状态覆盖；有限额 Key 取账号余额与 Key 剩余额度的较小值，无限额 Key 使用账号余额，顶部把各站确认金额相加；当前 Key 未确定时不回退整站统计。
 - 刷新按钮按当前站点优先、受控并发刷新全部站点，各卡片独立反馈进度和结果。
 - 显示真实加载、刷新、部分成功、过期、认证失效和错误状态。
 - Token 自动使用 K/M 紧凑格式，缺少可信倍率时明确显示不可用。
@@ -18,10 +18,11 @@
 
 ### API 密钥
 
-- 分页读取当前用户的全部 Key，只显示脱敏摘要，并按名称、摘要、分组和状态筛选。
-- 展示分组、平台、有效倍率、并发、今日与近 30 天实际消费、有效期和状态。
+- 分页读取当前用户的全部 Key，显示完整 Key 并支持点击复制，按名称、Key、分组和状态筛选。
+- 展示分组、平台、有效倍率、并发、今日与近 30 天实际消费、状态和创建时间；消费合并为一列，过期时间不再单独展示。
+- 分组下拉项直接显示分组名称、平台和倍率；平台使用 Claude、OpenAI、Grok、Gemini 图标，倍率使用图标化数值。
 - 普通用户可对单个 Key 切换可用分组；写入后必须远程回读一致才显示成功。
-- 完整 Key 不进入 Renderer、IPC 返回、SQLite、日志、CSV、截图或测试夹具。
+- 完整 Key 只在当前运行内存中短暂存在，不写入 SQLite、日志、缓存、CSV、截图或测试夹具；复制通过主进程 IPC 写入系统剪贴板。
 
 ### 使用记录
 
@@ -38,7 +39,7 @@
 - 支持站点与渠道下拉选择，切换时不使用旧对象数据冒充新结果。
 - 展示渠道状态、延迟、Ping、可用率和时间线；上游未返回的指标保持“待查询”。
 - 主窗口页面可见时默认每 60 秒低频刷新，可选 30/60/120 秒；隐藏、最小化或后台时暂停，并对 429 退避。
-- Key 与渠道优先按结构化分组 ID 关系关联；渠道健康区不再显示倍率折算徽标或文案。
+- Key 与渠道优先按结构化分组 ID 关系关联；总览遇到多个结构候选时只在候选集合内选取名称、平台和模型最接近者；渠道健康区不再显示倍率折算徽标或文案。
 - 渠道超过 6 个时列表独立滚动，不影响页头和详情区。
 
 ### 站点管理与设置
@@ -60,7 +61,7 @@
 
 ### 全部站点
 
-![全部站点](real-test-evidence/macos-2026-07-14-deep-optimization/01-overview.png)
+![全部站点](real-test-evidence/macos-1.4.2/16-overview-credit-sum.png)
 
 ### 使用记录
 
@@ -160,22 +161,24 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.4.1
+## 当前版本 1.4.3
 
 - `1.4.0` 新增 API 密钥管理与单 Key 分组切换，并完成使用记录自动筛选、全部站点当前 Key 统计、渠道低频实时监控、结构化渠道关联和渠道折算 UI 清理。
 - `1.4.1` 修复 macOS 应用 bundle 签名不完整导致安装后可能无法打开的问题，改由 electron-builder 完成整包 ad-hoc 签名。
+- `1.4.2` 统一全部站点额度口径，删除“按订阅规则”，顶部按站点当前 Key 可用金额求和，并为总览的多个结构化渠道候选增加确定性最接近择优。
+- `1.4.3` 优化 API 密钥页面和悬浮窗当前 Key 统计；macOS 安装副本页面检查通过，Windows 完成交叉构建，三个真实站点中两个登录成功，maok 本轮返回服务端错误。
 - 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
-本轮 1.4.1 双平台构建产物及校验值：
+本轮 1.4.3 双平台构建产物及校验值：
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg`          | `e25a5a5ecdb1c5e0e9a598eabda5f8d205199b3c1b8f512e3dcc2b5e912081ce` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-mac-arm64.dmg.blockmap` | `dd0162b7d5356a841b6515186ed17864969c742d73eab3d9b187b63c9a1e6ee5` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe`            | `4455af60671d1633a45cdedebbf231c91e0aa7a8e8eca8d7f35863154e3aeb80` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.1-win-x64.exe.blockmap`   | `c24ab8de965d8106f5cfb65fc58df2e786cd8c9b3f20856da8193b25a4cdd213` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg`          | `79c3e6e9c295d6bda0b64803771e9d0dce6d84597304219f5ad4301a835ed934` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg.blockmap` | `e1daf4e3005f080251d404eccd814ade60690a00b06a8240cef06e7a10f3b0f0` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe`            | `f527a660b102ff580db529f17710c452c0806a3b563be94c83bdfccefec55b7c` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe.blockmap`   | `6e707a5e4f3d7ce99e31653ed2a219e1514b1832159104433871940f04b3fcd2` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
 
@@ -194,14 +197,14 @@ npm run dev
 
 ## 验证状态
 
-2026-07-24 `1.4.1` 当前证据：
+2026-07-24 `1.4.3` 当前证据：
 
 - Prettier、ESLint、TypeScript：通过。
-- Vitest：34 个文件，210 项通过。
-- 开发 Electron E2E 与 macOS ARM64 打包应用 E2E：均为 6 项通过。
+- Vitest：34 个文件，215 项通过。
+- 开发 Electron E2E：目标流程 1 项通过；完整安装态 E2E 需在下一轮单实例清理后复跑。
 - 两个授权站点完成 Key 分组切换、回读和原分组恢复；第三站凭据登录受 Turnstile 阻断，仅通过用户已有登录会话只读确认 API 密钥页面能力。
-- macOS ARM64 打包应用：API 密钥宽窄布局、当前 Key 总览、使用记录、渠道低频刷新与去折算 UI 页面检查通过；证据位于 `real-test-evidence/macos-1.4.0/`。
-- macOS ARM64 安装副本：DMG 和 `/Applications` 应用严格签名校验通过，使用原有用户数据经 LaunchServices 正常显示前台窗口，最终安装副本 E2E 6/6。
+- macOS ARM64 安装应用：顶部 `$42.50` 跨站额度求和、有限额卡片、唯一渠道择优、宽窄总览及既有页面检查通过；16 张证据位于 `real-test-evidence/macos-1.4.2/`。
+- macOS ARM64 安装副本：DMG 和 `/Applications` 应用严格签名校验通过，使用原有用户数据经 LaunchServices 正常显示前台窗口，API 密钥页面和悬浮窗页面检查通过；完整安装态 E2E 需在下一轮单实例清理后复跑。
 - Windows x64：NSIS 交叉构建及 PE32+/asar/版本结构验证通过；未执行 Windows 真机。
 
 详细步骤和证据见 [macOS 真机实测清单](liran_docs/09-%E7%9C%9F%E6%9C%BA%E5%AE%9E%E6%B5%8B.md)。

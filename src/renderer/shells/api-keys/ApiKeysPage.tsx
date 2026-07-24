@@ -1,4 +1,19 @@
-import { AlertCircle, KeyRound, LoaderCircle, RefreshCw, Search } from 'lucide-react';
+import { useState } from 'react';
+import {
+  AlertCircle,
+  Check,
+  Code2,
+  Copy,
+  Gem,
+  Globe2,
+  KeyRound,
+  Leaf,
+  LoaderCircle,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
 import type { ApiKeyPagination, ApiKeysPageProps, ApiKeysPageState, ApiKeyStatus } from './types';
 import './api-keys.css';
 
@@ -12,6 +27,8 @@ const statusOptions: Array<{ value: '' | ApiKeyStatus; label: string }> = [
 ];
 
 export function ApiKeysPage(props: ApiKeysPageProps) {
+  const [copiedKeyId, setCopiedKeyId] = useState<string>();
+  const [copyError, setCopyError] = useState('');
   const selectedSite = props.sites.find((site) => site.id === props.selectedSiteId);
   const pagination = normalizeApiKeyPagination(props.pagination);
   const hasRows = props.keys.length > 0;
@@ -65,8 +82,8 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
           <label className="api-keys-search">
             <Search size={16} aria-hidden="true" />
             <input
-              aria-label="搜索名称或脱敏 Key 摘要"
-              placeholder="搜索名称或脱敏 Key 摘要"
+              aria-label="搜索名称或完整 API Key"
+              placeholder="搜索名称或完整 API Key"
               value={props.search}
               onChange={(event) => props.onSearchChange?.(event.target.value)}
             />
@@ -81,7 +98,7 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
               <option value="">全部分组</option>
               {props.groups.map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.name}
+                  {groupOptionLabel(group)}
                 </option>
               ))}
             </select>
@@ -120,7 +137,7 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
         </div>
 
         <div className="api-keys-feedback" aria-live="polite">
-          {apiKeyStateMessage(props.state) || props.successMessage || ''}
+          {apiKeyStateMessage(props.state) || copyError || props.successMessage || ''}
         </div>
 
         {blockingState ? (
@@ -139,9 +156,7 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                     <th>平台</th>
                     <th>有效倍率</th>
                     <th>当前并发</th>
-                    <th>今日实际消费</th>
-                    <th>近30天实际消费</th>
-                    <th>过期时间</th>
+                    <th>消费</th>
                     <th>状态</th>
                     <th>创建时间</th>
                   </tr>
@@ -154,13 +169,45 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                     );
                     return (
                       <tr key={key.id} className={isWriting ? 'api-keys-row-writing' : undefined}>
-                        <td className="api-keys-truncate" title={key.name}>
+                        <td className="api-keys-truncate api-keys-name-cell" title={key.name}>
                           {key.name}
                         </td>
                         <td>
-                          <code className="api-keys-masked" title={key.maskedLabel}>
-                            {key.maskedLabel}
-                          </code>
+                          <button
+                            type="button"
+                            className="api-keys-copy-key"
+                            title="点击复制完整 API Key"
+                            aria-label={`复制${key.name}的 API Key`}
+                            onClick={async () => {
+                              try {
+                                setCopyError('');
+                                await props.onCopyKey?.(key.id);
+                                setCopiedKeyId(key.id);
+                                window.setTimeout(
+                                  () =>
+                                    setCopiedKeyId((current) =>
+                                      current === key.id ? undefined : current,
+                                    ),
+                                  1600,
+                                );
+                              } catch {
+                                setCopiedKeyId(undefined);
+                                setCopyError('复制失败，请稍后重试');
+                              }
+                            }}
+                          >
+                            <code
+                              className="api-keys-full-key"
+                              title={key.apiKey ?? '完整 Key 待查询'}
+                            >
+                              {key.apiKey ?? '待查询'}
+                            </code>
+                            {copiedKeyId === key.id ? (
+                              <Check size={15} aria-hidden="true" />
+                            ) : (
+                              <Copy size={15} aria-hidden="true" />
+                            )}
+                          </button>
                         </td>
                         <td>
                           <div className="api-keys-group-cell">
@@ -177,11 +224,14 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                             >
                               {!key.groupId && <option value="">未分组</option>}
                               {key.groupId && !currentGroupInOptions && (
-                                <option value={key.groupId}>{key.groupName ?? '当前分组'}</option>
+                                <option value={key.groupId}>
+                                  {key.groupName ?? '当前分组'} · {platformLabel(key.platform)} ·{' '}
+                                  {formatRate(key.effectiveRate)}
+                                </option>
                               )}
                               {props.groups.map((group) => (
                                 <option key={group.id} value={group.id}>
-                                  {group.name}
+                                  {groupOptionLabel(group)}
                                 </option>
                               ))}
                             </select>
@@ -190,12 +240,21 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                             </small>
                           </div>
                         </td>
-                        <td>{key.platform || '待查询'}</td>
-                        <td>{formatRate(key.effectiveRate)}</td>
+                        <td>{platformBadge(key.platform)}</td>
+                        <td>{rateBadge(key.effectiveRate)}</td>
                         <td>{formatOptionalNumber(key.currentConcurrency)}</td>
-                        <td className="api-keys-cost">{formatCost(key.todayActualCost)}</td>
-                        <td className="api-keys-cost">{formatCost(key.last30DaysActualCost)}</td>
-                        <td>{key.expiresAt ? formatDateTime(key.expiresAt) : '永久有效'}</td>
+                        <td className="api-keys-cost">
+                          <div className="api-keys-cost-stack">
+                            <span>
+                              <small>今日</small>
+                              {formatCost(key.todayActualCost)}
+                            </span>
+                            <span>
+                              <small>30天</small>
+                              {formatCost(key.last30DaysActualCost)}
+                            </span>
+                          </div>
+                        </td>
                         <td>
                           <span className={`api-keys-status api-keys-status-${key.status}`}>
                             {statusLabel(key.status)}
@@ -299,6 +358,59 @@ function formatCost(value: number | undefined): string {
 
 function formatRate(value: number | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)}x` : '待查询';
+}
+
+function groupOptionLabel(group: ApiKeysPageProps['groups'][number]): string {
+  const platform = platformLabel(group.platform);
+  const rate = formatRate(group.rate);
+  return `${group.name} · ${platform} · ${rate}`;
+}
+
+function platformLabel(value: string | undefined): string {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === 'anthropic'
+    ? 'Claude'
+    : normalized === 'openai'
+      ? 'OpenAI'
+      : normalized === 'grok'
+        ? 'Grok'
+        : normalized === 'gemini'
+          ? 'Gemini'
+          : value || '待查询';
+}
+
+function platformBadge(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  const meta =
+    normalized === 'anthropic'
+      ? { label: 'Claude', className: 'api-keys-platform-claude', icon: <Sparkles size={15} /> }
+      : normalized === 'openai'
+        ? { label: 'OpenAI', className: 'api-keys-platform-openai', icon: <Leaf size={15} /> }
+        : normalized === 'grok'
+          ? { label: 'Grok', className: 'api-keys-platform-grok', icon: <Code2 size={15} /> }
+          : normalized === 'gemini'
+            ? { label: 'Gemini', className: 'api-keys-platform-gemini', icon: <Gem size={15} /> }
+            : {
+                label: '待查询',
+                className: 'api-keys-platform-unknown',
+                icon: <Globe2 size={15} />,
+              };
+  return (
+    <span className={`api-keys-platform ${meta.className}`} title={meta.label}>
+      {meta.icon}
+      <span>{meta.label}</span>
+    </span>
+  );
+}
+
+function rateBadge(value: number | undefined) {
+  const valid = typeof value === 'number' && Number.isFinite(value);
+  return (
+    <span className={`api-keys-rate ${valid ? '' : 'api-keys-rate-unknown'}`}>
+      <Zap size={14} aria-hidden="true" />
+      {valid ? `${value.toFixed(2)}x` : '待查询'}
+    </span>
+  );
 }
 
 function formatOptionalNumber(value: number | undefined): string {

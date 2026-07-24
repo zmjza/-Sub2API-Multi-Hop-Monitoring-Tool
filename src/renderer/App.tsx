@@ -618,9 +618,9 @@ export function App() {
       .catch(() => undefined);
   }, []);
   useEffect(() => {
-    if (initialLocation.surface === 'floating' || shell !== 'overview') return;
+    if (shell !== 'overview' && initialLocation.surface !== 'floating') return;
     void loadCurrentKeyStats();
-  }, [currentKeySelectionKey, shell]);
+  }, [currentKeySelectionKey, shell, initialLocation.surface]);
   useEffect(() => {
     if (initialLocation.surface === 'floating') return;
     const desktop = window.sub2apiDesktop?.sites;
@@ -796,6 +796,14 @@ export function App() {
         if (selectedSite) void loadApiKeys(selectedSite.id, next);
       }}
       onRefresh={() => selectedSite && void loadApiKeys(selectedSite.id, apiKeyFilters, true)}
+      onCopyKey={async (keyId) => {
+        if (!selectedSite) throw new Error('SITE_REQUIRED');
+        const result = await window.sub2apiDesktop?.sites.copyApiKey({
+          siteId: selectedSite.id,
+          keyId,
+        });
+        if (!result?.copied) throw new Error('API_KEY_COPY_FAILED');
+      }}
       onPageChange={(page) => {
         const next = { ...apiKeyFilters, page };
         setApiKeyFilters(next);
@@ -1012,6 +1020,7 @@ function apiKeyRow(key: ApiKeyManagementPayload['items'][number]): ApiKeyRow {
     id: key.id,
     name: key.name,
     maskedLabel: key.maskedLabel,
+    apiKey: key.apiKey,
     groupId: key.groupId,
     groupName: key.groupName,
     platform: key.platform,

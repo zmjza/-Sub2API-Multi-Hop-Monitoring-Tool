@@ -43,6 +43,7 @@ export interface DesktopBridge {
     keys(siteId: string): Promise<unknown>;
     apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload>;
     updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey>;
+    copyApiKey(input: { siteId: string; keyId: string }): Promise<{ copied: boolean }>;
     keyContexts(): Promise<SiteKeyContexts>;
     keyPreference(siteId: string): Promise<unknown>;
     setKeyPreference(

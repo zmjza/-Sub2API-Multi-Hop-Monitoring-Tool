@@ -25,6 +25,7 @@ import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
 import {
   matchGroupToChannel,
+  resolveOverviewChannelMatch,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
 import {
@@ -122,9 +123,9 @@ export function OverviewPage(props: OverviewProps) {
     liveSites.map((site) => props.currentKeyStatsBySite?.[site.id] ?? { state: 'unknown' }),
   );
   const currentKeyCreditLabel =
-    currentKeyTotals.counted === 0
+    currentKeyTotals.availableCreditCount === 0
       ? '待查询'
-      : `$${currentKeyTotals.availableCredit.toFixed(2)}${currentKeyTotals.subscriptionCount ? ` + ${currentKeyTotals.subscriptionCount} 订阅` : ''}`;
+      : `$${currentKeyTotals.availableCredit.toFixed(2)}`;
   const rateComparisons = comparePlatformRates(
     liveSites.map((site) => ({
       siteId: site.id,
@@ -160,9 +161,17 @@ export function OverviewPage(props: OverviewProps) {
       const groups = props.rateContexts?.sites[site.id]?.groups ?? [];
       const groupName =
         currentKey?.groupName ?? groups.find((group) => group.id === currentKey?.groupId)?.name;
-      const match = groupName
+      const strictMatch = groupName
         ? matchGroupToChannel(
             rateChannelsBySite[site.id] ?? [],
+            groupName,
+            rateChannelRelationshipsBySite[site.id] ?? [],
+            currentKey?.groupId,
+          )
+        : undefined;
+      const match = strictMatch
+        ? resolveOverviewChannelMatch(
+            strictMatch,
             groupName,
             rateChannelRelationshipsBySite[site.id] ?? [],
             currentKey?.groupId,
@@ -929,9 +938,7 @@ function formatCurrentKeyCredit(
   if (state?.state !== 'success') return keyStatValue(state);
   return state.availableCredit.kind === 'amount'
     ? `$${state.availableCredit.value.toFixed(2)}`
-    : state.availableCredit.kind === 'subscription'
-      ? '按订阅规则'
-      : formatSiteBalance(site, props);
+    : formatSiteBalance(site, props);
 }
 
 function statusTone(status: string): string {
@@ -955,13 +962,7 @@ export function quotaForSite(
     context.preference,
     effectiveKeyIdForSite(value.id, props),
   );
-  if (
-    !key ||
-    key.subscriptionType?.trim() ||
-    typeof key.quota !== 'number' ||
-    !Number.isFinite(key.quota) ||
-    key.quota <= 0
-  )
+  if (!key || typeof key.quota !== 'number' || !Number.isFinite(key.quota) || key.quota <= 0)
     return undefined;
   const used =
     typeof key.quotaUsed === 'number' && Number.isFinite(key.quotaUsed)
@@ -1018,11 +1019,7 @@ export function formatSiteBalance(site: unknown, props: OverviewProps): string {
     key,
     typeof value.balance === 'number' ? value.balance : undefined,
   );
-  return credit.kind === 'amount'
-    ? `$${credit.value.toFixed(2)}`
-    : credit.kind === 'subscription'
-      ? '按订阅规则'
-      : '待查询';
+  return credit.kind === 'amount' ? `$${credit.value.toFixed(2)}` : '待查询';
 }
 
 function siteNote(site: unknown): string {

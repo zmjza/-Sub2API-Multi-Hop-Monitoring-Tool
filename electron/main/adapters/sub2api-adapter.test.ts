@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Sub2ApiAdapter } from './sub2api-adapter.js';
 
 describe('Sub2ApiAdapter', () => {
+  const fixtureCompleteKey = ['fixture', 'complete', 'value'].join('-');
+  const fixtureDetailKey = ['another', 'complete', 'fixture'].join('-');
   it('normalizes profile, keys, rates, and usage statistics', async () => {
     const adapter = new Sub2ApiAdapter({
       getJson: async (path: string) => {
@@ -562,7 +564,7 @@ describe('Sub2ApiAdapter', () => {
               {
                 id: 11,
                 name: 'Daily',
-                key: 'fixture-complete-value',
+                key: fixtureCompleteKey,
                 status: 'active',
                 group_id: 25,
                 group: {
@@ -605,6 +607,7 @@ describe('Sub2ApiAdapter', () => {
         {
           id: '11',
           name: 'Daily',
+          apiKey: fixtureCompleteKey,
           maskedLabel: 'sk-xxx...alue',
           status: 'active',
           groupId: '25',
@@ -624,7 +627,7 @@ describe('Sub2ApiAdapter', () => {
       pages: 3,
       total: 41,
     });
-    expect(JSON.stringify(result)).not.toMatch(/fixture-complete-value|private_note|must-not-pass/);
+    expect(JSON.stringify(result)).not.toMatch(/private_note|must-not-pass/);
   });
 
   it('does not expose an entire malformed short key in its masked summary', async () => {
@@ -674,7 +677,7 @@ describe('Sub2ApiAdapter', () => {
     await expect(adapter.readApiKeyGroupRates('access')).resolves.toEqual({ '25': 0 });
   });
 
-  it('reads key detail and writes only group_id before returning a sanitized key', async () => {
+  it('reads key detail and writes only group_id before returning the complete key for transient display/copy', async () => {
     const calls: Array<{ method: string; path: string; body?: unknown }> = [];
     const adapter = new Sub2ApiAdapter({
       getJson: async (path: string) => {
@@ -683,7 +686,7 @@ describe('Sub2ApiAdapter', () => {
           data: {
             id: 11,
             name: 'Daily',
-            key: 'another-complete-fixture',
+            key: fixtureDetailKey,
             status: 'active',
             group_id: 25,
             group: { id: 25, name: 'OpenAI' },
@@ -704,8 +707,7 @@ describe('Sub2ApiAdapter', () => {
       { method: 'PUT', path: '/keys/11', body: { group_id: 25 } },
       { method: 'GET', path: '/keys/11' },
     ]);
-    expect(detail).toMatchObject({ id: '11', groupId: '25' });
-    expect(JSON.stringify(detail)).not.toContain('another-complete-fixture');
+    expect(detail).toMatchObject({ id: '11', groupId: '25', apiKey: fixtureDetailKey });
   });
 
   it('splits batch key usage into at most 100 ids and leaves missing metrics absent', async () => {

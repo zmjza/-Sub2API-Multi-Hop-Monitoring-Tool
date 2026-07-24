@@ -1,5 +1,53 @@
 # 更新说明
 
+## 1.4.3 - 2026-07-24
+
+### API 密钥页面与悬浮窗统计优化
+
+- API 密钥页面显示完整 Key，支持点击复制；完整值仅用于当前运行内存，不写入数据库、日志、缓存或测试证据，剪贴板写入由主进程完成。
+- 名称列居中并优化字重，平台改为 Claude/OpenAI/Grok/Gemini 图标，倍率改为图标数值，分组下拉项提前显示平台和倍率。
+- 合并今日与近 30 天消费列，删除过期时间列，优化搜索、分组、状态和站点选择控件。
+- 悬浮窗“今日 Token”“今日消费”改按当前有效 API Key 统计，不再使用整站快照。
+
+### 验证状态
+
+- TypeScript、ESLint、Prettier、Vitest 和开发态 Electron E2E 通过；macOS 安装副本页面检查通过，maok 真实登录因 Turnstile verification failed 受阻，Windows 仅交叉构建。
+
+### 1.4.3 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg`          | `79c3e6e9c295d6bda0b64803771e9d0dce6d84597304219f5ad4301a835ed934` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg.blockmap` | `e1daf4e3005f080251d404eccd814ade60690a00b06a8240cef06e7a10f3b0f0` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe`            | `f527a660b102ff580db529f17710c452c0806a3b563be94c83bdfccefec55b7c` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe.blockmap`   | `6e707a5e4f3d7ce99e31653ed2a219e1514b1832159104433871940f04b3fcd2` |
+
+## 1.4.2 - 2026-07-24
+
+### 总览额度与渠道关联
+
+- 全部站点不再显示“按订阅规则”；`subscriptionType` 只保留为上游元数据，不再覆盖总览额度语义。
+- 有限额 Key 继续按 `max(0, min(账号余额, quota - quota_used))` 展示 1.3.9 的总额、已用、进度和剩余；缺失、0 或无效 quota 视为无限额并显示账号余额。
+- 顶部“所选 Key 可用额度”对每个已解析站点的金额求和，未知站点不伪造为零；安装态 E2E 验证 5 个 `$8.50` 汇总为 `$42.50`。
+- 严格渠道匹配仍对多个候选返回歧义，保证倍率比较不误用渠道；总览仅在该结构化候选集合内按名称、关系平台、模型、健康、新鲜度、可用率和稳定 ID 选出唯一最接近渠道，卡片、详情请求和重试共用其 ID。
+
+### 验证与发布
+
+- Prettier、ESLint、TypeScript、Vitest 34 文件/215 项、生产构建、开发 Electron E2E 6/6 和 `/Applications` 安装副本 E2E 6/6 通过。
+- 16 张 macOS 安装应用证据位于 `real-test-evidence/macos-1.4.2/`，包含顶部额度求和、有限额卡片和宽窄总览。
+- DMG 通过 `hdiutil verify`；构建目录与 `/Applications` 安装副本通过 `codesign --verify --deep --strict`，版本/asar 为 1.4.2，主程序为 ARM64。
+- Windows x64 NSIS 已交叉构建，安装器为 PE32，解包主程序为 PE32+ x86-64，asar 为 1.4.2；未执行 Windows 真机。
+- macOS 仍为 ad-hoc 签名且未公证，不表述为 Apple Developer ID 可信分发。
+
+### 1.4.2 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.2-mac-arm64.dmg`          | `1bb98803bb98f50b327ab293024108a6a57c59b181b6f16fe0212f85f90f5b49` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.2-mac-arm64.dmg.blockmap` | `e362ab0b49b58d05c4aad0110bbabb7a7fcc308caf0f0ec6b5cb47e97f400c60` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.2-win-x64.exe`            | `7405b626cdc49cbc65810ba300747761bcba085b4a25fd4a7cb7c04ee15184f0` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.2-win-x64.exe.blockmap`   | `a1d261094373c4938819f5436e762c8187c3f075f947e1a8482560298b56a0b6` |
+
 ## 1.4.1 - 2026-07-24
 
 ### macOS 安装启动修复

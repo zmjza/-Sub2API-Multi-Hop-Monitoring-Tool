@@ -207,7 +207,7 @@ Key 能读到 `group_id`，渠道监控也有 `id`，直接比较或用名称包
 
 **正确做法**
 
-主关系使用 `key.group.name` 与 `monitor.name` 经 NFKC、大小写、括号和无语义分隔符规范化后的完整相等。零个精确结果时才使用 `/channels/available` 的渠道、平台、分组和模型结构化关系，且必须得到唯一结果。统一返回 `matched/unmatched/ambiguous`。
+主关系使用 `key.group.name` 与 `monitor.name` 经 NFKC、大小写、括号和无语义分隔符规范化后的完整相等。零个精确结果时才使用 `/channels/available` 的渠道、平台、分组和模型结构化关系。共享严格 matcher 必须返回 `matched/unmatched/ambiguous`，倍率比较只接受 matched。总览若业务明确要求从多个结构化候选中显示一个渠道，应在 strict result 之后单独处理，只能在 `ambiguous.candidates` 内依次比较完整名称、文本相似度、关系平台、模型、健康、新鲜度、可用率和稳定 ID；卡片、详情请求和重试必须复用同一最终 ID。
 
 **验证方式**
 
@@ -215,7 +215,7 @@ Key 能读到 `group_id`，渠道监控也有 `id`，直接比较或用名称包
 
 **禁止事项**
 
-禁止 `group_id === monitor.id`、`includes`、前后缀、相似度、删除语义词、按 provider 取第一个、按可用率消除歧义或借用兄弟分组。
+禁止 `group_id === monitor.id`、在共享严格 matcher 内用 `includes`/前后缀/相似度消除歧义、删除语义词、按 provider 取第一个或借用兄弟分组。总览候选择优不得从 `ambiguous.candidates` 外取值，不得让健康度压过更强的名称、平台或模型证据，也不得改变倍率比较的严格语义。
 
 **相关文件或命令**
 
@@ -289,3 +289,8 @@ Electron E2E 读取每个 footer 的计算样式、三个子控件坐标、scrol
 **适用范围**
 
 全部站点卡片底部操作区、当前渠道摘要及其他等高网格卡片的固定 footer。
+
+## 2026-07-24 API Key 页面倍率展示
+
+- API Key 分组下拉项必须同时显示分组名称、平台和有效倍率，倍率 `0` 是有效值，不能使用 truthy 判断隐藏。
+- 页面倍率图标仅表达 Key 当前有效倍率；不要复用渠道状态页已删除的“折算”文案或 BadgePercent。

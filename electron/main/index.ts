@@ -10,6 +10,7 @@ import {
   safeStorage,
   Notification,
   dialog,
+  clipboard,
 } from 'electron';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
@@ -39,6 +40,7 @@ import {
   rateSiteContextSchema,
   rechargeRatioRequestSchema,
   apiKeyListQuerySchema,
+  apiKeyDetailRequestSchema,
   apiKeyGroupUpdateRequestSchema,
   apiKeyManagementPayloadSchema,
   managedApiKeySchema,
@@ -264,6 +266,13 @@ function registerIpc() {
       await siteService.updateApiKeyGroup(apiKeyGroupUpdateRequestSchema.parse(input)),
     ),
   );
+  ipcMain.handle('api-keys:copy', async (_event, input: unknown) => {
+    const request = apiKeyDetailRequestSchema.parse(input);
+    const detail = await siteService.apiKeyDetail(request);
+    if (!detail.apiKey) throw new Error('API_KEY_UNAVAILABLE');
+    clipboard.writeText(detail.apiKey);
+    return { copied: true };
+  });
   ipcMain.handle('keys:contexts', () => siteKeyContextsSchema.parse(siteService.listKeyContexts()));
   ipcMain.handle('keys:preference:get', (_event, input: unknown) =>
     siteService.getKeyPreference(refreshRequestSchema.parse({ siteId: input }).siteId),
