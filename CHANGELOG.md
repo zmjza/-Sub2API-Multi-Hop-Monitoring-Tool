@@ -7,16 +7,16 @@
 - 增加固定 Gitee Release 源、严格 SemVer/稳定版 manifest 校验、SHA-256 下载校验、下载进度和临时文件清理。
 - 右上角版本徽标支持检查更新，启动时自动检查；支持立即更新、跳过此版本和稍后提醒。
 - Windows 目标为 NSIS 静默安装并自动重启；macOS 在当前 ad-hoc/未公证条件下打开 DMG 并提示手动替换。
-- 本版本为“真机更新测试专用”，本版本不包含业务功能变化；Gitee Release 尚未发布，线上下载与 macOS 替换仍待真实环境验收。
+- 本版本为“真机更新测试专用”，本版本不包含业务功能变化。`mac-arm64.dmg` 是 macOS ARM64 安装包，`win-x64.exe` 是 Windows x64 安装包；两者均上传到同一 Gitee Release。
 
 ### 1.4.6 产物校验
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg`          | `e197955dc76b3581d51b303853b86f4b992e087926d4d705d5c265cc100f22b4` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg.blockmap` | `6f1a7d8d46cc5c9841cc50c3f57b9cb667578242d9780e93818fdf9ff28008ae` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.6-win-x64.exe`            | `f3252b23398698e7894b32f8ac62a11c5efd2dc2d89af0125049a3e433de3035` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.6-win-x64.exe.blockmap`   | `dc0a2d53e470f3a7fec7590980fafb1a99f1fe74ca4d2f9bf47f0e5cd1a6b0b1` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg`          | `1f605d1b463d2696e5ca763783ae7a3f8d531af5652cda8489361e4124f76b1b` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg.blockmap` | `19adf7fbc37727d7348341dc3f64c1c2694de4891d47bd1dddce6fed28a7300a` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.6-win-x64.exe`            | `0483cbe7c8758fe57e263df8c8d3ecb6e6153f1ee051c80fb1881aef0d51c49f` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.6-win-x64.exe.blockmap`   | `548cab13adeff98f2f020748d15e477566e50f74ca8b324ec687baf9e630055b` |
 
 ## 1.4.5 - 2026-07-25
 
