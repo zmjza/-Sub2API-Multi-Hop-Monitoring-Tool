@@ -65,6 +65,10 @@
     "directories": {
       "output": "release"
     },
+    "electronLanguages": [
+      "en-US",
+      "zh-CN"
+    ],
     "artifactName": "Sub2API-Multi-Hub-Monitor-${version}-${os}-${arch}.${ext}",
     "mac": {
       "icon": "build/icon.icns",

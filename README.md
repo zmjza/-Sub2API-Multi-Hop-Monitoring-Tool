@@ -115,7 +115,8 @@
 - 密码、access token 和 refresh token 通过 Electron `safeStorage` 使用平台安全后端保护。
 - SQLite 只保存站点元数据、凭据引用、脱敏快照和设置，不存储明文密码或完整 API Key。
 - 真实站点验证仅对用户明确授权的 Key 执行可恢复分组切换，并在同次验证中回读恢复原分组；不创建、删除或修改其他远程数据。
-- 项目不提供云同步、遥测、付款或远程删除。在线更新已实现 `UPD-28` 核心链路：只使用 Gitee 稳定版，启动/设置/版本徽标可检查，Windows 目标为 NSIS 自动更新，macOS 在当前免费 ad-hoc 条件下采用 DMG 下载/打开降级流程。1.4.6 为真机更新测试专用；Gitee Release 发布和真实更新验收仍待完成。
+- 项目不提供云同步、遥测、付款或远程删除。在线更新已实现 `UPD-28` 核心链路：只使用 Gitee 稳定版，启动/设置/版本徽标可检查，Windows 目标为 NSIS 自动更新，macOS 在当前免费 ad-hoc 条件下采用 DMG 下载/打开降级流程。1.4.6 为真机更新测试专用；Gitee Release 已发布并完成 macOS 在线下载/替换验收，Windows 真机仍未验证。
+- 发布规则：每个 Gitee Release 同时上传 macOS ARM64 的 `mac-arm64.dmg` 和 Windows x64 的 `win-x64.exe`，并同步上传两个 blockmap 与 `update-manifest.json`；Release 说明必须明确解释两个安装包的平台。
 
 ## 技术栈
 
