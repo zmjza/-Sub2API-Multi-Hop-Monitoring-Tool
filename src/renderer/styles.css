@@ -184,6 +184,34 @@ input {
   font-weight: 800;
   white-space: nowrap;
 }
+.app-version-badge {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+.update-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line, #e5e7ef);
+  background: #fffdf3;
+  color: #3b3520;
+}
+.update-banner p {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.update-banner progress {
+  width: 120px;
+}
+.update-banner button {
+  min-height: 30px;
+}
 .app-version-badge svg {
   flex: 0 0 auto;
 }

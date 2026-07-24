@@ -15,6 +15,7 @@ import type {
   ApiKeyManagementPayload,
   ManagedApiKey,
 } from '../shared/contracts.js';
+import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
@@ -63,6 +64,14 @@ export interface DesktopBridge {
     setFloatingSettings(value: FloatingSettings): Promise<FloatingSettings>;
     appSettings(): Promise<AppSettings>;
     setAppSettings(value: AppSettings): Promise<AppSettings>;
+    updateCheck(): Promise<UpdateCheckResult>;
+    updateDownload(
+      manifest: UpdateManifest,
+    ): Promise<{ filePath: string; platform: NodeJS.Platform }>;
+    updateInstall(filePath: string): Promise<{ mode: 'restarted' | 'manual' }>;
+    updateSkip(version: string): Promise<void>;
+    updateRemindLater(version: string): Promise<void>;
+    onUpdateProgress(listener: (value: { received: number; total?: number }) => void): () => void;
     notificationPermission(): Promise<{ supported: boolean }>;
     onChanged(listener: () => void): () => void;
     onKeyContextChanged(listener: (siteId: string) => void): () => void;

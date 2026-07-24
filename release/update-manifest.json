@@ -1,0 +1,16 @@
+{
+  "version": "1.4.6",
+  "channel": "stable",
+  "publishedAt": "2026-07-25T03:01:00+08:00",
+  "releaseNotes": "真机更新测试专用\n本版本不包含业务功能变化\n仅用于验证更新检查、下载、安装、重启和数据保留。",
+  "testOnly": true,
+  "macArm64": {
+    "url": "https://gitee.com/zarq/Sub2API-Multi-Hub-Monitoring-Tool/releases/download/1.4.6/Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg",
+    "sha256": "e197955dc76b3581d51b303853b86f4b992e087926d4d705d5c265cc100f22b4"
+  },
+  "winX64": {
+    "url": "https://gitee.com/zarq/Sub2API-Multi-Hub-Monitoring-Tool/releases/download/1.4.6/Sub2API-Multi-Hub-Monitor-1.4.6-win-x64.exe",
+    "sha256": "f3252b23398698e7894b32f8ac62a11c5efd2dc2d89af0125049a3e433de3035"
+  },
+  "blockmap": "https://gitee.com/zarq/Sub2API-Multi-Hub-Monitoring-Tool/releases/download/1.4.6/Sub2API-Multi-Hub-Monitor-1.4.6-mac-arm64.dmg.blockmap"
+}

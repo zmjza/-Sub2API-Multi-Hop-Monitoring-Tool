@@ -54,6 +54,10 @@ import type {
   RateContexts,
   ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
+import type {
+  UpdateCheckResult,
+  UpdateManifest,
+} from '../../electron/main/services/update-service';
 const initialLocation = parsePreviewLocation(window.location.search);
 const showPreviewControls =
   import.meta.env.DEV || new URLSearchParams(window.location.search).get('preview') === 'true';
@@ -104,6 +108,9 @@ export function App() {
   const floatingOpacity = floatingSettings.opacity;
   const [currentSiteId, setCurrentSiteId] = useState<string>();
   const [sitesSection, setSitesSection] = useState<'notifications' | 'settings'>();
+  const [updateState, setUpdateState] = useState<UpdateCheckResult | undefined>();
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
   const currentSiteRef = useRef<string | undefined>(undefined);
   const refreshingSiteIdsRef = useRef<Set<string>>(new Set());
   const shellRef = useRef(shell);
@@ -121,6 +128,46 @@ export function App() {
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
   const versionLabel = normalizeVersionLabel(window.sub2apiDesktop?.shellVersion);
+  const checkForUpdate = () => {
+    const request = window.sub2apiDesktop?.sites.updateCheck();
+    if (request) void request.then(setUpdateState);
+  };
+  const downloadUpdate = async (manifest: UpdateManifest) => {
+    setUpdateDownloading(true);
+    setUpdateProgress(0);
+    try {
+      const result = await window.sub2apiDesktop?.sites.updateDownload(manifest);
+      if (result) {
+        const install = await window.sub2apiDesktop?.sites.updateInstall(result.filePath);
+        if (install?.mode === 'manual')
+          setUpdateState({
+            status: 'error',
+            code: 'MACOS_MANUAL',
+            message: 'DMG 已打开，请将新 App 替换旧 App 后重新启动。',
+          });
+      }
+    } catch (error) {
+      setUpdateState({
+        status: 'error',
+        code: 'DOWNLOAD_FAILED',
+        message: error instanceof Error ? error.message : '下载失败',
+      });
+    } finally {
+      setUpdateDownloading(false);
+    }
+  };
+  useEffect(() => {
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) return;
+    const unsubscribe = desktop.onUpdateProgress((value) =>
+      setUpdateProgress(value.total ? Math.round((value.received / value.total) * 100) : 0),
+    );
+    const timer = window.setTimeout(checkForUpdate, 1200);
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, []);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -929,14 +976,15 @@ export function App() {
                 : '—'}
             </span>
           </span>
-          <span
+          <button
             className="app-version-badge"
             aria-label={`版本 ${versionLabel}`}
-            title="当前应用版本"
+            title="点击检查更新"
+            onClick={checkForUpdate}
           >
             <Tag size={14} aria-hidden="true" />
             <span>{versionLabel}</span>
-          </span>
+          </button>
           <button
             className="icon-button"
             aria-label="刷新"
@@ -966,6 +1014,47 @@ export function App() {
             <span aria-hidden>×</span>
           </button>
         </header>
+        {updateState && updateState.status !== 'up-to-date' && updateState.status !== 'skipped' && (
+          <section className="update-banner" role="status">
+            {updateState.status === 'available' ? (
+              <>
+                <strong>发现新版本 {updateState.manifest.version}</strong>
+                <p>
+                  {updateState.manifest.testOnly
+                    ? '真机更新测试专用。本版本不包含业务功能变化。'
+                    : updateState.manifest.releaseNotes}
+                </p>
+                {updateDownloading && <progress max="100" value={updateProgress} />}
+                <button
+                  disabled={updateDownloading}
+                  onClick={() => void downloadUpdate(updateState.manifest)}
+                >
+                  {updateDownloading ? `下载中 ${updateProgress}%` : '立即更新'}
+                </button>
+                <button
+                  onClick={() => {
+                    void window.sub2apiDesktop?.sites.updateSkip(updateState.manifest.version);
+                    setUpdateState({ ...updateState, status: 'skipped' });
+                  }}
+                >
+                  跳过此版本
+                </button>
+                <button
+                  onClick={() => {
+                    void window.sub2apiDesktop?.sites.updateRemindLater(
+                      updateState.manifest.version,
+                    );
+                    setUpdateState({ ...updateState, status: 'skipped' });
+                  }}
+                >
+                  稍后提醒
+                </button>
+              </>
+            ) : (
+              <span>{updateState.message}</span>
+            )}
+          </section>
+        )}
         <div className="content-scroll">
           {(state === 'loading' || state === 'refreshing' || isRefreshingAll) && (
             <div className="refresh-progress" role="status">

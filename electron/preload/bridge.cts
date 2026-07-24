@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.4.5',
+  shellVersion: '1.4.6',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -52,6 +52,19 @@ const desktopBridge: DesktopBridge = {
       const request = ipcRenderer.invoke('app-settings:set', value);
       pendingAppSettings = request.catch(() => undefined);
       return request;
+    },
+    updateCheck: () => ipcRenderer.invoke('update:check'),
+    updateDownload: (manifest) => ipcRenderer.invoke('update:download', manifest),
+    updateInstall: (filePath) => ipcRenderer.invoke('update:install', filePath),
+    updateSkip: (version) => ipcRenderer.invoke('update:skip', version),
+    updateRemindLater: (version) => ipcRenderer.invoke('update:remind-later', version),
+    onUpdateProgress: (listener) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        value: { received: number; total?: number },
+      ) => listener(value);
+      ipcRenderer.on('update:progress', handler);
+      return () => ipcRenderer.removeListener('update:progress', handler);
     },
     notificationPermission: () => ipcRenderer.invoke('notifications:permission'),
     onChanged: (listener) => {

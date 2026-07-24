@@ -49,6 +49,7 @@ export function SitesPage(props: SitesProps) {
     floatingEnabled: boolean;
     staleAfterMinutes: 2 | 5 | 10 | 30;
   }>({ refreshIntervalMinutes: 5, floatingEnabled: true, staleAfterMinutes: 2 });
+  const [updateMessage, setUpdateMessage] = useState('');
   const [siteRules, setSiteRules] = useState<
     Record<string, { enabled?: boolean; threshold?: number }>
   >({});
@@ -415,6 +416,29 @@ export function SitesPage(props: SitesProps) {
           </section>
           <section className="notification-panel" id="general-settings">
             <h2>通用设置</h2>
+            <div className="notification-row">
+              <div>
+                <b>在线更新</b>
+                <small>{updateMessage || '检查 Gitee 稳定版更新'}</small>
+              </div>
+              <button
+                className="site-batch-button"
+                onClick={() => {
+                  void window.sub2apiDesktop?.sites.updateCheck().then((result) => {
+                    if (result.status === 'available')
+                      setUpdateMessage(
+                        `发现 ${result.manifest.version}：${result.manifest.testOnly ? '真机更新测试专用' : '有可用更新'}`,
+                      );
+                    else if (result.status === 'up-to-date') setUpdateMessage('当前已是最新版本');
+                    else if (result.status === 'skipped')
+                      setUpdateMessage(`已跳过 ${result.manifest.version}`);
+                    else setUpdateMessage(`检查失败：${result.message}`);
+                  });
+                }}
+              >
+                检查更新
+              </button>
+            </div>
             <div className="notification-row">
               <div>
                 <b>开机启动</b>

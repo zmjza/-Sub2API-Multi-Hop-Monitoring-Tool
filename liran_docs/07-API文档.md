@@ -53,6 +53,17 @@
 - `真实二开站待验证`：尚未通过真实站点或当前响应证据验证的字段/能力。
 - 二开站可能修改前缀、字段或能力，适配器必须进行运行时验证。
 
+## 在线更新接口（规划，非 sub2api 上游接口）
+
+| 能力 | 方向/入口 | 主要输入 | 标准化输出 | 当前证据 |
+| --- | --- | --- | --- | --- |
+| 检查更新 | 主进程 -> 固定 Gitee HTTPS feed | 当前版本、平台、架构、稳定通道 | `UpdateCheckResult`：无更新/可更新/不支持/错误，含版本、说明、资源和校验信息 | Gitee feed 兼容性待验证 |
+| 下载更新 | 主进程内部 | 已校验的目标资源 ID/URL | `UpdateDownloadState`：下载中、已完成、失败，含进度和脱敏错误 | 未实现 |
+| 安装更新 | 主进程内部 | 已完成且校验通过的本地包 | Windows 安装并重启；macOS 打开 DMG 或进入手动替换状态 | 平台行为待真实验证 |
+| 更新 IPC | Renderer <-> preload <-> 主进程 | `check`、`download`、`install`、`openDmg`、`skip`、`remindLater` | 类型化结果与事件，禁止任意 URL/路径 | 待设计和实现 |
+
+更新元数据最少需要版本、发布日期、平台、架构、下载地址、SHA-256、更新说明和测试版本标记；不得包含站点凭据、Token 或可执行脚本。正式实现前需要以实际 Gitee Release 资产验证字段和 URL，不得把本表当作已存在的公共 API。
+
 默认 API 基址：`<siteBaseUrl>/api/v1`，实际保存前需探测。
 鉴权：`Authorization: Bearer <access_token>`。不得把 Token 写入日志。
 

@@ -12,8 +12,10 @@ import {
   dialog,
   clipboard,
 } from 'electron';
+import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   siteInputSchema,
@@ -54,6 +56,7 @@ import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
 import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
 import { floatingWindowPolicy, resolveFloatingBounds } from './domain/window-bounds.js';
+import { compareSemver, UpdateService, updateManifestSchema } from './services/update-service.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -67,6 +70,7 @@ let appDatabase: AppDatabase;
 let isQuitting = false;
 let scheduler: RefreshScheduler;
 let notificationService: NotificationService;
+let updateService: UpdateService;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
@@ -332,6 +336,41 @@ function registerIpc() {
     if (!settings.floatingEnabled) floatingWindow?.hide();
     return settings;
   });
+  ipcMain.handle('update:check', () => updateService.check());
+  ipcMain.handle('update:download', async (event, input: unknown) => {
+    const result = await updateService.download(updateManifestSchema.parse(input), (value) =>
+      event.sender.send('update:progress', value),
+    );
+    return result;
+  });
+  ipcMain.handle('update:install', async (_event, input: unknown) => {
+    if (
+      typeof input !== 'string' ||
+      path.dirname(input) !== os.tmpdir() ||
+      !/^sub2api-update-\d+\.\d+\.\d+(?:-[^/]+)?\.(?:dmg|exe)$/.test(path.basename(input))
+    )
+      throw new Error('INVALID_UPDATE_PATH');
+    if (process.platform === 'darwin') {
+      await shell.openPath(input);
+      return { mode: 'manual' as const };
+    }
+    if (process.platform === 'win32') {
+      spawn(input, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+      app.quit();
+      return { mode: 'restarted' as const };
+    }
+    throw new Error('PLATFORM_UNSUPPORTED');
+  });
+  ipcMain.handle('update:skip', (_event, input: unknown) => {
+    if (typeof input !== 'string') throw new Error('INVALID_VERSION');
+    compareSemver(input, input);
+    updateService.skip(input);
+  });
+  ipcMain.handle('update:remind-later', (_event, input: unknown) => {
+    if (typeof input !== 'string') throw new Error('INVALID_VERSION');
+    compareSemver(input, input);
+    updateService.remindLater(input);
+  });
 }
 
 function safeRetryAfterSeconds(error: unknown): number | undefined {
@@ -509,6 +548,10 @@ app.whenReady().then(async () => {
   database.migrate();
   database.cleanupSnapshots(Date.now() - 30 * 24 * 60 * 60_000);
   appDatabase = database;
+  updateService = new UpdateService(app.getVersion(), {
+    get: (key, fallback) => database.getSetting(key, fallback),
+    set: (key, value) => database.setSetting(key, value),
+  });
   const testCodec = process.env.SUB2API_TEST_SECRET_CODEC === 'memory';
   const vault = new CredentialVault(
     testCodec
