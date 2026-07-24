@@ -141,7 +141,11 @@ describe('rate comparison rules', () => {
     const pending = comparePlatformRates([
       { siteId: 'pending', siteName: '待核验', ratio: 1, groups: [group('p', 'openai', 0.2)] },
     ]);
-    expect(pending[0]).toMatchObject({ platformKey: 'openai', state: 'checking', sites: [] });
+    expect(pending[0]).toMatchObject({
+      platformKey: 'openai',
+      state: 'ready',
+      stabilityLabel: '无渠道状态',
+    });
 
     const unsupported = comparePlatformRates([
       {
@@ -153,7 +157,11 @@ describe('rate comparison rules', () => {
         channels: [],
       },
     ]);
-    expect(unsupported[0]).toMatchObject({ platformKey: 'openai', state: 'empty', sites: [] });
+    expect(unsupported[0]).toMatchObject({
+      platformKey: 'openai',
+      state: 'ready',
+      stabilityLabel: '无渠道状态',
+    });
   });
 
   it('maps only the supported automatic refresh periods', () => {
@@ -563,8 +571,33 @@ describe('rate comparison rules', () => {
       },
     ]);
     expect(result.find((item) => item.platformKey === 'claude')).toMatchObject({
-      state: 'checking',
-      sites: [],
+      state: 'ready',
+      sites: [
+        expect.objectContaining({
+          siteId: 'no-status',
+          stabilityLabel: '无渠道状态',
+          stabilityScore: 0,
+          channelId: undefined,
+        }),
+      ],
+    });
+  });
+
+  it('includes an unsupported site in price recommendations without calling it stable', () => {
+    const result = comparePlatformRates([
+      {
+        siteId: 'unsupported',
+        siteName: '无渠道接口',
+        ratio: 1,
+        groups: [group('unsupported-group', 'openai', 0.2)],
+        channels: [],
+        channelState: 'unsupported',
+      },
+    ]);
+    expect(result.find((item) => item.platformKey === 'openai')).toMatchObject({
+      state: 'ready',
+      stabilityLabel: '无渠道状态',
+      sites: [expect.objectContaining({ stabilityLabel: '无渠道状态', stabilityScore: 0 })],
     });
   });
 

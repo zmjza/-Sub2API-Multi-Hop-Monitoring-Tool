@@ -462,7 +462,7 @@ export function OverviewPage(props: OverviewProps) {
                 ? formatRateMultiplier(recommendation.effectiveRate).replace(/x$/, '')
                 : '—';
               const stateLabel = recommendation
-                ? '稳定'
+                ? recommendation.stabilityLabel
                 : comparison.state === 'checking'
                   ? '核验中'
                   : '待推荐';
@@ -511,7 +511,11 @@ export function OverviewPage(props: OverviewProps) {
                     {recommendation ? (
                       <>
                         <span className="rate-platform-state-icon" aria-hidden="true">
-                          <CheckCircle2 size={26} />
+                          {recommendation.stabilityLabel === '稳定' ? (
+                            <CheckCircle2 size={26} />
+                          ) : (
+                            <Activity size={26} />
+                          )}
                         </span>
                         <p className="rate-platform-recommendation">
                           推荐渠道：
@@ -534,7 +538,13 @@ export function OverviewPage(props: OverviewProps) {
                             稳定 <b>{recommendation.stabilityScore.toFixed(1)}</b>
                           </span>
                         </div>
-                        <span className="rate-status-label 稳定">5 分钟稳定</span>
+                        <span
+                          className={`rate-status-label ${recommendation.stabilityLabel === '稳定' ? '稳定' : '待核验'}`}
+                        >
+                          {recommendation.stabilityLabel === '稳定'
+                            ? '5 分钟稳定'
+                            : '无渠道状态 · 待核验'}
+                        </span>
                       </>
                     ) : (
                       <>

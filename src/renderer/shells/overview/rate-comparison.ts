@@ -42,7 +42,7 @@ export interface PlatformRateComparison {
   effectiveRate?: number;
   priceScore?: number;
   stabilityScore?: number;
-  stabilityLabel: '稳定' | '正在核验' | '暂无稳定渠道';
+  stabilityLabel: '稳定' | '无渠道状态' | '正在核验' | '暂无稳定渠道';
   sites: Array<{
     siteId: string;
     siteName: string;
@@ -53,7 +53,7 @@ export interface PlatformRateComparison {
     priceScore: number;
     stabilityScore: number;
     totalScore: number;
-    stabilityLabel: '稳定';
+    stabilityLabel: '稳定' | '无渠道状态' | '状态未知' | '存在异常';
     channelId?: string;
   }>;
 }
@@ -271,7 +271,9 @@ type EligibleCandidate = {
   effectiveRate: number;
   groups: [AvailableRateGroup];
   availability7d: number;
-  channelId: string;
+  channelId?: string;
+  stabilityScore: number;
+  stabilityLabel: '稳定' | '无渠道状态';
 };
 
 type PlatformPool = {
@@ -316,8 +318,21 @@ export function comparePlatformRates(
         checking: false,
         candidates: [],
       };
-      if (site.channelState === undefined || site.channels === undefined) pool.checking = true;
-      if (match.status === 'matched') {
+      const noChannelStatus =
+        site.channelState === undefined || site.channelState === 'unsupported';
+      if (noChannelStatus) {
+        pool.candidates.push({
+          siteId: site.siteId,
+          siteName: site.siteName,
+          ratio,
+          rawRate: group.rate,
+          effectiveRate: normalizedRate,
+          groups: [group],
+          availability7d: -1,
+          stabilityScore: 0,
+          stabilityLabel: '无渠道状态',
+        });
+      } else if (match.status === 'matched') {
         const eligibility = channelEligibility(match.channel, now, site.channelState);
         if (eligibility.eligible)
           pool.candidates.push({
@@ -329,6 +344,8 @@ export function comparePlatformRates(
             groups: [group],
             availability7d: match.channel.availability7d ?? -1,
             channelId: match.channel.id,
+            stabilityScore: eligibility.score,
+            stabilityLabel: eligibility.label,
           });
       }
       pools.set(platform.key, pool);
@@ -350,7 +367,11 @@ export function comparePlatformRates(
       const maximum = Math.max(...pool.candidates.map((item) => item.effectiveRate));
       const scored = pool.candidates.map((item) => {
         const priceScore = normalizedPriceScore(item.effectiveRate, minimum, maximum);
-        return { ...item, priceScore, stabilityScore: 10, totalScore: priceScore * 0.6 + 4 };
+        return {
+          ...item,
+          priceScore,
+          totalScore: priceScore * 0.6 + item.stabilityScore * 0.4,
+        };
       });
       scored.sort(
         (left, right) =>
@@ -370,8 +391,8 @@ export function comparePlatformRates(
         state: 'ready',
         effectiveRate: first.effectiveRate,
         priceScore: first.priceScore,
-        stabilityScore: 10,
-        stabilityLabel: '稳定',
+        stabilityScore: first.stabilityScore,
+        stabilityLabel: first.stabilityLabel,
         sites: [
           {
             siteId: first.siteId,
@@ -381,9 +402,9 @@ export function comparePlatformRates(
             effectiveRate: first.effectiveRate,
             groups: first.groups,
             priceScore: first.priceScore,
-            stabilityScore: 10,
+            stabilityScore: first.stabilityScore,
             totalScore: first.totalScore,
-            stabilityLabel: '稳定',
+            stabilityLabel: first.stabilityLabel,
             channelId: first.channelId,
           },
         ],

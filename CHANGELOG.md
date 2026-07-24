@@ -1,5 +1,27 @@
 # 更新说明
 
+## 1.4.4 - 2026-07-24
+
+### 总览推荐、额度与 API 密钥视觉优化
+
+- 无渠道状态的有效 OpenAI、Claude、Gemini、Grok 分组现在参与倍率推荐，并明确标记为“无渠道状态”，不会伪装成健康渠道；有渠道但匹配歧义或明确异常仍不参与。
+- 悬浮窗和总览卡片继续按当前有效 Key 计算有限额剩余额度；无额度限制时使用站点账号余额。
+- 全部站点卡片底部充值比例独占一行，两个操作入口保持可读，窄卡片不再遮挡或压缩。
+- API 密钥行内分组改为支持键盘与外部点击关闭的自定义菜单，名称、平台和倍率分栏展示；API 密钥、使用记录和渠道状态站点选择器优先显示备注。
+
+### 验证状态
+
+- Prettier、ESLint、TypeScript、Vitest 35 文件/219 项通过；macOS DMG `hdiutil verify`、ad-hoc bundle 校验和 Windows PE/asar 结构校验通过。macOS 安装副本页面几何复核与三个真实站点交互待实测。
+
+### 1.4.4 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.4-mac-arm64.dmg`          | `37426653edaa32c51605eb749953e334fe0cff510796e05e0ea41a4b316d6a61` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.4-mac-arm64.dmg.blockmap` | `b66f1ed8331c985a8422aed4b190751bd82f9511cab65fe28aabdc7f8877a94d` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.4-win-x64.exe`            | `f5d527c91c752d3946ef9e9dfc6e48f4224e8313468cf491309ec0b7979cc9da` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.4-win-x64.exe.blockmap`   | `0b0b37b5a639db5333f62515eae3567f6cd8febbdac85ee948e373a0db0d3d21` |
+
 ## 1.4.3 - 2026-07-24
 
 ### API 密钥页面与悬浮窗统计优化

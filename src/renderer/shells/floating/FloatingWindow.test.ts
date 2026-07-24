@@ -53,6 +53,39 @@ describe('floating window transparency', () => {
     expect(html).toContain('>手动备注名</strong>');
   });
 
+  it('shows the effective key credit when the current key has a quota', () => {
+    const html = renderToStaticMarkup(
+      FloatingWindow({
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          balance: 100,
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        currentKeyStatsBySite: {
+          'site-1': {
+            state: 'success',
+            keyId: 'key-1',
+            totalRequests: 1,
+            totalTokens: 2,
+            totalActualCost: 0.1,
+            availableCredit: { kind: 'amount', value: 7 },
+          },
+        },
+      }),
+    );
+    expect(html).toContain('$7.00');
+    expect(html).not.toContain('$100.00');
+  });
+
   it('keeps the drag handle and bottom-right actions structurally isolated', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./FloatingWindow.tsx', import.meta.url)),

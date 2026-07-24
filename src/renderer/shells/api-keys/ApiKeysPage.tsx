@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Check,
+  ChevronDown,
   Code2,
   Copy,
   Gem,
@@ -164,9 +165,6 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                 <tbody>
                   {props.keys.map((key) => {
                     const isWriting = props.writingKeyIds?.includes(key.id) ?? false;
-                    const currentGroupInOptions = props.groups.some(
-                      (group) => group.id === key.groupId,
-                    );
                     return (
                       <tr key={key.id} className={isWriting ? 'api-keys-row-writing' : undefined}>
                         <td className="api-keys-truncate api-keys-name-cell" title={key.name}>
@@ -211,30 +209,20 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
                         </td>
                         <td>
                           <div className="api-keys-group-cell">
-                            <select
-                              aria-label={`切换${key.name}的分组`}
-                              value={key.groupId ?? ''}
+                            <GroupSelect
+                              ariaLabel={`切换${key.name}的分组`}
+                              currentGroupId={key.groupId}
+                              currentGroupName={key.groupName}
+                              currentPlatform={key.platform}
+                              currentRate={key.effectiveRate}
+                              groups={props.groups}
                               disabled={isWriting}
-                              onChange={(event) => {
-                                const nextGroupId = event.target.value;
+                              onChange={(nextGroupId) => {
                                 if (shouldRequestGroupChange(key.groupId, nextGroupId, isWriting)) {
                                   props.onGroupChange?.(key.id, nextGroupId);
                                 }
                               }}
-                            >
-                              {!key.groupId && <option value="">未分组</option>}
-                              {key.groupId && !currentGroupInOptions && (
-                                <option value={key.groupId}>
-                                  {key.groupName ?? '当前分组'} · {platformLabel(key.platform)} ·{' '}
-                                  {formatRate(key.effectiveRate)}
-                                </option>
-                              )}
-                              {props.groups.map((group) => (
-                                <option key={group.id} value={group.id}>
-                                  {groupOptionLabel(group)}
-                                </option>
-                              ))}
-                            </select>
+                            />
                             <small>
                               {isWriting ? '正在确认远程分组…' : (key.groupName ?? '待查询')}
                             </small>
@@ -305,6 +293,119 @@ function ApiKeysState(props: { state: ApiKeysPageState; errorMessage?: string })
       )}
       <strong>{apiKeyStateMessage(props.state) || '暂无 API 密钥'}</strong>
       {props.errorMessage && <span>{props.errorMessage}</span>}
+    </div>
+  );
+}
+
+interface GroupSelectProps {
+  ariaLabel: string;
+  currentGroupId?: string;
+  currentGroupName?: string;
+  currentPlatform?: string;
+  currentRate?: number;
+  groups: ApiKeysPageProps['groups'];
+  disabled: boolean;
+  onChange: (groupId: string) => void;
+}
+
+function GroupSelect(props: GroupSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const options =
+    props.currentGroupId && !props.groups.some((group) => group.id === props.currentGroupId)
+      ? [
+          {
+            id: props.currentGroupId,
+            name: props.currentGroupName ?? '当前分组',
+            platform: props.currentPlatform,
+            rate: props.currentRate,
+          },
+          ...props.groups,
+        ]
+      : props.groups;
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((group) => group.id === props.currentGroupId),
+  );
+  const selected = options[selectedIndex];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    setActiveIndex(selectedIndex);
+  }, [selectedIndex]);
+
+  const choose = (groupId: string) => {
+    setOpen(false);
+    if (groupId !== props.currentGroupId) props.onChange(groupId);
+  };
+
+  return (
+    <div className="api-keys-group-select" ref={rootRef}>
+      <button
+        type="button"
+        className="api-keys-group-select-trigger"
+        aria-label={props.ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={props.disabled || options.length === 0}
+        onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            setOpen(false);
+          } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.min(options.length - 1, index + 1));
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setOpen(true);
+            setActiveIndex((index) => Math.max(0, index - 1));
+          } else if (event.key === 'Enter' && open && options[activeIndex]) {
+            event.preventDefault();
+            choose(options[activeIndex].id);
+          }
+        }}
+      >
+        <span className="api-keys-group-select-current">
+          <strong>{selected?.name ?? '未分组'}</strong>
+          <small>{selected ? platformLabel(selected.platform) : '待查询'}</small>
+        </span>
+        <span className="api-keys-group-select-rate">
+          {selected ? formatRate(selected.rate) : '待查询'}
+        </span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      {open && options.length > 0 && (
+        <div className="api-keys-group-select-menu" role="listbox" aria-label={props.ariaLabel}>
+          {options.map((group, index) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={group.id === props.currentGroupId}
+              className={`api-keys-group-option ${index === activeIndex ? 'is-active' : ''}`}
+              key={group.id}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => choose(group.id)}
+            >
+              <span>
+                <strong>{group.name}</strong>
+                <small>{platformLabel(group.platform)}</small>
+              </span>
+              <span className="api-keys-group-option-rate">{formatRate(group.rate)}</span>
+              {group.id === props.currentGroupId && <Check size={14} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

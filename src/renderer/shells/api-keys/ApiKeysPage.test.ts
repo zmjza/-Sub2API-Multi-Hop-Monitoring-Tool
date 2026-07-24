@@ -102,6 +102,7 @@ describe('ApiKeysPage', () => {
     expect(html).not.toContain('过期时间');
     expect(html).not.toContain('永久有效');
     expect(html).toContain('aria-label="切换日常使用的分组"');
+    expect(html).toContain('0.00x');
     expect(html).toContain('aria-label="第 2 页"');
   });
 
@@ -122,7 +123,7 @@ describe('ApiKeysPage', () => {
     );
 
     expect(html).toContain('部分用量暂未读取');
-    expect(html.match(/<select[^>]*disabled=""/g)).toHaveLength(1);
+    expect(html.match(/api-keys-group-select-trigger[^>]*disabled=""/g)).toHaveLength(1);
     expect(html).toContain(fixtureCompleteKey);
   });
 

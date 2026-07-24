@@ -24,6 +24,11 @@ export function FloatingWindow(props: FloatingProps) {
     currentKeyStats?.state === 'success' ? currentKeyStats.totalTokens : undefined;
   const keyTodayCost =
     currentKeyStats?.state === 'success' ? currentKeyStats.totalActualCost : undefined;
+  const keyAvailableCredit =
+    currentKeyStats?.state === 'success' && currentKeyStats.availableCredit.kind === 'amount'
+      ? currentKeyStats.availableCredit.value
+      : undefined;
+  const displayedBalance = keyAvailableCredit ?? liveBalance;
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];
   const phaseLabel =
     (
@@ -37,9 +42,9 @@ export function FloatingWindow(props: FloatingProps) {
     )[props.queryPhase ?? ''] ?? '站点数据';
   const title = busy
     ? '正在查余额，先让 Codex 蹬一会儿… ⏳'
-    : liveBalance === undefined
+    : displayedBalance === undefined
       ? '尚无余额数据'
-      : liveBalance >= 2
+      : displayedBalance >= 2
         ? '这么有钱，就使劲蹬 Codex，别浪费！💸'
         : '快没钱了，赶紧充钱，别让天才程序员陨落！🥲';
   const siteTitle = props.selectedSite?.note?.trim() || props.selectedSite?.name || data.siteName;
@@ -72,8 +77,8 @@ export function FloatingWindow(props: FloatingProps) {
       )}
       <section className="floating-balance">
         <span>
-          {props.selectedSite?.balance !== undefined
-            ? `$${props.selectedSite.balance.toFixed(2)}`
+          {displayedBalance !== undefined
+            ? `$${displayedBalance.toFixed(2)}`
             : runtime
               ? '—'
               : data.balance}

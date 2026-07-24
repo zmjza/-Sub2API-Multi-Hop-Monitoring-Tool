@@ -15,6 +15,7 @@ import type { UsageProps } from './types';
 import { usageRecords } from './data';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { UsageQueryController } from './usage-query-controller';
+import { siteDisplayName } from '../../site-label';
 import './usage.css';
 export function UsagePage(props: UsageProps) {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'custom'>('today');
@@ -141,7 +142,7 @@ export function UsagePage(props: UsageProps) {
       </div>
       <section className="usage-panel">
         <div className="usage-selected-site">
-          当前选中中转站：<strong>{props.selectedSite?.name ?? '未选择站点'}</strong>
+          当前选中中转站：<strong>{siteDisplayName(props.selectedSite)}</strong>
         </div>
         <div className="usage-tabs">
           {(

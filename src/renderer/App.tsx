@@ -29,6 +29,7 @@ import { desktopRateChannelStatusLoader } from './shells/overview/rate-channel-s
 import { UsagePage } from './shells/usage/UsagePage';
 import { ApiKeysPage } from './shells/api-keys/ApiKeysPage';
 import type { ApiKeyRow, ApiKeysPageState, ApiKeyStatus } from './shells/api-keys/types';
+import { siteDisplayName } from './site-label';
 import { UsageLoadCoordinator } from './shells/usage/usage-load-coordinator';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
@@ -761,7 +762,12 @@ export function App() {
   const apiKeysPage = (
     <ApiKeysPage
       state={apiKeysState}
-      sites={dashboard?.sites.map(({ id, name }) => ({ id, name })) ?? []}
+      sites={
+        dashboard?.sites.map((site) => ({
+          id: site.id,
+          name: siteDisplayName(site),
+        })) ?? []
+      }
       selectedSiteId={selectedSite?.id}
       search={apiKeyFilters.search}
       groupFilter={apiKeyFilters.groupId}
@@ -900,7 +906,7 @@ export function App() {
                 {!selectedSite && <option value="">未选择站点</option>}
                 {dashboard?.sites.map((site) => (
                   <option value={site.id} key={site.id}>
-                    {site.name}
+                    {siteDisplayName(site)}
                   </option>
                 ))}
               </select>

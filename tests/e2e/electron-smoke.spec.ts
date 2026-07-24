@@ -860,11 +860,16 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.getByRole('heading', { name: 'API 密钥', exact: true })).toBeVisible();
   await expect(main.getByText('E2E Managed Key', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(main.locator('.api-keys-full-key')).toContainText('x');
-  await main.getByLabel('切换E2E Managed Key的分组').selectOption('202');
+  const groupTrigger = main.getByLabel('切换E2E Managed Key的分组');
+  await groupTrigger.click();
+  await main
+    .locator('.api-keys-group-select-menu')
+    .getByRole('option', { name: /E2E 高速分组.*OpenAI.*0\.50x/ })
+    .click();
   await expect(main.getByText('分组已同步到远程站点', { exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(main.getByLabel('切换E2E Managed Key的分组')).toHaveValue('202');
+  await expect(groupTrigger).toContainText('E2E 高速分组');
   const apiKeysWindowBounds = await application.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
       .find((candidate) => candidate.getBounds().width > 500)
