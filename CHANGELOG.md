@@ -1,5 +1,21 @@
 # 更新说明
 
+## 1.4.5 - 2026-07-25
+
+### API 密钥菜单与版本标识
+
+- API 密钥分组菜单改为按内容自适应宽度，长分组名称、平台和倍率不再被固定触发器宽度截断，并保留视口边界约束。
+- 主界面右上角保留带历史图标的“最后更新：时间”徽标，并在旁边新增独立的 `v1.4.5` 版本徽标；开发预览无 Electron bridge 时显示“开发版”。
+
+### 1.4.5 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.5-mac-arm64.dmg`          | `b200bc0ac4fefe4cdf730a644b90f5bae661bd63e107ce7a1c3d7289126e4e82` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.5-mac-arm64.dmg.blockmap` | `8a696d1e75458eafe3da5b122031530bdced6804bcec8a0ffdc754e4613d6eea` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.5-win-x64.exe`            | `c116140f2bd5c7f3453b4d84b6294441668258a83b3e6e1750e8979c2d999f37` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.5-win-x64.exe.blockmap`   | `a5a53e2f5d80f8b12c43ada8d22f967a244978824d97495cf5792d7074f281f6` |
+
 ## 1.4.4 - 2026-07-24
 
 ### 总览推荐、额度与 API 密钥视觉优化

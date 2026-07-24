@@ -155,6 +155,8 @@ describe('ApiKeysPage', () => {
       selectors.every((selector) => selector.startsWith('.api-keys-') || selector === 'to'),
     ).toBe(true);
     expect(css).toContain('overflow-x: auto');
+    expect(css).toContain('width: max-content');
+    expect(css).toContain('max-width: min(520px');
     expect(css).toContain('max-width: 1440px');
     expect(css).toContain('#4f46e5');
   });

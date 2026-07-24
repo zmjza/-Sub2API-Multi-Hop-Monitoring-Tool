@@ -841,6 +841,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   for (const candidate of appWindows)
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
   expect(await main.evaluate(() => typeof window.sub2apiDesktop)).toBe('object');
+  await expect(main.getByText('最后更新：', { exact: false })).toBeVisible();
+  await expect(main.locator('.app-version-badge')).toContainText('v1.4.5');
   await expect(main.getByRole('heading', { name: '添加新站点' })).toBeVisible();
   await main.getByPlaceholder('例如: OpenAI 备用节点').fill('本地集成站点');
   await main.getByPlaceholder('https://api.example.com').fill(`http://127.0.0.1:${address.port}`);
@@ -860,8 +862,16 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.getByRole('heading', { name: 'API 密钥', exact: true })).toBeVisible();
   await expect(main.getByText('E2E Managed Key', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(main.locator('.api-keys-full-key')).toContainText('x');
-  const groupTrigger = main.getByLabel('切换E2E Managed Key的分组');
+  const groupTrigger = main.locator(
+    '.api-keys-group-select-trigger[aria-label="切换E2E Managed Key的分组"]',
+  );
   await groupTrigger.click();
+  const groupMenu = main.locator('.api-keys-group-select-menu');
+  const [triggerBox, menuBox] = await Promise.all([
+    groupTrigger.boundingBox(),
+    groupMenu.boundingBox(),
+  ]);
+  expect(menuBox?.width ?? 0).toBeGreaterThanOrEqual(triggerBox?.width ?? 0);
   await main
     .locator('.api-keys-group-select-menu')
     .getByRole('option', { name: /E2E 高速分组.*OpenAI.*0\.50x/ })

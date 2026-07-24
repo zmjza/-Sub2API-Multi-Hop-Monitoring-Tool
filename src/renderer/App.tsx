@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bell,
   ChevronDown,
+  History,
   KeyRound,
   LayoutDashboard,
   LoaderCircle,
@@ -10,6 +11,7 @@ import {
   Settings,
   SlidersHorizontal,
   TimerReset,
+  Tag,
 } from 'lucide-react';
 import { PreviewControls } from './preview/PreviewControls';
 import {
@@ -30,6 +32,7 @@ import { UsagePage } from './shells/usage/UsagePage';
 import { ApiKeysPage } from './shells/api-keys/ApiKeysPage';
 import type { ApiKeyRow, ApiKeysPageState, ApiKeyStatus } from './shells/api-keys/types';
 import { siteDisplayName } from './site-label';
+import { normalizeVersionLabel } from './version-label';
 import { UsageLoadCoordinator } from './shells/usage/usage-load-coordinator';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
@@ -117,6 +120,7 @@ export function App() {
   const selectedSite = dashboard?.sites.find(
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
+  const versionLabel = normalizeVersionLabel(window.sub2apiDesktop?.shellVersion);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -913,10 +917,25 @@ export function App() {
               <ChevronDown size={18} />
             </label>
           )}
-          <span className="last-updated">
-            {selectedSite?.fetchedAt
-              ? `最后更新: ${new Date(selectedSite.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-              : '尚无更新时间'}
+          <span className="last-updated" title="当前站点最后更新时间">
+            <History size={15} aria-hidden="true" />
+            <span>
+              最后更新：
+              {selectedSite?.fetchedAt
+                ? new Date(selectedSite.fetchedAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '—'}
+            </span>
+          </span>
+          <span
+            className="app-version-badge"
+            aria-label={`版本 ${versionLabel}`}
+            title="当前应用版本"
+          >
+            <Tag size={14} aria-hidden="true" />
+            <span>{versionLabel}</span>
           </span>
           <button
             className="icon-button"

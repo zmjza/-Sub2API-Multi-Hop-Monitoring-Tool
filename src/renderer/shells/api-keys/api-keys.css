@@ -296,13 +296,27 @@
   z-index: 30;
   display: grid;
   gap: 3px;
-  max-height: 240px;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(520px, calc(100vw - 24px));
+  max-height: 320px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 5px;
   border: 1px solid #d8d4e8;
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 14px 30px rgba(48, 46, 65, 0.16);
+}
+
+.api-keys-group-select-menu .api-keys-group-option > span:first-child {
+  min-width: max-content;
+}
+
+.api-keys-group-select-menu .api-keys-group-option strong {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .api-keys-group-option {
