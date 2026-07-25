@@ -26,6 +26,8 @@ export type UpdateCheckResult =
   | { status: 'skipped'; currentVersion: string; manifest: UpdateManifest }
   | { status: 'error'; code: string; message: string };
 
+export const REMIND_LATER_DELAY_MS = 24 * 60 * 60 * 1000;
+
 export function compareSemver(a: string, b: string): number {
   const parse = (value: string) => {
     const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(value);
@@ -158,7 +160,7 @@ export class UpdateService {
   }
   remindLater(version: string) {
     this.state.set('update:remindVersion', version);
-    this.state.set('update:remindAt', Date.now());
+    this.state.set('update:remindAt', Date.now() + REMIND_LATER_DELAY_MS);
   }
 
   async download(

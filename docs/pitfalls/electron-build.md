@@ -855,3 +855,35 @@ macOS Electron 内部分发、DMG 安装、下载隔离属性与后续 Developer
 **适用范围**
 
 在线更新源、设置页 fallback 文案、发布后 macOS/Windows 页面验收。
+
+## “稍后提醒”不能把当前时间当作截止时间
+
+**现象**
+
+用户点击“稍后提醒”后，下一次启动或手动检查立即再次显示同一版本更新，提醒没有真正延后。
+
+**根因**
+
+持久化逻辑把 `update:remindAt` 写成 `Date.now()`，而检查逻辑要求 `remindAt > Date.now()` 才抑制提醒；写入完成后条件已经失效。
+
+**正确做法**
+
+写入明确的未来截止时间。本项目默认延后 24 小时，并通过服务层单元测试验证提醒时间大于调用前时间加延迟常量。
+
+**验证方式**
+
+调用 `UpdateService.remindLater()`，检查 `update:remindVersion` 和 `update:remindAt`；随后在截止时间内执行 `check()` 应返回 `skipped`，过期后才允许再次返回 `available`。
+
+**禁止事项**
+
+不要只验证 Renderer modal 关闭；不要把“本次弹框关闭”当作持久化稍后提醒成功；不要使用当前时间作为提醒截止时间。
+
+**相关文件或命令**
+
+- `electron/main/services/update-service.ts`
+- `electron/main/services/update-service.test.ts`
+- `npm test -- --run electron/main/services/update-service.test.ts`
+
+**适用范围**
+
+在线更新跳过/稍后提醒、应用重启后的更新检查和所有持久化提醒状态。

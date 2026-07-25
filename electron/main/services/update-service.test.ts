@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
   compareSemver,
+  REMIND_LATER_DELAY_MS,
   selectAsset,
   UpdateService,
   updateManifestSchema,
@@ -107,6 +108,17 @@ describe('update service', () => {
       fetchImpl,
     );
     await expect(service.check()).resolves.toMatchObject({ status: 'skipped' });
+  });
+  it('schedules a later reminder in the future', () => {
+    const state = new Map<string, unknown>();
+    const service = new UpdateService('1.4.5', {
+      get: (key, fallback) => (state.has(key) ? (state.get(key) as typeof fallback) : fallback),
+      set: (key, value) => state.set(key, value),
+    });
+    const before = Date.now();
+    service.remindLater('1.4.6');
+    expect(state.get('update:remindVersion')).toBe('1.4.6');
+    expect(state.get('update:remindAt')).toBeGreaterThanOrEqual(before + REMIND_LATER_DELAY_MS);
   });
   it('downloads and verifies the selected platform asset', async () => {
     const payload = new TextEncoder().encode('update-bytes');
