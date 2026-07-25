@@ -49,7 +49,6 @@ export function SitesPage(props: SitesProps) {
     floatingEnabled: boolean;
     staleAfterMinutes: 2 | 5 | 10 | 30;
   }>({ refreshIntervalMinutes: 5, floatingEnabled: true, staleAfterMinutes: 2 });
-  const [updateMessage, setUpdateMessage] = useState('');
   const [siteRules, setSiteRules] = useState<
     Record<string, { enabled?: boolean; threshold?: number }>
   >({});
@@ -419,24 +418,16 @@ export function SitesPage(props: SitesProps) {
             <div className="notification-row">
               <div>
                 <b>在线更新</b>
-                <small>{updateMessage || '检查 GitHub 稳定版更新'}</small>
+                <small>{props.updateNotice?.message || '检查 GitHub 稳定版更新'}</small>
               </div>
               <button
                 className="site-batch-button"
-                onClick={() => {
-                  void window.sub2apiDesktop?.sites.updateCheck().then((result) => {
-                    if (result.status === 'available')
-                      setUpdateMessage(
-                        `发现 ${result.manifest.version}：${result.manifest.testOnly ? '真机更新测试专用' : '有可用更新'}`,
-                      );
-                    else if (result.status === 'up-to-date') setUpdateMessage('当前已是最新版本');
-                    else if (result.status === 'skipped')
-                      setUpdateMessage(`已跳过 ${result.manifest.version}`);
-                    else setUpdateMessage(`检查失败：${result.message}`);
-                  });
-                }}
+                aria-busy={props.updateChecking}
+                disabled={props.updateChecking}
+                onClick={() => props.onCheckForUpdate?.()}
               >
-                检查更新
+                {props.updateChecking && <LoaderCircle size={16} className="spin" />}
+                {props.updateChecking ? '检查中…' : '检查更新'}
               </button>
             </div>
             <div className="notification-row">

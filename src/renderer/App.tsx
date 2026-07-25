@@ -122,6 +122,9 @@ export function App() {
     message: string;
   }>();
   const updateNoticeTimerRef = useRef<number | undefined>(undefined);
+  const updateCheckingRef = useRef(false);
+  const updateTriggerRef = useRef<HTMLButtonElement>(null);
+  const updateCloseRef = useRef<HTMLButtonElement>(null);
   const currentSiteRef = useRef<string | undefined>(undefined);
   const refreshingSiteIdsRef = useRef<Set<string>>(new Set());
   const shellRef = useRef(shell);
@@ -145,7 +148,8 @@ export function App() {
     updateNoticeTimerRef.current = window.setTimeout(() => setUpdateNotice(undefined), 4_500);
   };
   const checkForUpdate = async () => {
-    if (updateChecking) return;
+    if (updateCheckingRef.current) return;
+    updateCheckingRef.current = true;
     setUpdateChecking(true);
     showUpdateNotice('正在检查更新…');
     try {
@@ -153,6 +157,8 @@ export function App() {
       if (!result) throw new Error('更新服务不可用');
       setUpdateState(result);
       if (result.status === 'available') {
+        setShell('overview');
+        setSitesSection(undefined);
         setUpdateModalOpen(true);
         showUpdateNotice(`发现新版本 ${result.manifest.version}`, 'success');
       } else if (result.status === 'up-to-date') showUpdateNotice('当前已是最新版本', 'success');
@@ -163,8 +169,14 @@ export function App() {
       setUpdateState({ status: 'error', code: 'CHECK_FAILED', message });
       showUpdateNotice(`检查更新失败：${message}`, 'error');
     } finally {
+      updateCheckingRef.current = false;
       setUpdateChecking(false);
     }
+  };
+  const closeUpdateModal = () => {
+    if (updateDownloading) return;
+    setUpdateModalOpen(false);
+    window.setTimeout(() => updateTriggerRef.current?.focus(), 0);
   };
   const downloadUpdate = async (manifest: UpdateManifest) => {
     setUpdateDownloading(true);
@@ -209,6 +221,15 @@ export function App() {
       if (updateNoticeTimerRef.current) window.clearTimeout(updateNoticeTimerRef.current);
     };
   }, []);
+  useEffect(() => {
+    if (!updateModalOpen) return;
+    updateCloseRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeUpdateModal();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [updateModalOpen, updateDownloading]);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -939,7 +960,15 @@ export function App() {
     'api-keys': apiKeysPage,
     usage: <UsagePage {...context} />,
     channels: <ChannelsPage {...context} />,
-    sites: <SitesPage {...context} />,
+    sites: (
+      <SitesPage
+        {...context}
+        updateChecking={updateChecking}
+        updateNotice={updateNotice}
+        updateState={updateState}
+        onCheckForUpdate={checkForUpdate}
+      />
+    ),
     radar: <RadarPage />,
   };
   const navigation = [
@@ -1019,6 +1048,7 @@ export function App() {
           </span>
           <button
             className="app-version-badge"
+            ref={updateTriggerRef}
             aria-label={`版本 ${versionLabel}`}
             title={updateChecking ? '正在检查更新' : '点击检查更新'}
             aria-busy={updateChecking}
@@ -1088,14 +1118,14 @@ export function App() {
         </div>
         {updateState?.status === 'available' && updateModalOpen && (
           <div
-            className="update-modal-backdrop"
+            className="update-modal-backdrop update-surface"
             role="presentation"
             onMouseDown={() => {
-              if (!updateDownloading) setUpdateModalOpen(false);
+              closeUpdateModal();
             }}
           >
             <section
-              className="update-modal"
+              className="update-modal update-card"
               role="dialog"
               aria-modal="true"
               aria-labelledby="update-modal-title"
@@ -1108,10 +1138,11 @@ export function App() {
                 </div>
                 <button
                   className="icon-button"
+                  ref={updateCloseRef}
                   aria-label="关闭更新弹框"
                   title="关闭"
                   disabled={updateDownloading}
-                  onClick={() => setUpdateModalOpen(false)}
+                  onClick={closeUpdateModal}
                 >
                   <X size={18} />
                 </button>
@@ -1121,6 +1152,11 @@ export function App() {
                   真机更新测试专用，本版本不包含业务功能变化。
                 </div>
               )}
+              <div className="update-modal-version-row" aria-label="版本更新信息">
+                <span>{versionLabel}</span>
+                <i aria-hidden="true" />
+                <strong>{updateState.manifest.version}</strong>
+              </div>
               <p className="update-modal-notes">{updateState.manifest.releaseNotes}</p>
               {updateDownloading && (
                 <div className="update-modal-progress" role="status">

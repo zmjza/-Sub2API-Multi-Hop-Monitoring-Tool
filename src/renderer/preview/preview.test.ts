@@ -76,6 +76,13 @@ describe('controlled UI shell preview', () => {
     expect(app).toContain('aria-modal="true"');
     expect(app).toContain('跳过此版本');
     expect(app).toContain('稍后提醒');
+    expect(app).toContain("setShell('overview')");
+    expect(app).toContain('updateCheckingRef');
+    expect(app).toContain('update-card');
+    expect(app).toContain('update-modal-version-row');
+    expect(sitesPage).toContain('onCheckForUpdate');
+    expect(sitesPage).toContain('aria-busy={props.updateChecking}');
+    expect(sitesPage).not.toContain('sites.updateCheck()');
     expect(sitesPage).toContain('检查 GitHub 稳定版更新');
     expect(sitesPage).not.toContain('检查 Gitee 稳定版更新');
     expect(styles).toContain('.update-toast');

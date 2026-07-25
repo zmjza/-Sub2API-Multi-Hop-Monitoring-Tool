@@ -188,16 +188,29 @@ input {
   border: 0;
   cursor: pointer;
   font: inherit;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.app-version-badge:hover:not(:disabled) {
+  background: #f3f1ff;
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.14);
+  transform: translateY(-1px);
+}
+.app-version-badge:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+.app-version-badge:focus-visible {
+  outline: 3px solid rgba(99, 102, 241, 0.32);
+  outline-offset: 3px;
+}
+.app-version-badge:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 .update-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--line, #e5e7ef);
-  background: #fffdf3;
-  color: #3b3520;
+  display: none;
 }
 .update-banner p {
   flex: 1 1 320px;
@@ -214,7 +227,7 @@ input {
 }
 .update-toast {
   position: fixed;
-  z-index: 80;
+  z-index: 90;
   top: 88px;
   right: 32px;
   max-width: min(420px, calc(100vw - 48px));
@@ -224,12 +237,13 @@ input {
   gap: 10px;
   padding: 11px 15px;
   border: 1px solid #d8d4f5;
-  border-radius: 10px;
+  border-radius: 16px;
   background: #fff;
   color: #343248;
   box-shadow: 0 10px 28px rgba(31, 28, 61, 0.16);
   font-size: 13px;
   font-weight: 700;
+  animation: update-toast-in 220ms ease-out both;
 }
 .update-toast.is-success {
   border-color: #a7e3c9;
@@ -244,23 +258,25 @@ input {
 }
 .update-modal-backdrop {
   position: fixed;
-  z-index: 70;
+  z-index: 85;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
-  background: rgba(27, 27, 36, 0.36);
+  padding: 28px;
+  background: rgba(27, 27, 36, 0.28);
+  backdrop-filter: blur(4px);
 }
 .update-modal {
-  width: min(520px, 100%);
+  width: min(500px, 100%);
   max-height: min(680px, calc(100vh - 48px));
   overflow: auto;
   border: 1px solid #dedbea;
-  border-radius: 16px;
+  border-radius: 22px;
   background: #fff;
   color: #1b1b24;
   box-shadow: 0 24px 70px rgba(27, 27, 36, 0.24);
-  padding: 24px;
+  padding: 26px;
+  animation: update-card-in 220ms ease-out both;
 }
 .update-modal-header {
   display: flex;
@@ -273,18 +289,39 @@ input {
   flex: 0 0 auto;
 }
 .update-modal-eyebrow {
-  display: block;
-  margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-bottom: 10px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eeeaff;
   color: #6258d9;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .update-modal h2 {
   margin: 0;
-  font-size: 21px;
+  font-size: 24px;
   line-height: 1.25;
+}
+.update-modal-version-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  color: #7b788d;
+  font-size: 13px;
+  font-weight: 700;
+}
+.update-modal-version-row i {
+  width: 18px;
+  height: 1px;
+  background: #c7c3d9;
+}
+.update-modal-version-row strong {
+  color: #4f46e5;
+  font-size: 15px;
 }
 .update-modal-test-note {
   margin-top: 18px;
@@ -320,9 +357,8 @@ input {
   height: 8px;
 }
 .update-modal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-top: 24px;
 }
@@ -337,6 +373,22 @@ input {
   cursor: pointer;
   font-size: 12px;
   font-weight: 800;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.update-modal-actions button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(31, 28, 61, 0.12);
+}
+.update-modal-actions button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+.update-modal-actions button:focus-visible,
+.update-modal-header .icon-button:focus-visible {
+  outline: 3px solid rgba(99, 102, 241, 0.32);
+  outline-offset: 2px;
 }
 .update-modal-actions button:disabled {
   cursor: wait;
@@ -352,6 +404,26 @@ input {
   background: #fff;
   color: #514f60;
 }
+@keyframes update-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes update-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 @media (max-width: 720px) {
   .update-toast {
     top: 76px;
@@ -364,6 +436,7 @@ input {
   }
   .update-modal {
     padding: 20px;
+    border-radius: 18px;
   }
   .update-modal-actions {
     display: grid;
