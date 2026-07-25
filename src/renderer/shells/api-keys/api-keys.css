@@ -1,6 +1,9 @@
 .api-keys-page {
   max-width: 1440px;
+  min-height: calc(100vh - 128px);
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
   color: #1b1b24;
 }
 
@@ -68,6 +71,9 @@
 }
 
 .api-keys-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-height: 420px;
   padding: 16px;
   border: 1px solid rgba(199, 196, 216, 0.3);
@@ -130,7 +136,9 @@
 }
 
 .api-keys-table-wrap {
-  overflow-x: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   border: 1px solid #e4e1ee;
   border-radius: 8px;
 }

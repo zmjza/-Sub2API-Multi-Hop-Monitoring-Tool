@@ -41,7 +41,7 @@
 | 文件                                     | 范围                             | 当前条目数 |
 | ---------------------------------------- | -------------------------------- | ---------: |
 | [electron-build.md](electron-build.md)   | Electron 生产构建、Renderer 加载 |         24 |
-| [tooling.md](tooling.md)                 | npm、审计、测试产物管理          |         11 |
+| [tooling.md](tooling.md)                 | npm、审计、测试产物管理          |         12 |
 | [sub2api-adapter.md](sub2api-adapter.md) | sub2api 二开响应与能力适配       |         12 |
 | [rate-comparison.md](rate-comparison.md) | 倍率评分、渠道稳定性与横向滚动   |          9 |
 

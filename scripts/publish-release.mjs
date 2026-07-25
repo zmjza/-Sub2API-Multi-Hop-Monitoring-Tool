@@ -1,4 +1,4 @@
-/* global Blob, FormData, URL, URLSearchParams, console, fetch, process */
+/* global Blob, URL, console, fetch, process */
 
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
@@ -9,9 +9,8 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const repository = 'zarq/Sub2API-Multi-Hub-Monitoring-Tool';
+const repository = 'zmjza/-Sub2API-Multi-Hop-Monitoring-Tool';
 const releaseDir = path.join(root, 'release');
-const maxGiteeAssetBytes = 100_000_000;
 
 export function validateVersion(value) {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(value))
@@ -60,7 +59,7 @@ async function ensureVersionTag(version) {
     if (stdout.trim()) return;
   } catch {
     await run('git', ['tag', version]);
-    await run('git', ['push', 'origin', version]);
+    await run('git', ['push', 'github', version]);
     return;
   }
   throw new Error(`本地已存在版本标签 ${version}，请递增 package.json 版本后再发布`);
@@ -82,7 +81,7 @@ async function readToken() {
       '-a',
       process.env.USER ?? '',
       '-s',
-      'sub2api-gitee-release-token',
+      'sub2api-github-release-token',
       '-w',
     ]);
     const token = stdout.trim();
@@ -90,7 +89,7 @@ async function readToken() {
   } catch {
     // Convert the platform-specific keychain failure into an actionable message.
   }
-  throw new Error('找不到 macOS Keychain 项 sub2api-gitee-release-token');
+  throw new Error('找不到 macOS Keychain 项 sub2api-github-release-token');
 }
 
 async function sha256(filePath) {
@@ -99,14 +98,20 @@ async function sha256(filePath) {
   return hash.digest('hex');
 }
 
-function giteeUrl(version, fileName) {
-  return `https://gitee.com/${repository}/releases/download/${version}/${encodeURIComponent(fileName)}`;
+function githubUrl(version, fileName) {
+  return `https://github.com/${repository}/releases/download/${version}/${encodeURIComponent(fileName)}`;
 }
 
-async function giteeRequest(token, endpoint, init = {}) {
-  const url = new URL(`https://gitee.com/api/v5${endpoint}`);
-  url.searchParams.set('access_token', token);
-  const response = await fetch(url, init);
+async function githubRequest(token, endpoint, init = {}) {
+  const url = new URL(`https://api.github.com${endpoint}`);
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      ...(init.headers ?? {}),
+    },
+  });
   const text = await response.text();
   let data;
   try {
@@ -114,40 +119,46 @@ async function giteeRequest(token, endpoint, init = {}) {
   } catch {
     data = text;
   }
-  if (!response.ok) throw new Error(`Gitee API ${response.status}: ${data?.message ?? data}`);
+  if (!response.ok) throw new Error(`GitHub API ${response.status}: ${data?.message ?? data}`);
   return data;
 }
 
 async function createRelease(token, version, notes) {
-  const existing = await giteeRequest(token, `/repos/${repository}/releases?per_page=100`);
+  const existing = await githubRequest(token, `/repos/${repository}/releases?per_page=100`);
   const found = Array.isArray(existing)
     ? existing.find((release) => release.tag_name === version)
     : undefined;
-  if (found) throw new Error(`Gitee Release ${version} 已存在，请递增版本号后再发布`);
-  const body = new URLSearchParams({
-    tag_name: version,
-    target_commitish: version,
-    name: `${version} ${notes.includes('真机更新测试专用') ? '真机更新测试专用' : '稳定版'}`,
-    body: notes,
-  });
-  return giteeRequest(token, `/repos/${repository}/releases`, {
+  if (found) throw new Error(`GitHub Release ${version} 已存在，请递增版本号后再发布`);
+  return githubRequest(token, `/repos/${repository}/releases`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tag_name: version,
+      target_commitish: 'main',
+      name: `${version} ${notes.includes('真机更新测试专用') ? '真机更新测试专用' : '稳定版'}`,
+      body: notes,
+      draft: false,
+      prerelease: false,
+    }),
   });
 }
 
 async function uploadAsset(token, releaseId, filePath) {
-  const form = new FormData();
-  form.set('access_token', token);
-  form.set('file', new Blob([await fs.readFile(filePath)]), path.basename(filePath));
+  const fileName = path.basename(filePath);
   const response = await fetch(
-    `https://gitee.com/api/v5/repos/${repository}/releases/${releaseId}/attach_files`,
-    { method: 'POST', body: form },
+    `https://uploads.github.com/repos/${repository}/releases/${releaseId}/assets?name=${encodeURIComponent(fileName)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: new Blob([await fs.readFile(filePath)]),
+    },
   );
   const data = await response.json();
-  if (!response.ok)
-    throw new Error(`上传 ${path.basename(filePath)} 失败：${data?.message ?? response.status}`);
+  if (!response.ok) throw new Error(`上传 ${fileName} 失败：${data?.message ?? response.status}`);
   return data;
 }
 
@@ -172,10 +183,6 @@ async function main() {
   for (const filePath of binaryFiles) {
     const stat = await fs.stat(filePath).catch(() => undefined);
     if (!stat?.isFile()) throw new Error(`缺少发布文件：${path.relative(root, filePath)}`);
-    if (stat.size > maxGiteeAssetBytes)
-      throw new Error(
-        `${path.basename(filePath)} 为 ${stat.size} bytes，超过 Gitee 100,000,000 bytes 限制`,
-      );
   }
   const notes = args.testOnly
     ? `${args.notes}\n\n真机更新测试专用\n本版本不包含业务功能变化。`
@@ -189,14 +196,14 @@ async function main() {
     releaseNotes: notes,
     testOnly: args.testOnly,
     macArm64: {
-      url: giteeUrl(version, macName),
+      url: githubUrl(version, macName),
       sha256: await sha256(path.join(releaseDir, macName)),
     },
     winX64: {
-      url: giteeUrl(version, winName),
+      url: githubUrl(version, winName),
       sha256: await sha256(path.join(releaseDir, winName)),
     },
-    blockmap: giteeUrl(version, names[1]),
+    blockmap: githubUrl(version, names[1]),
   };
   await fs.writeFile(
     path.join(releaseDir, 'update-manifest.json'),
@@ -209,11 +216,13 @@ async function main() {
     const uploaded = await uploadAsset(token, release.id, filePath);
     console.log(`已上传 ${uploaded.name ?? path.basename(filePath)}`);
   }
-  const remote = await giteeRequest(token, `/repos/${repository}/releases/${release.id}`);
+  const remote = await githubRequest(token, `/repos/${repository}/releases/${release.id}`);
   const remoteNames = new Set((remote.assets ?? []).map((asset) => asset.name));
-  for (const name of names)
+  for (const filePath of files) {
+    const name = path.basename(filePath);
     if (!remoteNames.has(name)) throw new Error(`远程 Release 缺少 ${name}`);
-  console.log(`发布完成：https://gitee.com/${repository}/releases/tag/${version}`);
+  }
+  console.log(`发布完成：https://github.com/${repository}/releases/tag/${version}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

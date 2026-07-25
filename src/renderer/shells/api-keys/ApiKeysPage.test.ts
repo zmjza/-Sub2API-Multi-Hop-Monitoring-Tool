@@ -154,10 +154,14 @@ describe('ApiKeysPage', () => {
     expect(
       selectors.every((selector) => selector.startsWith('.api-keys-') || selector === 'to'),
     ).toBe(true);
-    expect(css).toContain('overflow-x: auto');
+    expect(css).toContain('overflow: auto');
     expect(css).toContain('width: max-content');
     expect(css).toContain('max-width: min(520px');
     expect(css).toContain('max-width: 1440px');
+    expect(css).toContain('min-height: calc(100vh - 128px)');
+    expect(css).toContain('display: flex');
+    expect(css).toContain('flex: 1 1 auto');
+    expect(css).toContain('overflow: auto');
     expect(css).toContain('#4f46e5');
   });
 });

@@ -2,7 +2,7 @@
 
 一款面向 sub2api 多站用户的本地桌面监控工具。它将分散在多个中转站的余额、API Key 倍率、今日用量、使用记录和渠道状态集中到一个 Electron 应用中，适合需要长期管理 6–20 个 sub2api 二开站点的个人开发者。
 
-> 项目完全在本地运行，不提供云端同步或遥测。在线更新规划仅通过 Gitee 获取稳定版安装包，不上传站点凭据和 Token；当前功能尚未实现。
+> 项目完全在本地运行，不提供云端同步或遥测。在线更新通过 GitHub 稳定版 Release 获取安装包，Gitee 仅作为源码镜像，不上传站点凭据和 Token。
 
 ## 功能概览
 
@@ -115,8 +115,8 @@
 - 密码、access token 和 refresh token 通过 Electron `safeStorage` 使用平台安全后端保护。
 - SQLite 只保存站点元数据、凭据引用、脱敏快照和设置，不存储明文密码或完整 API Key。
 - 真实站点验证仅对用户明确授权的 Key 执行可恢复分组切换，并在同次验证中回读恢复原分组；不创建、删除或修改其他远程数据。
-- 项目不提供云同步、遥测、付款或远程删除。在线更新已实现 `UPD-28` 核心链路：只使用 Gitee 稳定版，启动/设置/版本徽标可检查，Windows 目标为 NSIS 自动更新，macOS 在当前免费 ad-hoc 条件下采用 DMG 下载/打开降级流程。1.4.6 为真机更新测试专用；Gitee Release 已发布并完成 macOS 在线下载/替换验收，Windows 真机仍未验证。
-- 发布规则：每个 Gitee Release 同时上传 macOS ARM64 的 `mac-arm64.dmg` 和 Windows x64 的 `win-x64.exe`，并同步上传两个 blockmap 与 `update-manifest.json`；Release 说明必须明确解释两个安装包的平台。
+- 项目不提供云同步、遥测、付款或远程删除。在线更新已实现 `UPD-28` 核心链路：只使用 GitHub 稳定版，启动/设置/版本徽标可检查，Windows 目标为 NSIS 自动更新，macOS 在当前免费 ad-hoc 条件下采用 DMG 下载/打开降级流程。1.4.6 为真机更新测试专用；Gitee 仅同步源码。
+- 发布规则：每个 GitHub Release 同时上传 macOS ARM64 的 `mac-arm64.dmg` 和 Windows x64 的 `win-x64.exe`，并同步上传两个 blockmap 与 `update-manifest.json`；Release 说明必须明确解释两个安装包的平台。
 
 ## 技术栈
 
@@ -135,7 +135,7 @@
 已验证的本地工具链为 Node.js 24 和 npm 11。项目使用 npm，`package-lock.json` 是唯一依赖锁定事实来源，不应在同一工作区混用 pnpm。
 
 ```bash
-git clone https://gitee.com/zarq/Sub2API-Multi-Hub-Monitoring-Tool.git
+git clone https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool.git
 cd Sub2API-Multi-Hub-Monitoring-Tool
 npm ci
 npm run dev
@@ -163,26 +163,27 @@ npm run dev
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
-## 当前版本 1.4.6
+## 当前版本 1.4.7
 
 - `1.4.0` 新增 API 密钥管理与单 Key 分组切换，并完成使用记录自动筛选、全部站点当前 Key 统计、渠道低频实时监控、结构化渠道关联和渠道折算 UI 清理。
 - `1.4.1` 修复 macOS 应用 bundle 签名不完整导致安装后可能无法打开的问题，改由 electron-builder 完成整包 ad-hoc 签名。
 - `1.4.2` 统一全部站点额度口径，删除“按订阅规则”，顶部按站点当前 Key 可用金额求和，并为总览的多个结构化渠道候选增加确定性最接近择优。
 - `1.4.6` 为真机更新测试专用版本，接入 Gitee 稳定版更新检查、下载校验、跳过/稍后提醒和平台安装策略；本版本不包含业务功能变化。
+- `1.4.7` 优化 API 密钥页面的纵向布局，少量数据时表格面板也会铺满内容区底部。
 - 完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 构建与安装包
 
-本轮 1.4.3 双平台构建产物及校验值：
+本轮 1.4.7 双平台构建产物及校验值：
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg`          | `79c3e6e9c295d6bda0b64803771e9d0dce6d84597304219f5ad4301a835ed934` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-mac-arm64.dmg.blockmap` | `e1daf4e3005f080251d404eccd814ade60690a00b06a8240cef06e7a10f3b0f0` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe`            | `f527a660b102ff580db529f17710c452c0806a3b563be94c83bdfccefec55b7c` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe.blockmap`   | `6e707a5e4f3d7ce99e31653ed2a219e1514b1832159104433871940f04b3fcd2` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg`          | `982eb262a92dafa1ae1f3d42bac9525ab23af36e5ee9d554fdef10197ee50d26` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg.blockmap` | `42bbcdfffb7d175eaf6e5f0330b4dcd85affe0479a0dd9d7b9dde69ca7391c56` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe`            | `6a5f85996b0f8c68369d2ca177ac6afdd4a003ee5fc8aeec309c636a00173e50` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe.blockmap`   | `f843cbf3e3498c5442fe9dd51c039e14592ea5898745d130cbedf12d64f26a39` |
 
-安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
+安装包体积较大，不纳入 Git 源码历史，应通过 GitHub Release 发布；Gitee 只同步源码。
 
 ### 一键发布在线更新
 
@@ -192,7 +193,7 @@ npm run dev
 npm run release:publish -- --notes "本次更新说明"
 ```
 
-命令会读取 `package.json` 版本，检查 `CHANGELOG.md`，要求工作区干净，创建并推送同名 Git 标签，构建并校验 macOS ARM64 DMG、Windows x64 NSIS、两个 blockmap 和 `update-manifest.json`，再创建 Gitee Release 并上传全部五个文件。`mac-arm64.dmg` 是 macOS ARM64 安装包，`win-x64.exe` 是 Windows x64 安装包；发布令牌只从 macOS Keychain 的 `sub2api-gitee-release-token` 读取。
+命令会读取 `package.json` 版本，检查 `CHANGELOG.md`，要求工作区干净，创建并推送同名 Git 标签，构建并校验 macOS ARM64 DMG、Windows x64 NSIS、两个 blockmap 和 `update-manifest.json`，再创建 GitHub Release 并上传全部五个文件。`mac-arm64.dmg` 是 macOS ARM64 安装包，`win-x64.exe` 是 Windows x64 安装包；发布令牌只从 macOS Keychain 的 `sub2api-github-release-token` 读取。Gitee 通过仓库镜像同步源码，不同步 Release 附件。
 
 真机更新测试专用版本使用：
 

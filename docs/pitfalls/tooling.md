@@ -363,3 +363,36 @@ Gitee Release 需要可解析的版本标签；本项目更新服务还要求固
 **适用范围**
 
 所有 Gitee 稳定版发布和真机更新测试 patch 发布。
+
+## GitHub Release 承载大文件，Gitee 只做源码镜像
+
+**现象**
+
+Gitee Release API 对单个附件存在约 100 MB 上传限制；当前 macOS DMG 构建可能超过该限制，而 GitHub Release 支持更大的单文件安装包。
+
+**根因**
+
+Gitee 镜像同步的是 Git 提交、分支和标签，不会同步 Release 附件；把安装包继续上传 Gitee 会让发布命令在大版本时失败。
+
+**正确做法**
+
+GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，Gitee `zarq/Sub2API-Multi-Hub-Monitoring-Tool` 配置 Pull 镜像。`npm run release:publish -- --notes "..."` 从 Keychain 读取 `sub2api-github-release-token`，上传五个单文件资产；更新服务固定校验 GitHub HTTPS manifest。
+
+**验证方式**
+
+检查 `git ls-remote github` 存在 `main` 与版本标签，GitHub Release 同时包含 DMG、EXE、两个 blockmap 和 manifest；运行发布命令的 `--dry-run` 后再执行完整发布。
+
+**禁止事项**
+
+不要把 GitHub Token 写入仓库、`.env`、日志或文档；不要把 Gitee 镜像误当成 Release 附件镜像；不要重新引入针对 Gitee 100 MB 限制的分片逻辑。
+
+**相关文件或命令**
+
+- `scripts/publish-release.mjs`
+- `electron/main/services/update-service.ts`
+- `git push github master:main`
+- `npm run release:publish -- --notes "本次更新说明"`
+
+**适用范围**
+
+所有后续稳定版发布和真机更新测试 patch 发布。

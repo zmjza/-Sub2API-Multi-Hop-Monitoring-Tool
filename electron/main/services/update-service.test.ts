@@ -14,8 +14,14 @@ const manifest: UpdateManifest = {
   publishedAt: '2026-07-25T00:00:00Z',
   releaseNotes: '真机更新测试专用\n本版本不包含业务功能变化',
   testOnly: true,
-  macArm64: { url: 'https://gitee.com/a.dmg', sha256: 'a'.repeat(64) },
-  winX64: { url: 'https://gitee.com/a.exe', sha256: 'b'.repeat(64) },
+  macArm64: {
+    url: 'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/a.dmg',
+    sha256: 'a'.repeat(64),
+  },
+  winX64: {
+    url: 'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/a.exe',
+    sha256: 'b'.repeat(64),
+  },
 };
 
 describe('update service', () => {
@@ -29,17 +35,16 @@ describe('update service', () => {
     expect(updateManifestSchema.parse(manifest).testOnly).toBe(true);
     const fetchImpl = async (url: RequestInfo | URL) =>
       new Response(
-        url.toString().includes('releases?')
-          ? JSON.stringify([
-              {
-                assets: [
-                  {
-                    name: 'update-manifest.json',
-                    browser_download_url: 'https://gitee.com/manifest.json',
-                  },
-                ],
-              },
-            ])
+        url.toString().includes('api.github.com')
+          ? JSON.stringify({
+              assets: [
+                {
+                  name: 'update-manifest.json',
+                  browser_download_url:
+                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
+                },
+              ],
+            })
           : JSON.stringify(manifest),
         { status: 200 },
       );
@@ -81,17 +86,16 @@ describe('update service', () => {
     ]);
     const fetchImpl = async (url: RequestInfo | URL) =>
       new Response(
-        url.toString().includes('releases?')
-          ? JSON.stringify([
-              {
-                assets: [
-                  {
-                    name: 'update-manifest.json',
-                    browser_download_url: 'https://gitee.com/manifest.json',
-                  },
-                ],
-              },
-            ])
+        url.toString().includes('api.github.com')
+          ? JSON.stringify({
+              assets: [
+                {
+                  name: 'update-manifest.json',
+                  browser_download_url:
+                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
+                },
+              ],
+            })
           : JSON.stringify(manifest),
       );
     const service = new UpdateService(

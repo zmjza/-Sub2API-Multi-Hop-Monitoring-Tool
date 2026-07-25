@@ -68,7 +68,7 @@ export function selectAsset(manifest: UpdateManifest, platform: NodeJS.Platform,
         : undefined;
   if (asset) {
     const url = new URL(asset.url);
-    if (url.protocol !== 'https:' || url.hostname !== 'gitee.com')
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com')
       throw new Error('ASSET_HOST_NOT_ALLOWED');
     return asset;
   }
@@ -108,14 +108,11 @@ export class UpdateService {
   private async checkInternal(): Promise<UpdateCheckResult> {
     try {
       const response = await this.fetchWithTimeout(
-        'https://gitee.com/api/v5/repos/zarq/Sub2API-Multi-Hub-Monitoring-Tool/releases?per_page=1',
-        { headers: { Accept: 'application/json' } },
+        'https://api.github.com/repos/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/latest',
+        { headers: { Accept: 'application/vnd.github+json' } },
       );
       if (!response.ok) throw new Error(`HTTP_${response.status}`);
-      const releases = (await response.json()) as unknown;
-      if (!Array.isArray(releases) || releases.length === 0)
-        return { status: 'up-to-date', currentVersion: this.currentVersion };
-      const release = releases[0] as {
+      const release = (await response.json()) as {
         assets?: Array<{ name?: string; browser_download_url?: string }>;
       };
       const asset = release.assets?.find(
@@ -123,7 +120,7 @@ export class UpdateService {
       );
       if (!asset?.browser_download_url) throw new Error('MANIFEST_NOT_FOUND');
       const manifestUrl = new URL(asset.browser_download_url);
-      if (manifestUrl.protocol !== 'https:' || manifestUrl.hostname !== 'gitee.com')
+      if (manifestUrl.protocol !== 'https:' || manifestUrl.hostname !== 'github.com')
         throw new Error('MANIFEST_HOST_NOT_ALLOWED');
       const manifestResponse = await this.fetchWithTimeout(manifestUrl);
       if (!manifestResponse.ok) throw new Error(`MANIFEST_HTTP_${manifestResponse.status}`);
@@ -169,12 +166,12 @@ export class UpdateService {
     onProgress?: (value: { received: number; total?: number }) => void,
   ): Promise<{ filePath: string; platform: NodeJS.Platform }> {
     const asset = selectAsset(manifest, this.platform, this.arch);
-    const response = await this.fetchWithTimeout(asset.url);
-    if (!response.ok || !response.body) throw new Error(`DOWNLOAD_HTTP_${response.status}`);
     const suffix = this.platform === 'darwin' ? '.dmg' : '.exe';
     const filePath = path.join(os.tmpdir(), `sub2api-update-${manifest.version}${suffix}`);
     this.tempFile = filePath;
     let received = 0;
+    const response = await this.fetchWithTimeout(asset.url);
+    if (!response.ok || !response.body) throw new Error(`DOWNLOAD_HTTP_${response.status}`);
     const total = Number(response.headers.get('content-length') ?? 0) || undefined;
     const stream = new (await import('node:stream')).Transform({
       transform(chunk, _encoding, callback) {

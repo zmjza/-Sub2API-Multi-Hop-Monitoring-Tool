@@ -1,5 +1,22 @@
 # 更新说明
 
+## 1.4.7 - 2026-07-25
+
+### API 密钥表格高度优化
+
+- API 密钥页面在只有一条或少量数据时，表格面板会自动延伸到内容区底部，不再留下大块空白。
+- 表格区域保留横向滚动，并在内容较多时支持内部滚动；筛选、分组下拉、分页和现有数据接口不变。
+- 本版本为界面优化版本，macOS ARM64 与 Windows x64 安装包同步生成。
+
+### 1.4.7 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg`          | `982eb262a92dafa1ae1f3d42bac9525ab23af36e5ee9d554fdef10197ee50d26` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg.blockmap` | `42bbcdfffb7d175eaf6e5f0330b4dcd85affe0479a0dd9d7b9dde69ca7391c56` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe`            | `6a5f85996b0f8c68369d2ca177ac6afdd4a003ee5fc8aeec309c636a00173e50` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe.blockmap`   | `f843cbf3e3498c5442fe9dd51c039e14592ea5898745d130cbedf12d64f26a39` |
+
 ## 1.4.6 - 2026-07-25
 
 ### 在线更新真机测试准备
