@@ -376,7 +376,7 @@ Gitee 镜像同步的是 Git 提交、分支和标签，不会同步 Release 附
 
 **正确做法**
 
-GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，Gitee `zarq/Sub2API-Multi-Hub-Monitoring-Tool` 配置 Pull 镜像。`npm run release:publish -- --notes "..."` 从 Keychain 读取 `sub2api-github-release-token`，上传五个单文件资产；更新服务固定校验 GitHub HTTPS manifest。
+GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，Gitee `zarq/Sub2API-Multi-Hub-Monitoring-Tool` 配置 Pull 镜像。`npm run release:publish -- --notes "..."` 从 Keychain 读取 `sub2api-github-release-token`，上传五个单文件资产并清理本地临时产物；更新服务固定校验 GitHub HTTPS manifest。
 
 **验证方式**
 

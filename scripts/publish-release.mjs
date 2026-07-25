@@ -45,6 +45,20 @@ export function assetNames(version) {
   ];
 }
 
+async function cleanupReleaseArtifacts() {
+  const entries = await fs.readdir(releaseDir, { withFileTypes: true }).catch(() => []);
+  const packagePattern = /^Sub2API-Multi-Hub-Monitor-.*\.(?:dmg|exe)(?:\.blockmap)?$/;
+  const removable = entries
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        (packagePattern.test(entry.name) || entry.name === 'update-manifest.json'),
+    )
+    .map((entry) => path.join(releaseDir, entry.name));
+  await Promise.all(removable.map((filePath) => fs.rm(filePath, { force: true })));
+  return removable.length;
+}
+
 async function run(command, args) {
   await execFileAsync(command, args, { cwd: root, env: process.env, maxBuffer: 10 * 1024 * 1024 });
 }
@@ -222,11 +236,14 @@ async function main() {
     const name = path.basename(filePath);
     if (!remoteNames.has(name)) throw new Error(`远程 Release 缺少 ${name}`);
   }
+  const cleaned = await cleanupReleaseArtifacts();
+  console.log(`已清理本地发布产物：${cleaned} 个文件`);
   console.log(`发布完成：https://github.com/${repository}/releases/tag/${version}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  main().catch((error) => {
+  main().catch(async (error) => {
+    await cleanupReleaseArtifacts().catch(() => undefined);
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });

@@ -20,7 +20,7 @@
 
 - 每次功能优化、Bug 修复或行为调整后，都必须递增 SemVer 版本，并重新生成最新 macOS ARM64 DMG 与 Windows x64 NSIS 安装包。
 - 安装包文件名必须包含当前版本号，更新说明必须同步记录本次变更和 SHA-256；不得把旧产物冒充当前版本。
-- `release/` 是当前发布目录，只保留最新版本的 DMG、EXE、blockmap 和当前构建元数据；生成新版本前清理旧版本产物。
+- `release/` 仅作为发布命令的临时构建目录；上传 GitHub Release 成功或失败后都清理 DMG、EXE、blockmap 和 `update-manifest.json`，不在本地长期保留安装包。
 - 历史版本恢复必须以远端历史提交的完整代码树为基线，不能只修改 `package.json` 版本号。
 - Windows 仍只做交叉构建和 CI 证据，不冒充 Windows 真机验收；macOS 真机状态必须单独记录。
 - GitHub Release 必须同时上传并在说明中明确标注 macOS ARM64 DMG（`mac-arm64.dmg`）与 Windows x64 NSIS（`win-x64.exe`）；对应 blockmap 和 `update-manifest.json` 也必须同步上传，不能只发布单个平台。Gitee 只做源码镜像，不承载 Release 大文件。

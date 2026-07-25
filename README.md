@@ -203,7 +203,7 @@ npm run release:publish -- --notes "真机更新测试专用" --test-only
 
 该参数会把“真机更新测试专用、无业务功能变化”写入 Release 说明。发布前可用 `--dry-run` 只检查参数、版本和 CHANGELOG，不执行构建、标签或上传。
 
-发布规则：每次功能优化或修复都必须递增版本号并重新生成 macOS ARM64 DMG、Windows x64 NSIS；`release/` 只保留最新版本产物，旧安装包应在生成新版本前清理。历史版本恢复必须基于对应远端提交的完整代码树，不能只回写版本号。
+发布规则：每次功能优化或修复都必须递增版本号并重新生成 macOS ARM64 DMG、Windows x64 NSIS；`release/` 仅用于发布时临时构建，上传 GitHub Release 后自动清理本地安装包。历史版本恢复必须基于对应远端提交的完整代码树，不能只回写版本号。
 
 ### macOS
 
