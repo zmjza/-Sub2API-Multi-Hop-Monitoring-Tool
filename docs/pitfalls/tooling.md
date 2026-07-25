@@ -331,7 +331,7 @@ Electron IPC 后异步补齐下拉选项、搜索建议或其他已知延迟数�
 
 本项目 npm 传递依赖漏洞修复、CI 安全门禁和发布工具链升级。
 
-## Gitee 双平台发布必须由统一命令生成并绑定已推送标签
+## GitHub 双平台发布必须由统一命令生成并绑定已推送标签
 
 **现象**
 
@@ -339,15 +339,15 @@ Electron IPC 后异步补齐下拉选项、搜索建议或其他已知延迟数�
 
 **根因**
 
-Gitee Release 需要可解析的版本标签；本项目更新服务还要求固定 manifest、平台匹配的安装包、SHA-256 和对应 blockmap 同时存在。macOS DMG 还受 Gitee API 单文件 `100,000,000` bytes 限制。
+GitHub Release 需要可解析的版本标签；本项目更新服务还要求固定 manifest、平台匹配的安装包、SHA-256 和对应 blockmap 同时存在。Gitee 只同步源码，不承载 Release 附件。
 
 **正确做法**
 
-使用 `npm run release:publish -- --notes "..."`。命令要求工作区干净，读取 `package.json`/`CHANGELOG.md`，构建 macOS ARM64 与 Windows x64，校验五个资产，自动推送同名 Git 标签，从 Keychain 读取令牌并上传后复核远端资产。`dist:mac` 固定使用最大压缩以保持 DMG 小于上传限制。
+使用 `npm run release:publish -- --notes "..."`。命令要求工作区干净，读取 `package.json`/`CHANGELOG.md`，构建 macOS ARM64 与 Windows x64，校验五个资产，自动推送同名 Git 标签，从 Keychain 读取令牌并上传后复核远端资产。GitHub Release 使用单文件上传，不需要分片。
 
 **验证方式**
 
-先运行 `node scripts/publish-release.mjs --notes "检查" --dry-run`，再运行发布命令；发布完成后检查 Gitee Release 同时包含 `mac-arm64.dmg`、`win-x64.exe`、两个 blockmap 和 `update-manifest.json`。
+先运行 `node scripts/publish-release.mjs --notes "检查" --dry-run`，再运行发布命令；发布完成后检查 GitHub Release 同时包含 `mac-arm64.dmg`、`win-x64.exe`、两个 blockmap 和 `update-manifest.json`。
 
 **禁止事项**
 
@@ -358,11 +358,11 @@ Gitee Release 需要可解析的版本标签；本项目更新服务还要求固
 - `scripts/publish-release.mjs`
 - `package.json`
 - `npm run release:publish -- --notes "本次更新说明"`
-- `security find-generic-password -s sub2api-gitee-release-token -w`
+- `security find-generic-password -s sub2api-github-release-token -w`
 
 **适用范围**
 
-所有 Gitee 稳定版发布和真机更新测试 patch 发布。
+所有 GitHub 稳定版发布和真机更新测试 patch 发布。
 
 ## GitHub Release 承载大文件，Gitee 只做源码镜像
 
