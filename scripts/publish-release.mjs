@@ -1,7 +1,9 @@
-/* global Blob, URL, console, fetch, process */
+/* global URL, console, fetch, process, setTimeout */
 
 import { createHash } from 'node:crypto';
-import { promises as fs } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { createReadStream, promises as fs } from 'node:fs';
+import { request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFile } from 'node:child_process';
@@ -145,7 +147,10 @@ async function createRelease(token, version, notes) {
   const found = Array.isArray(existing)
     ? existing.find((release) => release.tag_name === version)
     : undefined;
-  if (found) throw new Error(`GitHub Release ${version} 已存在，请递增版本号后再发布`);
+  if (found) {
+    console.log(`复用已有 GitHub Release ${version}`);
+    return found;
+  }
   return githubRequest(token, `/repos/${repository}/releases`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -162,21 +167,58 @@ async function createRelease(token, version, notes) {
 
 async function uploadAsset(token, releaseId, filePath) {
   const fileName = path.basename(filePath);
-  const response = await fetch(
+  const stat = await fs.stat(filePath);
+  const url = new URL(
     `https://uploads.github.com/repos/${repository}/releases/${releaseId}/assets?name=${encodeURIComponent(fileName)}`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/octet-stream',
-      },
-      body: new Blob([await fs.readFile(filePath)]),
-    },
   );
-  const data = await response.json();
-  if (!response.ok) throw new Error(`上传 ${fileName} 失败：${data?.message ?? response.status}`);
-  return data;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await new Promise((resolve, reject) => {
+        const request = httpsRequest(
+          url,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/vnd.github+json',
+              'Content-Type': 'application/octet-stream',
+              'Content-Length': stat.size,
+              'User-Agent': 'sub2api-release-publisher',
+            },
+          },
+          (response) => {
+            const chunks = [];
+            response.on('data', (chunk) => chunks.push(chunk));
+            response.on('end', () => {
+              const text = Buffer.concat(chunks).toString('utf8');
+              let data;
+              try {
+                data = text ? JSON.parse(text) : undefined;
+              } catch {
+                data = text;
+              }
+              if ((response.statusCode ?? 500) >= 400)
+                reject(
+                  new Error(
+                    `上传 ${fileName} 失败：${data?.message ?? response.statusCode ?? '未知错误'}`,
+                  ),
+                );
+              else resolve(data);
+            });
+          },
+        );
+        request.on('error', reject);
+        createReadStream(filePath)
+          .on('error', (error) => request.destroy(error))
+          .pipe(request);
+      });
+    } catch (error) {
+      if (attempt === 3) throw error;
+      console.log(`上传 ${fileName} 失败，正在重试（${attempt}/3）`);
+      await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+    }
+  }
+  throw new Error(`上传 ${fileName} 失败`);
 }
 
 async function main() {
@@ -229,7 +271,12 @@ async function main() {
   const files = names.map((name) => path.join(releaseDir, name));
   await ensureVersionTag(version);
   const release = await createRelease(token, version, notes);
+  const existingNames = new Set((release.assets ?? []).map((asset) => asset.name));
   for (const filePath of files) {
+    if (existingNames.has(path.basename(filePath))) {
+      console.log(`已存在，跳过 ${path.basename(filePath)}`);
+      continue;
+    }
     const uploaded = await uploadAsset(token, release.id, filePath);
     console.log(`已上传 ${uploaded.name ?? path.basename(filePath)}`);
   }
