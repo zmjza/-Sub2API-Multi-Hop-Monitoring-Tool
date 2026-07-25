@@ -70,7 +70,7 @@ describe('update service', () => {
     await Promise.all([service.check(), service.check()]);
     expect(calls).toBe(1);
   });
-  it('rejects update assets outside the fixed Gitee HTTPS host', () => {
+  it('rejects update assets outside the fixed GitHub HTTPS host', () => {
     expect(() =>
       selectAsset(
         { ...manifest, macArm64: { ...manifest.macArm64, url: 'https://example.com/update.dmg' } },

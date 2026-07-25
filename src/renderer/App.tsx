@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  AlertCircle,
+  CheckCircle2,
   Bell,
   ChevronDown,
+  Download,
   History,
   KeyRound,
   LayoutDashboard,
@@ -12,6 +15,7 @@ import {
   SlidersHorizontal,
   TimerReset,
   Tag,
+  X,
 } from 'lucide-react';
 import { PreviewControls } from './preview/PreviewControls';
 import {
@@ -111,6 +115,13 @@ export function App() {
   const [updateState, setUpdateState] = useState<UpdateCheckResult | undefined>();
   const [updateDownloading, setUpdateDownloading] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateNotice, setUpdateNotice] = useState<{
+    tone: 'info' | 'success' | 'error';
+    message: string;
+  }>();
+  const updateNoticeTimerRef = useRef<number | undefined>(undefined);
   const currentSiteRef = useRef<string | undefined>(undefined);
   const refreshingSiteIdsRef = useRef<Set<string>>(new Set());
   const shellRef = useRef(shell);
@@ -128,9 +139,32 @@ export function App() {
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
   const versionLabel = normalizeVersionLabel(window.sub2apiDesktop?.shellVersion);
-  const checkForUpdate = () => {
-    const request = window.sub2apiDesktop?.sites.updateCheck();
-    if (request) void request.then(setUpdateState);
+  const showUpdateNotice = (message: string, tone: 'info' | 'success' | 'error' = 'info') => {
+    if (updateNoticeTimerRef.current) window.clearTimeout(updateNoticeTimerRef.current);
+    setUpdateNotice({ message, tone });
+    updateNoticeTimerRef.current = window.setTimeout(() => setUpdateNotice(undefined), 4_500);
+  };
+  const checkForUpdate = async () => {
+    if (updateChecking) return;
+    setUpdateChecking(true);
+    showUpdateNotice('正在检查更新…');
+    try {
+      const result = await window.sub2apiDesktop?.sites.updateCheck();
+      if (!result) throw new Error('更新服务不可用');
+      setUpdateState(result);
+      if (result.status === 'available') {
+        setUpdateModalOpen(true);
+        showUpdateNotice(`发现新版本 ${result.manifest.version}`, 'success');
+      } else if (result.status === 'up-to-date') showUpdateNotice('当前已是最新版本', 'success');
+      else if (result.status === 'skipped') showUpdateNotice('该版本已按设置跳过', 'info');
+      else showUpdateNotice(`检查更新失败：${result.message}`, 'error');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '检查更新失败';
+      setUpdateState({ status: 'error', code: 'CHECK_FAILED', message });
+      showUpdateNotice(`检查更新失败：${message}`, 'error');
+    } finally {
+      setUpdateChecking(false);
+    }
   };
   const downloadUpdate = async (manifest: UpdateManifest) => {
     setUpdateDownloading(true);
@@ -145,6 +179,10 @@ export function App() {
             code: 'MACOS_MANUAL',
             message: 'DMG 已打开，请将新 App 替换旧 App 后重新启动。',
           });
+        if (install?.mode === 'manual') {
+          setUpdateModalOpen(false);
+          showUpdateNotice('DMG 已打开，请替换旧 App 后重新启动。');
+        }
       }
     } catch (error) {
       setUpdateState({
@@ -152,6 +190,8 @@ export function App() {
         code: 'DOWNLOAD_FAILED',
         message: error instanceof Error ? error.message : '下载失败',
       });
+      setUpdateModalOpen(false);
+      showUpdateNotice('更新下载失败，请稍后重试。', 'error');
     } finally {
       setUpdateDownloading(false);
     }
@@ -166,6 +206,7 @@ export function App() {
     return () => {
       window.clearTimeout(timer);
       unsubscribe();
+      if (updateNoticeTimerRef.current) window.clearTimeout(updateNoticeTimerRef.current);
     };
   }, []);
   const siteIdsKey = dashboard?.sites
@@ -979,7 +1020,9 @@ export function App() {
           <button
             className="app-version-badge"
             aria-label={`版本 ${versionLabel}`}
-            title="点击检查更新"
+            title={updateChecking ? '正在检查更新' : '点击检查更新'}
+            aria-busy={updateChecking}
+            disabled={updateChecking}
             onClick={checkForUpdate}
           >
             <Tag size={14} aria-hidden="true" />
@@ -1014,46 +1057,21 @@ export function App() {
             <span aria-hidden>×</span>
           </button>
         </header>
-        {updateState && updateState.status !== 'up-to-date' && updateState.status !== 'skipped' && (
-          <section className="update-banner" role="status">
-            {updateState.status === 'available' ? (
-              <>
-                <strong>发现新版本 {updateState.manifest.version}</strong>
-                <p>
-                  {updateState.manifest.testOnly
-                    ? '真机更新测试专用。本版本不包含业务功能变化。'
-                    : updateState.manifest.releaseNotes}
-                </p>
-                {updateDownloading && <progress max="100" value={updateProgress} />}
-                <button
-                  disabled={updateDownloading}
-                  onClick={() => void downloadUpdate(updateState.manifest)}
-                >
-                  {updateDownloading ? `下载中 ${updateProgress}%` : '立即更新'}
-                </button>
-                <button
-                  onClick={() => {
-                    void window.sub2apiDesktop?.sites.updateSkip(updateState.manifest.version);
-                    setUpdateState({ ...updateState, status: 'skipped' });
-                  }}
-                >
-                  跳过此版本
-                </button>
-                <button
-                  onClick={() => {
-                    void window.sub2apiDesktop?.sites.updateRemindLater(
-                      updateState.manifest.version,
-                    );
-                    setUpdateState({ ...updateState, status: 'skipped' });
-                  }}
-                >
-                  稍后提醒
-                </button>
-              </>
+        {updateNotice && (
+          <div className={`update-toast is-${updateNotice.tone}`} role="status" aria-live="polite">
+            {updateNotice.tone === 'success' ? (
+              <CheckCircle2 size={17} aria-hidden="true" />
+            ) : updateNotice.tone === 'error' ? (
+              <AlertCircle size={17} aria-hidden="true" />
             ) : (
-              <span>{updateState.message}</span>
+              <LoaderCircle
+                size={17}
+                className={updateChecking ? 'spin' : undefined}
+                aria-hidden="true"
+              />
             )}
-          </section>
+            <span>{updateNotice.message}</span>
+          </div>
         )}
         <div className="content-scroll">
           {(state === 'loading' || state === 'refreshing' || isRefreshingAll) && (
@@ -1068,6 +1086,90 @@ export function App() {
           )}
           {pages[shell]}
         </div>
+        {updateState?.status === 'available' && updateModalOpen && (
+          <div
+            className="update-modal-backdrop"
+            role="presentation"
+            onMouseDown={() => {
+              if (!updateDownloading) setUpdateModalOpen(false);
+            }}
+          >
+            <section
+              className="update-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="update-modal-title"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <header className="update-modal-header">
+                <div>
+                  <span className="update-modal-eyebrow">在线更新</span>
+                  <h2 id="update-modal-title">发现新版本 {updateState.manifest.version}</h2>
+                </div>
+                <button
+                  className="icon-button"
+                  aria-label="关闭更新弹框"
+                  title="关闭"
+                  disabled={updateDownloading}
+                  onClick={() => setUpdateModalOpen(false)}
+                >
+                  <X size={18} />
+                </button>
+              </header>
+              {updateState.manifest.testOnly && (
+                <div className="update-modal-test-note">
+                  真机更新测试专用，本版本不包含业务功能变化。
+                </div>
+              )}
+              <p className="update-modal-notes">{updateState.manifest.releaseNotes}</p>
+              {updateDownloading && (
+                <div className="update-modal-progress" role="status">
+                  <div className="update-modal-progress-label">
+                    <span>正在下载更新</span>
+                    <strong>{updateProgress}%</strong>
+                  </div>
+                  <progress max="100" value={updateProgress} />
+                </div>
+              )}
+              <div className="update-modal-actions">
+                <button
+                  className="primary-action"
+                  disabled={updateDownloading}
+                  onClick={() => void downloadUpdate(updateState.manifest)}
+                >
+                  <Download size={16} />
+                  {updateDownloading ? '下载中' : '立即更新'}
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={updateDownloading}
+                  onClick={() => {
+                    void window.sub2apiDesktop?.sites.updateSkip(updateState.manifest.version);
+                    setUpdateState({ ...updateState, status: 'skipped' });
+                    setUpdateModalOpen(false);
+                    showUpdateNotice('已跳过此版本');
+                  }}
+                >
+                  跳过此版本
+                </button>
+                <button
+                  className="secondary-action"
+                  disabled={updateDownloading}
+                  onClick={() => {
+                    void window.sub2apiDesktop?.sites.updateRemindLater(
+                      updateState.manifest.version,
+                    );
+                    setUpdateState({ ...updateState, status: 'skipped' });
+                    setUpdateModalOpen(false);
+                    showUpdateNotice('已设置稍后提醒');
+                  }}
+                >
+                  稍后提醒
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </section>
       {showPreviewControls && (
         <PreviewControls

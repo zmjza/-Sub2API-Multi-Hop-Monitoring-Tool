@@ -61,6 +61,21 @@ describe('controlled UI shell preview', () => {
     expect(app).toContain("openSitesSection('settings')");
   });
 
+  it('exposes update feedback and confirmation actions in the main shell', () => {
+    const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
+    const styles = readFileSync(fileURLToPath(new URL('../styles.css', import.meta.url)), 'utf8');
+
+    expect(app).toContain('正在检查更新');
+    expect(app).toContain('当前已是最新版本');
+    expect(app).toContain('发现新版本');
+    expect(app).toContain('role="dialog"');
+    expect(app).toContain('aria-modal="true"');
+    expect(app).toContain('跳过此版本');
+    expect(app).toContain('稍后提醒');
+    expect(styles).toContain('.update-toast');
+    expect(styles).toContain('.update-modal-backdrop');
+  });
+
   it('uses the packaged Sub2API logo in the application brand lockup', () => {
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
 
