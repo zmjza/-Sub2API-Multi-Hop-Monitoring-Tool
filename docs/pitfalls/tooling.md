@@ -396,3 +396,35 @@ GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，
 **适用范围**
 
 所有后续稳定版发布和真机更新测试 patch 发布。
+
+## 旧客户端不会被远程 Release 改写更新源
+
+**现象**
+
+旧版本客户端点击检查更新时显示最新版本，但新 GitHub Release 已经存在。
+
+**根因**
+
+在线更新源地址和解析逻辑属于客户端代码；如果旧安装包仍固定请求旧 Gitee 源，它不会因为远端新增 GitHub Release 而自动切换到 GitHub。
+
+**正确做法**
+
+先安装已经内置 GitHub 更新服务的过渡版本，再由该版本检查后续 GitHub Release。更新说明中必须明确旧客户端的迁移边界。
+
+**验证方式**
+
+检查旧安装包内的 `update-service` 源地址或使用真实客户端执行检查；用新版本客户端验证 GitHub latest Release、manifest、版本比较和提示状态。
+
+**禁止事项**
+
+不要把旧客户端显示“最新”解释成远程 Release 不存在；不要声称能通过修改 Release 远程内容改变旧客户端代码。
+
+**相关文件或命令**
+
+- `electron/main/services/update-service.ts`
+- `liran_docs/modules/17-测试构建与分发/在线更新与真机更新验证.md`
+- `npm run release:publish -- --notes "本次更新说明"`
+
+**适用范围**
+
+更新源迁移、旧版本过渡和 GitHub/Gitee 发布架构切换。
