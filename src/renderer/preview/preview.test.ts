@@ -63,6 +63,10 @@ describe('controlled UI shell preview', () => {
 
   it('exposes update feedback and confirmation actions in the main shell', () => {
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
+    const sitesPage = readFileSync(
+      fileURLToPath(new URL('../shells/sites/SitesPage.tsx', import.meta.url)),
+      'utf8',
+    );
     const styles = readFileSync(fileURLToPath(new URL('../styles.css', import.meta.url)), 'utf8');
 
     expect(app).toContain('正在检查更新');
@@ -72,6 +76,8 @@ describe('controlled UI shell preview', () => {
     expect(app).toContain('aria-modal="true"');
     expect(app).toContain('跳过此版本');
     expect(app).toContain('稍后提醒');
+    expect(sitesPage).toContain('检查 GitHub 稳定版更新');
+    expect(sitesPage).not.toContain('检查 Gitee 稳定版更新');
     expect(styles).toContain('.update-toast');
     expect(styles).toContain('.update-modal-backdrop');
   });

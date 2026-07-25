@@ -419,7 +419,7 @@ export function SitesPage(props: SitesProps) {
             <div className="notification-row">
               <div>
                 <b>在线更新</b>
-                <small>{updateMessage || '检查 Gitee 稳定版更新'}</small>
+                <small>{updateMessage || '检查 GitHub 稳定版更新'}</small>
               </div>
               <button
                 className="site-batch-button"

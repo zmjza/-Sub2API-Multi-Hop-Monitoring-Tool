@@ -823,3 +823,35 @@ Electron 下载包自带 linker-generated ad-hoc 签名。手工 deep 重签会�
 **适用范围**
 
 macOS Electron 内部分发、DMG 安装、下载隔离属性与后续 Developer ID 发布流程。
+
+## 更新源切换后设置页静态文案也必须同步
+
+**现象**
+
+在线更新服务和 Release 已切换到 GitHub，但 macOS 打包应用设置页仍显示“检查 Gitee 稳定版更新”，会误导用户对实际更新源的判断。
+
+**根因**
+
+更新源边界先在主进程、发布脚本和文档中完成切换，Renderer 设置页保留了旧的静态 fallback 文案；自动化只验证了检查结果，没有验证来源说明文字。
+
+**正确做法**
+
+切换远程更新源时同时搜索并更新 Renderer 的静态文案，并增加源码回归断言。发布后的 macOS 打包应用至少点击一次版本徽标、进入设置页检查来源文字和 toast。
+
+**验证方式**
+
+使用 `SUB2API_PACKAGED_EXECUTABLE` 启动新 DMG 对应应用，点击版本徽标确认“当前已是最新版本”，进入站点管理确认“检查 GitHub 稳定版更新”；截图保存到独立 `real-test-evidence` 目录。
+
+**禁止事项**
+
+不要只验证远程 manifest 就宣称 UI 已切换；不要保留与实际发布源冲突的旧平台名称；不要把截图中的旧文案当成无害视觉差异跳过。
+
+**相关文件或命令**
+
+- `src/renderer/shells/sites/SitesPage.tsx`
+- `src/renderer/preview/preview.test.ts`
+- `SUB2API_PACKAGED_EXECUTABLE=<app-executable> npm run test:e2e`
+
+**适用范围**
+
+在线更新源、设置页 fallback 文案、发布后 macOS/Windows 页面验收。
