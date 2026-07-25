@@ -180,14 +180,14 @@ npm run dev
 
 ## 构建与安装包
 
-本轮 1.4.7 双平台构建产物及校验值：
+本轮 1.5.0 双平台构建产物及校验值：
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg`          | `982eb262a92dafa1ae1f3d42bac9525ab23af36e5ee9d554fdef10197ee50d26` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg.blockmap` | `42bbcdfffb7d175eaf6e5f0330b4dcd85affe0479a0dd9d7b9dde69ca7391c56` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe`            | `6a5f85996b0f8c68369d2ca177ac6afdd4a003ee5fc8aeec309c636a00173e50` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe.blockmap`   | `f843cbf3e3498c5442fe9dd51c039e14592ea5898745d130cbedf12d64f26a39` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.0-mac-arm64.dmg`          | `a495b5e5042cd1f33a602601da860984c01cba93436bbab39a662cd52a273dc1` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.0-mac-arm64.dmg.blockmap` | `5a2ed6be95c90079b4c4c3fb63a37d3a1fe381c27c798ebaec49e6bde73ee1c6` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.0-win-x64.exe`            | `0031fd8d4a5a2ec3b4ba705e5001da76e695269461319c842d4311d9feb6c849` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.0-win-x64.exe.blockmap`   | `14fc5c93c94760c5cbffad0915f0860a72f4995703111108ce7d952d5cf7cfba` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 GitHub Release 发布；Gitee 只同步源码。
 

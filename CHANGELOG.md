@@ -11,6 +11,15 @@
 - 保持 GitHub 稳定版 Release、SHA-256 校验、Windows 自动重启和 macOS 下载/打开 DMG 后必要时手动替换的既有策略。
 - 本版本包含页面交互与视觉行为变化，不是无业务变化的测试 patch；Windows 仍只做交叉构建，macOS 进行真实页面验收。
 
+### 1.5.0 远端产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.0-mac-arm64.dmg`          | `a495b5e5042cd1f33a602601da860984c01cba93436bbab39a662cd52a273dc1` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.0-mac-arm64.dmg.blockmap` | `5a2ed6be95c90079b4c4c3fb63a37d3a1fe381c27c798ebaec49e6bde73ee1c6` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.0-win-x64.exe`            | `0031fd8d4a5a2ec3b4ba705e5001da76e695269461319c842d4311d9feb6c849` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.0-win-x64.exe.blockmap`   | `14fc5c93c94760c5cbffad0915f0860a72f4995703111108ce7d952d5cf7cfba` |
+
 ## 1.4.9 - 2026-07-25
 
 ### 在线更新提醒修复
