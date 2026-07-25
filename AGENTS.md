@@ -25,3 +25,4 @@
 - Windows 仍只做交叉构建和 CI 证据，不冒充 Windows 真机验收；macOS 真机状态必须单独记录。
 - Gitee Release 必须同时上传并在说明中明确标注 macOS ARM64 DMG（`mac-arm64.dmg`）与 Windows x64 NSIS（`win-x64.exe`）；对应 blockmap 和 `update-manifest.json` 也必须同步上传，不能只发布单个平台。
 - Gitee Release API 令牌只保存在本机 macOS Keychain 的 `sub2api-gitee-release-token` 项中；后续发布从 Keychain 读取，禁止写入仓库、`.env`、日志或文档。
+- 统一发布命令为 `npm run release:publish -- --notes "本次更新说明"`；真机更新测试使用 `--test-only`，发布前可用 `--dry-run`。不要绕过该命令手动只上传单个平台。

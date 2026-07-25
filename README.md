@@ -145,20 +145,21 @@ npm run dev
 
 ## 常用命令
 
-| 命令                          | 用途                                   |
-| ----------------------------- | -------------------------------------- |
-| `npm run dev`                 | 启动 Electron 开发环境                 |
-| `npm run format:check`        | 检查 Prettier 格式                     |
-| `npm run lint`                | 运行 ESLint                            |
-| `npm run typecheck`           | 检查 Renderer 和 Electron TypeScript   |
-| `npm run test`                | 运行 Vitest                            |
-| `npm run test:e2e`            | 运行 Playwright Electron E2E           |
-| `npm run build`               | 构建 Renderer 和 Electron              |
-| `npm run pack`                | 生成未打包应用目录                     |
-| `npm run dist:mac`            | 构建 macOS ARM64 DMG                   |
-| `npm run dist:win`            | 构建 Windows x64 NSIS                  |
-| `npm run verify:real`         | 使用运行时环境变量执行授权站点只读验证 |
-| `npm run verify:real-service` | 执行服务层只读集成验证                 |
+| 命令                                            | 用途                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------- |
+| `npm run dev`                                   | 启动 Electron 开发环境                                        |
+| `npm run format:check`                          | 检查 Prettier 格式                                            |
+| `npm run lint`                                  | 运行 ESLint                                                   |
+| `npm run typecheck`                             | 检查 Renderer 和 Electron TypeScript                          |
+| `npm run test`                                  | 运行 Vitest                                                   |
+| `npm run test:e2e`                              | 运行 Playwright Electron E2E                                  |
+| `npm run build`                                 | 构建 Renderer 和 Electron                                     |
+| `npm run pack`                                  | 生成未打包应用目录                                            |
+| `npm run dist:mac`                              | 构建 macOS ARM64 DMG                                          |
+| `npm run dist:win`                              | 构建 Windows x64 NSIS                                         |
+| `npm run release:publish -- --notes "修复说明"` | 构建并发布当前版本的 macOS ARM64 + Windows x64 双平台 Release |
+| `npm run verify:real`                           | 使用运行时环境变量执行授权站点只读验证                        |
+| `npm run verify:real-service`                   | 执行服务层只读集成验证                                        |
 
 `verify:real*` 需要运行时凭据，请勿将凭据写入 shell 历史、`.env`、源码或测试文件。
 
@@ -182,6 +183,24 @@ npm run dev
 | Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.4.3-win-x64.exe.blockmap`   | `6e707a5e4f3d7ce99e31653ed2a219e1514b1832159104433871940f04b3fcd2` |
 
 安装包体积较大，不纳入 Git 源码历史，应通过 Gitee Release 或其他独立分发渠道发布。
+
+### 一键发布在线更新
+
+以后发布新版本只需：
+
+```bash
+npm run release:publish -- --notes "本次更新说明"
+```
+
+命令会读取 `package.json` 版本，检查 `CHANGELOG.md`，要求工作区干净，创建并推送同名 Git 标签，构建并校验 macOS ARM64 DMG、Windows x64 NSIS、两个 blockmap 和 `update-manifest.json`，再创建 Gitee Release 并上传全部五个文件。`mac-arm64.dmg` 是 macOS ARM64 安装包，`win-x64.exe` 是 Windows x64 安装包；发布令牌只从 macOS Keychain 的 `sub2api-gitee-release-token` 读取。
+
+真机更新测试专用版本使用：
+
+```bash
+npm run release:publish -- --notes "真机更新测试专用" --test-only
+```
+
+该参数会把“真机更新测试专用、无业务功能变化”写入 Release 说明。发布前可用 `--dry-run` 只检查参数、版本和 CHANGELOG，不执行构建、标签或上传。
 
 发布规则：每次功能优化或修复都必须递增版本号并重新生成 macOS ARM64 DMG、Windows x64 NSIS；`release/` 只保留最新版本产物，旧安装包应在生成新版本前清理。历史版本恢复必须基于对应远端提交的完整代码树，不能只回写版本号。
 
