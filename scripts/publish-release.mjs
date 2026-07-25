@@ -64,19 +64,22 @@ async function run(command, args) {
 }
 
 async function ensureVersionTag(version) {
+  let tagCommit;
   try {
     const { stdout } = await execFileAsync(
       'git',
       ['rev-parse', '--verify', `refs/tags/${version}`],
       { cwd: root },
     );
-    if (stdout.trim()) return;
+    tagCommit = stdout.trim();
   } catch {
     await run('git', ['tag', version]);
     await run('git', ['push', 'github', version]);
     return;
   }
-  throw new Error(`本地已存在版本标签 ${version}，请递增 package.json 版本后再发布`);
+  const { stdout: headStdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: root });
+  if (tagCommit === headStdout.trim()) return;
+  throw new Error(`版本标签 ${version} 已存在但不是当前提交，请递增版本号后再发布`);
 }
 
 async function ensureCleanTree() {
