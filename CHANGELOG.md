@@ -13,10 +13,10 @@
 
 | 平台                 | 文件                                                     | SHA-256                                                            |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg`          | `2c9319d5777ad1c6d8efccc53176c177d71727fbcc0a9872a81232356d973365` |
-| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg.blockmap` | `cf272f9d1ee3db9cd7e0e27fd56813d640f0356be4d498ec6909379e9b20a9ff` |
-| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe`            | `c8de1c0e0ce5584fa845e7c4e7b1358c91e1c5111e2c1021347ea61957c9445c` |
-| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe.blockmap`   | `46cc0afb42d53413353f4e9df284f2d1db58227a38f47e154bd713704afb49f4` |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg`          | `b34d8e82ea4790c7aec898f68676b27f486b873b64473a59bf867a582ac4733d` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg.blockmap` | `56307a8c6ec21987c8cf420acdde18b085c8610ff2d344eda800b532a96b0082` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe`            | `c19ee1bfaf6a1712d5e46dd2f031fad54b6ba45e65dda1ecfadbe17ab524a9c1` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe.blockmap`   | `2da4fc7d82386213759b5880464d00dc07ef2a005c92adaa838bcecbcd856f6a` |
 
 ## 1.5.0 - 2026-07-25
 
