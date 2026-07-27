@@ -920,3 +920,37 @@ HTML 不允许交互式 `button` 嵌套 `button`。详情查看与关联切换�
 **适用范围**
 
 所有需要在渠道、列表、表格或卡片内部增加独立操作按钮的 Renderer UI。
+
+## 在线更新不能依赖无缓存的 latest 请求和 preload 版本常量
+
+**现象**
+
+新 Release 已存在时，旧客户端可能仍提示“当前已是最新版本”；安装包界面版本还可能显示上一个版本号，导致用户误判更新不可用。
+
+**根因**
+
+GitHub `releases/latest` 请求可能命中缓存；同时 preload 中硬编码的 `shellVersion` 不会随着 `package.json` 版本自动变化。
+
+**正确做法**
+
+更新检查 URL 增加时间戳并发送 `Cache-Control: no-cache`，版本显示通过同步 IPC 从主进程 `app.getVersion()` 获取。发布前用旧版本号实例化 `UpdateService` 对真实 latest/manifest 做回归。
+
+**验证方式**
+
+使用当前构建的服务以 `1.5.1` 检查真实 GitHub，结果必须为 `available`；打包 E2E 断言徽标显示当前 SemVer，点击后出现检查中、最新、可用或错误反馈之一。
+
+**禁止事项**
+
+不要只修改 Release 说明或重新上传同名资产；不要在 preload、Renderer 测试或安装包文件名中保留旧版本常量；不要把一次缓存命中误判为远端没有新版本。
+
+**相关文件或命令**
+
+- `electron/main/services/update-service.ts`
+- `electron/preload/bridge.cts`
+- `electron/main/index.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run release:publish -- --notes "..."`
+
+**适用范围**
+
+所有 GitHub Release 在线更新检查、版本徽标、设置页检查按钮和双平台安装包发布。
