@@ -16,7 +16,15 @@ import {
   rankChannels,
   selectDisplayedChannel,
   usageModelsForGroup,
+  toggleChannelAssociation,
 } from './channel-ranking';
+
+describe('toggleChannelAssociation', () => {
+  it('toggles one channel while preserving other manual associations', () => {
+    expect(toggleChannelAssociation(['a', 'b'], 'b')).toEqual(['a']);
+    expect(toggleChannelAssociation(['a'], 'b')).toEqual(['a', 'b']);
+  });
+});
 
 const channels = [
   { id: 'a', name: 'ClaudeCode-Kiro【高并发】', groupName: 'Claude', availability7d: 99 },

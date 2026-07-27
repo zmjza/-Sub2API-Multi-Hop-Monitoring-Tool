@@ -1472,9 +1472,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     'E2E 分组',
   );
   await expect(
-    main
-      .getByRole('dialog', { name: '本地集成站点 渠道状态' })
-      .locator('.rate-channel-list > button'),
+    main.getByRole('dialog', { name: '本地集成站点 渠道状态' }).locator('.rate-channel-list-card'),
   ).toHaveCount(7);
   await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toContainText(
     '本地模型通道',
@@ -1510,7 +1508,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .getByRole('button', { name: '重试', exact: true })
     .click();
   await expect(
-    main.getByRole('dialog', { name: 'localhost 渠道状态' }).locator('.rate-channel-list > button'),
+    main.getByRole('dialog', { name: 'localhost 渠道状态' }).locator('.rate-channel-list-card'),
   ).toHaveCount(7);
   await main.keyboard.press('Escape');
 
@@ -1610,10 +1608,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   });
   await main.getByRole('button', { name: '渠道状态', exact: true }).click();
   await expect(main.locator('.channel-card')).toHaveCount(7);
-  await expect(main.getByRole('region', { name: 'Key 分组渠道关联' })).toContainText('自动关联');
-  await expect(
-    main.getByRole('region', { name: 'Key 分组渠道关联' }).getByRole('checkbox'),
-  ).toHaveCount(7);
+  await expect(main.getByRole('region', { name: 'Key 分组渠道关联' })).toHaveCount(0);
   await expect(main.getByText('E2E 分组精准通道', { exact: true }).first()).toBeVisible();
   await expect(main.locator('.channel-card-status-stack')).toHaveCount(7);
   await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(0);
@@ -1631,14 +1626,14 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   ).toBe(false);
   await captureEvidence(main, '03-channels');
   availableChannelsMode = 'partial';
-  const associationRegion = main.getByRole('region', { name: 'Key 分组渠道关联' });
-  await associationRegion
-    .locator('label')
-    .filter({ hasText: 'OpenAI 便宜 A' })
-    .locator('input[type="checkbox"]')
-    .check();
-  await associationRegion.getByRole('button', { name: '保存关联' }).click();
-  await expect(associationRegion).toContainText('手动指定 1 个渠道');
+  await main.getByRole('button', { name: '全部站点', exact: true }).click();
+  await main.getByRole('button', { name: '查看 本地集成站点 渠道状态' }).click();
+  const associationPopover = main.getByRole('dialog', { name: /渠道状态/ });
+  await expect(associationPopover.locator('.rate-channel-association-button')).toHaveCount(7);
+  await associationPopover.getByRole('button', { name: /关联 OpenAI 便宜 A/ }).click();
+  await expect(
+    associationPopover.getByRole('button', { name: /取消关联 OpenAI 便宜 A/ }),
+  ).toBeVisible();
   await expect
     .poll(async () =>
       main.evaluate(async () =>
@@ -1650,14 +1645,21 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .toEqual([
       expect.objectContaining({ groupId: 'g1', channelIds: ['channel-e2e-2'], source: 'manual' }),
     ]);
-  await main.getByRole('button', { name: '刷新渠道', exact: true }).click();
-  await expect(associationRegion).toContainText('手动指定 1 个渠道');
+  await associationPopover.getByRole('button', { name: /取消关联 OpenAI 便宜 A/ }).click();
   await captureEvidence(main, '17-channel-manual-association');
-  await associationRegion.getByRole('button', { name: '恢复自动匹配' }).click();
-  await expect(associationRegion).toContainText('未找到自动关联');
+  await expect
+    .poll(async () =>
+      main.evaluate(async () =>
+        window.sub2apiDesktop?.sites.channelAssociations(
+          (await window.sub2apiDesktop?.sites.list())?.currentSiteId ?? '',
+        ),
+      ),
+    )
+    .toEqual([]);
+  await associationPopover.getByRole('button', { name: /查看 OpenAI 便宜 A 渠道详情/ }).click();
+  await expect(associationPopover).toBeVisible();
+  await associationPopover.getByRole('button', { name: '关闭渠道状态弹窗' }).click();
   availableChannelsMode = 'complete';
-  await main.getByRole('button', { name: '刷新渠道', exact: true }).click();
-  await expect(associationRegion).toContainText('自动关联');
   await main.getByRole('button', { name: '通知', exact: true }).click();
   await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'sites');
   await expect(main.locator('#notification-settings')).toBeVisible();

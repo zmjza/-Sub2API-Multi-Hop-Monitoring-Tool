@@ -1581,34 +1581,49 @@
   padding-top: 14px;
   border-top: 1px solid #e2e8f0;
 }
-.rate-channel-list > button {
-  display: grid;
+.rate-channel-list-card {
+  position: relative;
   min-width: 0;
   min-height: 132px;
-  gap: 7px;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  padding: 12px;
   background: #fff;
   color: #334155;
-  text-align: left;
-  cursor: pointer;
+  overflow: hidden;
 }
-.rate-channel-list > button:hover,
-.rate-channel-list > button:focus-visible,
-.rate-channel-list > button.selected {
+.rate-channel-list-card:hover,
+.rate-channel-list-card:focus-within,
+.rate-channel-list-card.selected {
   border-color: #86efac;
   background: #f7fcf8;
   outline: none;
+}
+.rate-channel-list-select {
+  width: 100%;
+  min-height: 132px;
+  display: grid;
+  gap: 7px;
+  border: 0;
+  padding: 12px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rate-channel-list-select:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: -3px;
+  border-radius: 15px;
 }
 .rate-channel-list-head {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
+  padding-right: 68px;
 }
 .rate-channel-list-head b,
-.rate-channel-list > button > small {
+.rate-channel-list-select > small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1617,7 +1632,7 @@
 .rate-channel-list-head b {
   font-size: 12px;
 }
-.rate-channel-list > button > small {
+.rate-channel-list-select > small {
   color: #64748b;
   font-size: 10px;
 }
@@ -1647,6 +1662,42 @@
   align-self: center;
   color: #94a3b8;
   font-size: 9px;
+}
+.rate-channel-association-button {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  min-width: 58px;
+  height: 28px;
+  border: 1px solid #ddd9ec;
+  border-radius: 14px;
+  padding: 0 10px;
+  background: #f7f5fc;
+  color: #5f5b70;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.rate-channel-association-button:hover:not(:disabled),
+.rate-channel-association-button:focus-visible {
+  border-color: #8b82f6;
+  color: #4f46e5;
+  outline: none;
+}
+.rate-channel-association-button.associated {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #047857;
+}
+.rate-channel-association-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.rate-channel-association-message {
+  margin-top: 10px;
+  color: #047857;
+  font-size: 11px;
+  text-align: right;
 }
 @media (max-width: 620px) {
   .rate-channel-list {

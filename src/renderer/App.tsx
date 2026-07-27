@@ -546,27 +546,38 @@ export function App() {
     if (!selectedSite) return { ok: false };
     return loadChannels(selectedSite.id, true);
   };
-  context.onChannelAssociationSave = async (groupId, channelIds) => {
-    if (!selectedSite || !window.sub2apiDesktop) return;
+  const saveChannelAssociationForSite = async (
+    siteId: string,
+    groupId: string,
+    channelIds: string[],
+  ) => {
+    if (!window.sub2apiDesktop) return;
     const next = await window.sub2apiDesktop.sites.setChannelAssociation({
-      siteId: selectedSite.id,
+      siteId,
       groupId,
       channelIds,
     });
-    setChannelAssociations(next);
-    setChannelAssociationsBySite((current) => ({ ...current, [selectedSite.id]: next }));
-    await loadChannels(selectedSite.id, true);
+    setChannelAssociations((current) => (selectedSite?.id === siteId ? next : current));
+    setChannelAssociationsBySite((current) => ({ ...current, [siteId]: next }));
+    await loadChannels(siteId, true);
+  };
+  const clearChannelAssociationForSite = async (siteId: string, groupId: string) => {
+    if (!window.sub2apiDesktop) return;
+    const next = await window.sub2apiDesktop.sites.clearChannelAssociation({ siteId, groupId });
+    setChannelAssociations((current) => (selectedSite?.id === siteId ? next : current));
+    setChannelAssociationsBySite((current) => ({ ...current, [siteId]: next }));
+    await loadChannels(siteId, true);
+  };
+  context.onChannelAssociationSave = async (groupId, channelIds) => {
+    if (!selectedSite || !window.sub2apiDesktop) return;
+    await saveChannelAssociationForSite(selectedSite.id, groupId, channelIds);
   };
   context.onChannelAssociationClear = async (groupId) => {
     if (!selectedSite || !window.sub2apiDesktop) return;
-    const next = await window.sub2apiDesktop.sites.clearChannelAssociation({
-      siteId: selectedSite.id,
-      groupId,
-    });
-    setChannelAssociations(next);
-    setChannelAssociationsBySite((current) => ({ ...current, [selectedSite.id]: next }));
-    await loadChannels(selectedSite.id, true);
+    await clearChannelAssociationForSite(selectedSite.id, groupId);
   };
+  context.onChannelAssociationSaveForSite = saveChannelAssociationForSite;
+  context.onChannelAssociationClearForSite = clearChannelAssociationForSite;
   context.floatingPosition = floatingPosition;
   context.floatingOpacity = floatingOpacity;
   context.onFloatingPositionChange = (position) => {

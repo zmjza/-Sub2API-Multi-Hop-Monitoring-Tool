@@ -15,6 +15,7 @@ import type {
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
+import { toggleChannelAssociation } from '../channels/channel-ranking';
 
 type Channel = ChannelViewPayload['channels'][number];
 
@@ -33,6 +34,9 @@ export function ChannelStatusPopover(props: {
   onCacheChange?: (cache: ChannelStatusCache) => void;
   onLoaded?: (channels: RateChannelSnapshot[]) => void;
   onStateChange?: (state: 'supported' | 'unsupported' | 'error') => void;
+  associationGroupId?: string;
+  associatedChannelIds?: string[];
+  onAssociationSave?: (groupId: string, channelIds: string[]) => Promise<void>;
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -59,7 +63,16 @@ export function ChannelStatusPopover(props: {
   const [selected, setSelected] = useState<Channel>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(false);
+  const [associatedChannelIds, setAssociatedChannelIds] = useState<string[]>(
+    props.associatedChannelIds ?? [],
+  );
+  const [associationBusyId, setAssociationBusyId] = useState<string>();
+  const [associationMessage, setAssociationMessage] = useState('');
   const detailRequestRef = useRef(0);
+
+  useEffect(() => {
+    setAssociatedChannelIds(props.associatedChannelIds ?? []);
+  }, [props.associatedChannelIds?.join(','), props.associationGroupId]);
 
   const publishCache = useCallback((cache: ChannelStatusCache) => {
     cacheRef.current = cache;
@@ -186,6 +199,24 @@ export function ChannelStatusPopover(props: {
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
   const model = detail?.models[0];
   const checkedAt = selected?.timeline.at(-1)?.checkedAt;
+  const toggleAssociation = async (channelId: string) => {
+    const groupId = props.associationGroupId;
+    if (!groupId || !props.onAssociationSave || associationBusyId) return;
+    const previous = associatedChannelIds;
+    const next = toggleChannelAssociation(previous, channelId);
+    setAssociatedChannelIds(next);
+    setAssociationBusyId(channelId);
+    setAssociationMessage('');
+    try {
+      await props.onAssociationSave(groupId, next);
+      setAssociationMessage(next.includes(channelId) ? '已关联渠道' : '已取消关联');
+    } catch {
+      setAssociatedChannelIds(previous);
+      setAssociationMessage('关联保存失败，已恢复原状态');
+    } finally {
+      setAssociationBusyId(undefined);
+    }
+  };
   return createPortal(
     <div
       ref={panelRef}
@@ -321,47 +352,75 @@ export function ChannelStatusPopover(props: {
           </div>
           <div className="rate-channel-list" aria-label="全部渠道状态">
             {channels.map((channel) => {
+              const associated = associatedChannelIds.includes(channel.id);
               return (
-                <button
-                  type="button"
-                  className={channel.id === selected.id ? 'selected' : ''}
+                <article
+                  className={`rate-channel-list-card ${channel.id === selected.id ? 'selected' : ''}`}
                   key={channel.id}
-                  onClick={() =>
-                    cacheRef.current?.channels &&
-                    void loadDetail(channel, cacheRef.current.channels)
-                  }
                 >
-                  <span className="rate-channel-list-head">
-                    <b title={channel.name}>{channel.name}</b>
-                    <em className={`rate-channel-status ${channel.status}`}>
-                      {statusLabel(channel.status)}
-                    </em>
-                  </span>
-                  <small>
-                    {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
-                  </small>
-                  <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
-                    {[channel.primaryModel, ...channel.extraModels].filter(Boolean).join('、') ||
-                      '模型待查询'}
-                  </small>
-                  <span className="rate-channel-list-metrics">
-                    <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
-                    <small>Ping {formatMilliseconds(channel.pingMs)}</small>
-                    <small>可用率 {formatAvailability(channel.availability7d)}</small>
-                  </span>
-                  <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
-                    {channel.timeline.length ? (
-                      channel.timeline.map((point, index) => (
-                        <i className={point.status} key={`${point.checkedAt}-${index}`} />
-                      ))
-                    ) : (
-                      <small>暂无状态记录</small>
-                    )}
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    className="rate-channel-list-select"
+                    aria-label={`查看 ${channel.name} 渠道详情`}
+                    onClick={() =>
+                      cacheRef.current?.channels &&
+                      void loadDetail(channel, cacheRef.current.channels)
+                    }
+                  >
+                    <span className="rate-channel-list-head">
+                      <b title={channel.name}>{channel.name}</b>
+                      <em className={`rate-channel-status ${channel.status}`}>
+                        {statusLabel(channel.status)}
+                      </em>
+                    </span>
+                    <small>
+                      {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
+                    </small>
+                    <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
+                      {[channel.primaryModel, ...channel.extraModels].filter(Boolean).join('、') ||
+                        '模型待查询'}
+                    </small>
+                    <span className="rate-channel-list-metrics">
+                      <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
+                      <small>Ping {formatMilliseconds(channel.pingMs)}</small>
+                      <small>可用率 {formatAvailability(channel.availability7d)}</small>
+                    </span>
+                    <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
+                      {channel.timeline.length ? (
+                        channel.timeline.map((point, index) => (
+                          <i className={point.status} key={`${point.checkedAt}-${index}`} />
+                        ))
+                      ) : (
+                        <small>暂无状态记录</small>
+                      )}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rate-channel-association-button ${associated ? 'associated' : ''}`}
+                    aria-label={`${associated ? '取消关联' : '关联'} ${channel.name}`}
+                    aria-pressed={associated}
+                    disabled={
+                      !props.associationGroupId ||
+                      !props.onAssociationSave ||
+                      associationBusyId !== undefined
+                    }
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggleAssociation(channel.id);
+                    }}
+                  >
+                    {associationBusyId === channel.id ? '保存中…' : associated ? '已关联' : '关联'}
+                  </button>
+                </article>
               );
             })}
           </div>
+          {associationMessage && (
+            <div className="rate-channel-association-message" role="status">
+              {associationMessage}
+            </div>
+          )}
         </div>
       )}
     </div>,

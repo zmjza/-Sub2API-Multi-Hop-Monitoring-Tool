@@ -64,4 +64,20 @@ describe('readChannelItems', () => {
     }
     expect(styles).not.toContain('.channel-rate-badge');
   });
+
+  it('moves manual association controls into the channel status popover', () => {
+    const page = readFileSync(
+      fileURLToPath(new URL('./ChannelsPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    const popover = readFileSync(
+      fileURLToPath(new URL('../overview/ChannelStatusPopover.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(page).not.toContain('channel-association-panel');
+    expect(page).not.toContain('保存关联');
+    expect(popover).toContain('rate-channel-association-button');
+    expect(popover).toContain('已关联');
+    expect(popover).toContain('toggleChannelAssociation');
+  });
 });

@@ -966,6 +966,40 @@ export function OverviewPage(props: OverviewProps) {
           loadDetail={(channelId, force) =>
             channelStatusLoaderRef.current!.loadDetail(channelPopover.siteId, channelId, force)
           }
+          associationGroupId={
+            currentChannelContextBySite[channelPopover.siteId]?.currentKey?.groupId
+          }
+          associatedChannelIds={
+            associationsBySite[channelPopover.siteId]?.find(
+              (item) =>
+                item.groupId ===
+                  currentChannelContextBySite[channelPopover.siteId]?.currentKey?.groupId &&
+                item.source === 'manual',
+            )?.channelIds ?? []
+          }
+          onAssociationSave={async (groupId, channelIds) => {
+            await props.onChannelAssociationSaveForSite?.(
+              channelPopover.siteId,
+              groupId,
+              channelIds,
+            );
+            setManualAssociationsBySite((current) => {
+              const previous = current[channelPopover.siteId] ?? [];
+              const retained = previous.filter((item) => item.groupId !== groupId);
+              const next = channelIds.length
+                ? [
+                    ...retained,
+                    {
+                      siteId: channelPopover.siteId,
+                      groupId,
+                      channelIds,
+                      source: 'manual' as const,
+                    },
+                  ]
+                : retained;
+              return { ...current, [channelPopover.siteId]: next };
+            });
+          }}
           onCacheChange={(cache) => syncChannelStatusCache(channelPopover.siteId, cache)}
           onLoaded={(channels) => {
             setRateChannelsBySite((current) => ({

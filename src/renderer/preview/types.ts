@@ -90,6 +90,12 @@ export interface PreviewContext {
   }>;
   onChannelAssociationSave?: (groupId: string, channelIds: string[]) => Promise<void>;
   onChannelAssociationClear?: (groupId: string) => Promise<void>;
+  onChannelAssociationSaveForSite?: (
+    siteId: string,
+    groupId: string,
+    channelIds: string[],
+  ) => Promise<void>;
+  onChannelAssociationClearForSite?: (siteId: string, groupId: string) => Promise<void>;
   floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom';
   floatingOpacity?: number;
   onFloatingPositionChange?: (

@@ -328,61 +328,6 @@
 .unsupported-panel svg {
   color: #d97706;
 }
-.channel-association-panel {
-  display: grid;
-  gap: 14px;
-  margin: 18px 0;
-  padding: 16px 18px;
-  background: #fff;
-  border: 1px solid #e6e3ef;
-  border-radius: 12px;
-}
-.channel-association-panel > div:first-child {
-  display: grid;
-  gap: 4px;
-}
-.channel-association-panel small {
-  color: #777587;
-}
-.channel-association-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-}
-.channel-association-options label {
-  display: inline-flex;
-  gap: 7px;
-  align-items: center;
-  min-height: 32px;
-}
-.channel-association-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.channel-association-actions button {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid #d7d3e5;
-  border-radius: 8px;
-  background: #fff;
-  color: #292735;
-  cursor: pointer;
-}
-.channel-association-actions button:first-child {
-  border-color: #0f766e;
-  background: #0f766e;
-  color: #fff;
-}
-.channel-association-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-.channel-association-actions [role='status'] {
-  color: #0f766e;
-  font-size: 13px;
-}
 @media (max-width: 1300px) {
   .channel-cards {
     grid-template-columns: repeat(2, 1fr);

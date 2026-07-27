@@ -470,3 +470,9 @@ export function resolveCurrentKey<T extends { id: string; maskedLabel: string }>
   if (preference?.mode === 'manual') return keys.find((item) => item.id === preference.keyId);
   return defaultKeyLabel ? keys.find((item) => item.maskedLabel === defaultKeyLabel) : undefined;
 }
+
+export function toggleChannelAssociation(channelIds: string[], channelId: string): string[] {
+  return channelIds.includes(channelId)
+    ? channelIds.filter((id) => id !== channelId)
+    : [...channelIds, channelId];
+}
