@@ -172,19 +172,29 @@ export class Sub2ApiAdapter {
 
   async readOptionalChannels(accessToken: string) {
     try {
+      let availableChannelsRequestFailed = false;
       const [raw, availableRaw] = await Promise.all([
         this.client.getJson('/channel-monitors', accessToken, 'channelMonitors'),
-        this.client
-          .getJson('/channels/available', accessToken, 'availableChannels')
-          .catch(() => undefined),
+        this.client.getJson('/channels/available', accessToken, 'availableChannels').catch(() => {
+          availableChannelsRequestFailed = true;
+          return undefined;
+        }),
       ]);
       const availableChannels = normalizeAvailableChannels(availableRaw);
+      const availableRelationshipsPartial = hasIncompleteAvailableGroupIds(availableRaw);
       return {
         state: 'supported' as const,
         channels: asArray(unwrapPayload(raw)).map((item) =>
           normalizeChannelSummary(asRecord(item)),
         ),
         ...(availableChannels.length ? { availableChannels } : {}),
+        availableChannelsState: availableChannelsRequestFailed
+          ? ('error' as const)
+          : availableRelationshipsPartial
+            ? ('partial' as const)
+            : availableChannels.length
+              ? ('complete' as const)
+              : ('empty' as const),
       };
     } catch (error) {
       if (isUnsupported(error)) return { state: 'unsupported' as const, channels: [] };
@@ -520,7 +530,7 @@ function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[
           groupIds: asArray(section.groups).flatMap((groupEntry) => {
             const group = asRecord(groupEntry);
             const groupId = stringOrUndefined(group.id ?? group.group_id);
-            return groupId && isSafeNumericId(groupId) ? [groupId] : [];
+            return groupId && groupId.length <= 128 ? [groupId] : [];
           }),
           groupNames: asArray(section.groups).flatMap((groupEntry) => {
             const group = asRecord(groupEntry);
@@ -536,6 +546,24 @@ function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[
       ];
     });
     return platforms.length ? [{ name, platforms }] : [];
+  });
+}
+
+function hasIncompleteAvailableGroupIds(value: unknown): boolean {
+  const entries = asArray(unwrapPayload(value));
+  if (!entries.length) return false;
+  return entries.some((entry) => {
+    const channel = asRecord(entry);
+    return asArray(channel.platforms).some((platformEntry) => {
+      const groups = asArray(asRecord(platformEntry).groups);
+      return (
+        groups.length === 0 ||
+        groups.some((groupEntry) => {
+          const group = asRecord(groupEntry);
+          return !stringOrUndefined(group.id ?? group.group_id);
+        })
+      );
+    });
   });
 }
 

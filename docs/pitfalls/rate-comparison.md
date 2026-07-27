@@ -131,27 +131,27 @@ Antigravity 被渲染成第五个平台，或只在直接平台字段中归入 G
 
 站点卡片当前 Key 渠道摘要、倍率稳定性核验、渠道状态页面和完整渠道状态弹窗。
 
-## 时间线 unknown 不能被汇总 normal 覆盖为稳定
+## 三分钟窗口只排除明确失败状态
 
 **现象**
 
-渠道最近五分钟时间线包含 `unknown`，但渠道汇总状态为 `normal` 时，倍率比较仍可能给出稳定 10 分。
+渠道最近三分钟时间线包含 `unknown`、空状态或 `degraded` 时，不能因为状态名称不等于 `normal` 就误判为异常；反之明确失败状态必须排除。
 
 **根因**
 
-稳定性函数只优先处理时间线中的 `failed` 和 `degraded`，遗漏了 `unknown`；后续直接使用汇总状态得出稳定结果。
+上游状态会归一化为 `normal`、`degraded`、`failed`、`unknown`，并可能直接返回 `error`、`down`、`unavailable`。业务规则只把 `failed/error/down/unavailable` 视为不稳定，其他值或空值按稳定处理。
 
 **正确做法**
 
-倍率推荐使用硬门槛而不是异常状态降分：当前汇总必须为 `normal`，最近五分钟至少有一条可解析且非未来记录，窗口内每条记录都必须为 `normal`。任意 `failed`、`degraded`、`unknown`、空窗口、过期、未来或非法时间戳均直接排除；无渠道状态也不计算分数。
+倍率推荐使用 3 分钟窗口：当前状态或窗口记录出现 `failed/error/down/unavailable` 时排除；`unknown`、`degraded`、空状态按稳定处理。没有渠道状态的候选进入独立价格池，不计算稳定分。
 
 **验证方式**
 
-运行 `npm test -- --run src/renderer/shells/overview/rate-comparison.test.ts`，确认 unknown、degraded、failed、空时间线、过期、未来、非法时间以及当前状态矛盾的回归用例均被排除；再运行完整 Vitest。
+运行 `npm test -- --run src/renderer/shells/overview/rate-comparison.test.ts`，确认 3 分钟边界、四种明确失败状态、unknown/degraded 稳定语义及无状态价格池回归用例；再运行完整 Vitest。
 
 **禁止事项**
 
-不要仅凭渠道汇总 `normal` 判定最近五分钟稳定；不要为无状态或异常候选设置中性分；不要让被排除候选影响价格 min/max。
+不要恢复 5 分钟窗口；不要把 `unknown`、`degraded` 或空状态误当失败；不要让无状态候选混入稳定分价格池；不要让被排除候选影响价格 min/max。
 
 **相关文件或命令**
 

@@ -1,5 +1,16 @@
 # sub2api API 文档
 
+## 2026-07-26 渠道关系与状态接口补充
+
+| 方法与路径                                  | 用途                                      | 客户端规则                                                                                   |
+| ------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET /channels/available`                   | 返回 channel→platform→groups 的结构化关系 | 只信 `groups[].id` 与 Key `group_id` 精确相等；缺 ID 标记关系 `partial`，不得按名称猜测      |
+| `GET /channel-monitors`                     | 返回渠道健康、时间线和摘要                | 只提供状态数据，不作为分组关系主数据源                                                       |
+| `GET /channel-monitors/{channel_id}/status` | 返回单渠道模型详情                        | 详情请求必须使用统一最终关联的 `channelId`                                                   |
+| IPC `channels:associations:get/set/clear`   | 读取、保存、清除站点分组手动渠道关联      | 数据键为 `siteId + groupId`，`groupId` 保留上游不透明字符串或数字，`channelIds[]` 支持一对多 |
+
+推荐规则：最近 3 分钟内仅 `failed/error/down/unavailable` 排除；其他状态和空状态按稳定处理。无关联渠道状态的候选进入独立价格池，不与有状态候选混合归一化。
+
 ## 2026-07-24 普通用户接口核对与验证
 
 证据版本：GitHub `Wei-Shaw/sub2api` main 提交 `cb24522dd53f8f363d008e3afdc8e4baf9788cab`。公共前缀为 `/api/v1`，所有接口使用当前站点已有 Bearer Token。下列路径均为普通用户路由，不得替换为 `/admin/*`。

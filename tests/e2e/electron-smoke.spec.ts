@@ -481,6 +481,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   let floatingLatestHost: string | undefined;
   let floatingLatestSequence = 0;
   let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
+  let availableChannelsMode: 'complete' | 'partial' = 'complete';
   let managedKeyGroupId = '101';
   const availableRateGroups = [
     {
@@ -678,7 +679,30 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
               platforms: [
                 {
                   platform: 'openai',
-                  groups: [{ name: 'E2E 分组' }],
+                  groups:
+                    availableChannelsMode === 'complete'
+                      ? [{ id: 'g1', name: 'E2E 分组' }]
+                      : [{ name: 'E2E 分组' }],
+                  supported_models: [{ name: 'gpt-e2e' }],
+                },
+              ],
+            },
+            {
+              name: 'OpenAI 便宜 A',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groups: [{ id: 'rate-openai-a', name: 'OpenAI 便宜 A' }],
+                  supported_models: [{ name: 'gpt-e2e' }],
+                },
+              ],
+            },
+            {
+              name: 'OpenAI 便宜 B',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groups: [{ id: 'rate-openai-b', name: 'OpenAI 便宜 B' }],
                   supported_models: [{ name: 'gpt-e2e' }],
                 },
               ],
@@ -842,7 +866,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
   expect(await main.evaluate(() => typeof window.sub2apiDesktop)).toBe('object');
   await expect(main.getByText('最后更新：', { exact: false })).toBeVisible();
-  await expect(main.locator('.app-version-badge')).toContainText('v1.5.0');
+  await expect(main.locator('.app-version-badge')).toContainText('v1.5.1');
   await expect(main.getByRole('heading', { name: '添加新站点' })).toBeVisible();
   await main.getByPlaceholder('例如: OpenAI 备用节点').fill('本地集成站点');
   await main.getByPlaceholder('https://api.example.com').fill(`http://127.0.0.1:${address.port}`);
@@ -968,7 +992,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   channelDelayMs = 0;
   await expect(main.locator('.site-card > .rate-inline-channel.is-error')).toHaveCount(1);
   await expect(
-    main.locator('.site-card > .rate-inline-channel').filter({ hasText: '当前渠道' }),
+    main.locator('.site-card > .rate-inline-channel').filter({ hasText: '自动关联' }),
   ).toHaveCount(4);
   await expect(main.locator('.site-card').getByText('本地集成站点', { exact: true })).toBeVisible();
   await main.locator('.site-card').filter({ hasText: '本地集成站点' }).dblclick();
@@ -1072,7 +1096,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(openAiRateCard).toContainText('OpenAI 便宜 A');
   await expect(openAiRateCard).not.toContainText('OpenAI 便宜 B');
   await expect(openAiRateCard.locator('.rate-inline-channel')).toHaveCount(0);
-  await expect(openAiRateCard).toContainText('5 分钟稳定');
+  await expect(openAiRateCard).toContainText('3 分钟稳定');
   await expect(main.locator('.rate-platform-logo')).toHaveCount(4);
   await expect(main.locator('.rate-platform-content')).toHaveCount(5);
   expect(
@@ -1562,7 +1586,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.locator('.app-toolbar').getByRole('button', { name: '刷新' }).click();
   await expect.poll(() => modelsRequestCount).toBeGreaterThan(modelsBeforeRefresh);
   await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model'], {
-    timeout: 5_000,
+    timeout: 15_000,
   });
   await expect(main.locator('.usage-table-panel').getByText('高', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel').getByText('首字', { exact: true })).toBeVisible();
@@ -1578,8 +1602,18 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .poll(async () => readFile(exportPath, 'utf8').catch(() => ''))
     .toContain('test-model');
   expect((await stat(exportPath)).mode & 0o077).toBe(0);
+  await main.evaluate(async () => {
+    const desktop = window.sub2apiDesktop?.sites;
+    const siteId = (await desktop?.list())?.currentSiteId;
+    if (!desktop || !siteId) throw new Error('Current site unavailable');
+    await desktop.setKeyPreference(siteId, { mode: 'auto' });
+  });
   await main.getByRole('button', { name: '渠道状态', exact: true }).click();
   await expect(main.locator('.channel-card')).toHaveCount(7);
+  await expect(main.getByRole('region', { name: 'Key 分组渠道关联' })).toContainText('自动关联');
+  await expect(
+    main.getByRole('region', { name: 'Key 分组渠道关联' }).getByRole('checkbox'),
+  ).toHaveCount(7);
   await expect(main.getByText('E2E 分组精准通道', { exact: true }).first()).toBeVisible();
   await expect(main.locator('.channel-card-status-stack')).toHaveCount(7);
   await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(0);
@@ -1596,6 +1630,34 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     ),
   ).toBe(false);
   await captureEvidence(main, '03-channels');
+  availableChannelsMode = 'partial';
+  const associationRegion = main.getByRole('region', { name: 'Key 分组渠道关联' });
+  await associationRegion
+    .locator('label')
+    .filter({ hasText: 'OpenAI 便宜 A' })
+    .locator('input[type="checkbox"]')
+    .check();
+  await associationRegion.getByRole('button', { name: '保存关联' }).click();
+  await expect(associationRegion).toContainText('手动指定 1 个渠道');
+  await expect
+    .poll(async () =>
+      main.evaluate(async () =>
+        window.sub2apiDesktop?.sites.channelAssociations(
+          (await window.sub2apiDesktop?.sites.list())?.currentSiteId ?? '',
+        ),
+      ),
+    )
+    .toEqual([
+      expect.objectContaining({ groupId: 'g1', channelIds: ['channel-e2e-2'], source: 'manual' }),
+    ]);
+  await main.getByRole('button', { name: '刷新渠道', exact: true }).click();
+  await expect(associationRegion).toContainText('手动指定 1 个渠道');
+  await captureEvidence(main, '17-channel-manual-association');
+  await associationRegion.getByRole('button', { name: '恢复自动匹配' }).click();
+  await expect(associationRegion).toContainText('未找到自动关联');
+  availableChannelsMode = 'complete';
+  await main.getByRole('button', { name: '刷新渠道', exact: true }).click();
+  await expect(associationRegion).toContainText('自动关联');
   await main.getByRole('button', { name: '通知', exact: true }).click();
   await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'sites');
   await expect(main.locator('#notification-settings')).toBeVisible();

@@ -1,5 +1,12 @@
 # Key-渠道关联与状态语义
 
+## 2026-07-26 1.5.1 当前有效规则
+
+- `group_id` 是唯一主关联键；`/channels/available` 缺少 `groups[].id` 时关系为 `partial`，不能使用渠道名称、模型、monitor ID 或取第一个渠道补齐。
+- 统一 final resolver 返回一对多渠道和 `source`。自动关系完整时覆盖旧手动结果；自动关系部分、为空或请求失败时保留手动结果。
+- 手动映射按 `siteId + groupId` 持久化，渠道页面支持多选、清除和恢复自动匹配；总览、渠道详情、重试和推荐复用同一最终渠道 ID 集合。
+- 渠道健康最近 3 分钟只排除 `failed/error/down/unavailable`；`degraded/unknown/空状态` 在倍率稳定判定中按稳定处理。
+
 上级：[[03-索引]]、[[_渠道状态]]
 依赖：M06、M07、M10、M11、M14、M16
 需求：RQ-26、RQ-27
@@ -7,7 +14,7 @@
 
 ## 关系与状态模型
 
-关系先按 Key.groupId 定位 available channel，之后再把 channel 映射到 monitor。`group_id` 与 `monitor.id` 属于不同实体，禁止比较。严格 matcher 对多个候选继续返回 ambiguous，供倍率比较执行唯一高置信门禁；总览可在该候选集合内按名称相似度、关系平台/模型、健康、新鲜度、可用率和稳定 ID 依次择优，但不得扩展候选集合。健康、同步、新鲜度和关联状态正交：remote failed/error 才是“异常”，请求失败是“刷新失败”，旧数据是“数据过期”，无关系是“未关联”。
+关系先按 Key.groupId 定位 available channel，之后再把 channel 映射到 monitor。`group_id` 与 `monitor.id` 属于不同实体，禁止比较。当前有效规则只接受 `platforms[].groups[].id` 的精确相等；自动关系不完整时使用手动 `channelIds[]`，不再通过名称相似度或模型择优补齐。健康、同步、新鲜度和关联状态正交：remote failed/error/down/unavailable 才是不稳定，unknown/degraded/空状态在倍率稳定判定中允许稳定。
 
 ## 微观任务
 

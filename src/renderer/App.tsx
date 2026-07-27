@@ -39,6 +39,7 @@ import { siteDisplayName } from './site-label';
 import { normalizeVersionLabel } from './version-label';
 import { UsageLoadCoordinator } from './shells/usage/usage-load-coordinator';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
+import { currentKeyGroup, resolveFinalChannelAssociation } from './shells/channels/channel-ranking';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
 import { retryAfterSecondsFromError } from './channel-polling';
 import { SitesPage } from './shells/sites/SitesPage';
@@ -53,6 +54,7 @@ import './styles.css';
 import type {
   SiteKeyContext,
   SiteKeyContexts,
+  ChannelAssociation,
   UsageFilterOptions,
   FloatingSettings,
   RateContexts,
@@ -89,6 +91,10 @@ export function App() {
   const [writingKeyIds, setWritingKeyIds] = useState<Set<string>>(() => new Set());
   const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [channelsData, setChannelsData] = useState<unknown>();
+  const [channelAssociations, setChannelAssociations] = useState<ChannelAssociation[]>([]);
+  const [channelAssociationsBySite, setChannelAssociationsBySite] = useState<
+    Record<string, ChannelAssociation[]>
+  >({});
   const [channelDetail, setChannelDetail] = useState<unknown>();
   const [selectedChannelId, setSelectedChannelId] = useState<string>();
   const [keyContexts, setKeyContexts] = useState<SiteKeyContexts>({});
@@ -288,6 +294,8 @@ export function App() {
   context.usageData = usageData;
   context.usageStats = usageStats;
   context.channelsData = channelsData;
+  context.channelAssociations = channelAssociations;
+  context.channelAssociationsBySite = channelAssociationsBySite;
   context.channelDetail = channelDetail;
   context.selectedChannelId = selectedChannelId;
   context.keyOptions = keyOptions;
@@ -538,6 +546,27 @@ export function App() {
     if (!selectedSite) return { ok: false };
     return loadChannels(selectedSite.id, true);
   };
+  context.onChannelAssociationSave = async (groupId, channelIds) => {
+    if (!selectedSite || !window.sub2apiDesktop) return;
+    const next = await window.sub2apiDesktop.sites.setChannelAssociation({
+      siteId: selectedSite.id,
+      groupId,
+      channelIds,
+    });
+    setChannelAssociations(next);
+    setChannelAssociationsBySite((current) => ({ ...current, [selectedSite.id]: next }));
+    await loadChannels(selectedSite.id, true);
+  };
+  context.onChannelAssociationClear = async (groupId) => {
+    if (!selectedSite || !window.sub2apiDesktop) return;
+    const next = await window.sub2apiDesktop.sites.clearChannelAssociation({
+      siteId: selectedSite.id,
+      groupId,
+    });
+    setChannelAssociations(next);
+    setChannelAssociationsBySite((current) => ({ ...current, [selectedSite.id]: next }));
+    await loadChannels(selectedSite.id, true);
+  };
   context.floatingPosition = floatingPosition;
   context.floatingOpacity = floatingOpacity;
   context.onFloatingPositionChange = (position) => {
@@ -781,11 +810,31 @@ export function App() {
       const value = await channelStatusLoaderRef.current.loadChannels(siteId, force);
       if (!isCurrent()) return { ok: false };
       setChannelsData(value);
-      const rawChannels =
-        value && typeof value === 'object' && 'channels' in value ? value.channels : undefined;
-      const first = Array.isArray(rawChannels) ? rawChannels[0] : undefined;
-      const id =
-        first && typeof first === 'object' && 'id' in first ? String(first.id ?? '') : undefined;
+      const storedAssociations = await window.sub2apiDesktop?.sites.channelAssociations(siteId);
+      if (isCurrent() && storedAssociations) {
+        setChannelAssociations(storedAssociations);
+        setChannelAssociationsBySite((current) => ({ ...current, [siteId]: storedAssociations }));
+      }
+      const keyGroup = currentKeyGroup(
+        keyOptions,
+        usageFilterOptions.groups,
+        keyPreference,
+        selectedSite?.defaultKeyLabel,
+      );
+      const manualChannelIds =
+        storedAssociations?.find((item) => item.groupId === keyGroup?.groupId)?.channelIds ?? [];
+      const association = keyGroup?.groupId
+        ? resolveFinalChannelAssociation(
+            value.channels,
+            keyGroup.groupName,
+            value.availableChannels ?? [],
+            keyGroup.groupId,
+            manualChannelIds,
+            value.availableChannelsState,
+          )
+        : undefined;
+      const first = association?.status === 'matched' ? association.channels[0] : value.channels[0];
+      const id = first?.id;
       setSelectedChannelId(id);
       if (!id) {
         setChannelDetail(undefined);

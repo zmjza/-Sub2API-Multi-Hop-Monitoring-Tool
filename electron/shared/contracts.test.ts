@@ -21,6 +21,7 @@ import {
   apiKeySummarySchema,
   siteSummarySchema,
   usageStatsSchema,
+  channelAssociationRequestSchema,
 } from './contracts.js';
 
 describe('IPC boundary schemas', () => {
@@ -70,6 +71,16 @@ describe('IPC boundary schemas', () => {
     expect(() =>
       siteInputSchema.parse({ name: '', url: 'file:///tmp/a', account: 'x', password: 'x' }),
     ).toThrow();
+  });
+
+  it('accepts opaque upstream group IDs for manual channel associations', () => {
+    expect(
+      channelAssociationRequestSchema.parse({
+        siteId: 'site-a',
+        groupId: 'g1',
+        channelIds: ['channel-a', 'channel-b'],
+      }),
+    ).toEqual({ siteId: 'site-a', groupId: 'g1', channelIds: ['channel-a', 'channel-b'] });
   });
 
   it('allows only the safe reasoning effort field on usage records', () => {

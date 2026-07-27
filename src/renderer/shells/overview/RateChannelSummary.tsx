@@ -16,6 +16,8 @@ export function RateChannelSummary(props: {
   listState: InlineChannelListState;
   matchState: InlineChannelMatchState;
   channel?: Channel;
+  channels?: Channel[];
+  associationSource?: 'auto' | 'manual' | 'unmatched';
   detailState?: InlineChannelDetailState;
   onRetry: () => void;
 }) {
@@ -57,8 +59,17 @@ export function RateChannelSummary(props: {
 
   return (
     <div className={`rate-inline-channel is-${status}`} aria-label={`${props.groupName} 当前渠道`}>
+      {(props.channels ?? [props.channel]).length > 1 && (
+        <div className="rate-inline-channel-associated" aria-label="全部关联渠道">
+          {(props.channels ?? [props.channel]).map((item) => (
+            <span key={item.id}>
+              {item.name} · {statusLabel(item.status)}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="rate-inline-channel-heading">
-        <span>当前渠道</span>
+        <span>{props.associationSource === 'manual' ? '手动指定' : '自动关联'}</span>
         <b title={detail?.name ?? props.channel.name}>{detail?.name ?? props.channel.name}</b>
         <em className={`rate-channel-status ${status}`}>{statusLabel(status)}</em>
       </div>

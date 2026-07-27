@@ -31,6 +31,8 @@ export interface PreviewContext {
   usageData?: unknown;
   usageStats?: unknown;
   channelsData?: unknown;
+  channelAssociations?: ChannelAssociation[];
+  channelAssociationsBySite?: Record<string, ChannelAssociation[]>;
   channelDetail?: unknown;
   selectedChannelId?: string;
   keyOptions?: Array<{
@@ -86,6 +88,8 @@ export interface PreviewContext {
     retryAfterSeconds?: number;
     terminal?: boolean;
   }>;
+  onChannelAssociationSave?: (groupId: string, channelIds: string[]) => Promise<void>;
+  onChannelAssociationClear?: (groupId: string) => Promise<void>;
   floatingPosition?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom';
   floatingOpacity?: number;
   onFloatingPositionChange?: (
@@ -121,6 +125,7 @@ export function parsePreviewLocation(search: string): PreviewLocation {
   };
 }
 import type {
+  ChannelAssociation,
   DashboardSnapshot,
   RateContexts,
   SiteKeyContexts,

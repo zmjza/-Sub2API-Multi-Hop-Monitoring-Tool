@@ -1184,6 +1184,41 @@
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.58);
 }
+.rate-inline-channel-associated {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.rate-inline-channel-associated::-webkit-scrollbar {
+  display: none;
+}
+.rate-inline-channel-associated span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #d9d6e4;
+  border-radius: 6px;
+  color: #4c495b;
+  font-size: 12px;
+}
+.rate-platform-secondary {
+  display: grid;
+  gap: 3px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #ebe8f2;
+  color: #6f6b7d;
+  font-size: 12px;
+}
+.rate-platform-secondary b {
+  color: #2b2937;
+  font-size: 14px;
+}
+.rate-platform-secondary small {
+  color: #888497;
+}
 .site-card > .rate-inline-channel {
   flex: 0 0 auto;
   height: 102px;

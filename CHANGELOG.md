@@ -1,5 +1,23 @@
 # 更新说明
 
+## 1.5.1 - 2026-07-26
+
+### Key 分组精确渠道关联与三分钟推荐
+
+- 以 `group_id` 对 `channels/available` 的 `platforms[].groups[].id` 做精确主关联，同一分组命中多个渠道时逐个展示和评分。
+- 增加按站点和分组持久化的手动多渠道关联；自动关系完整时优先自动关系，自动关系缺失时保留手动选择，并支持恢复自动匹配。
+- 推荐稳定窗口从 5 分钟改为 3 分钟；仅 `failed`、`error`、`down`、`unavailable` 视为不稳定，`unknown`、`degraded`、空状态按稳定处理。
+- 推荐按“有状态综合分”和“无状态最低价”分池，综合分为价格分 60% + 稳定分 40%，卡片显示全部关联渠道。
+
+### 1.5.1 产物校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg`          | `2c9319d5777ad1c6d8efccc53176c177d71727fbcc0a9872a81232356d973365` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-mac-arm64.dmg.blockmap` | `cf272f9d1ee3db9cd7e0e27fd56813d640f0356be4d498ec6909379e9b20a9ff` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe`            | `c8de1c0e0ce5584fa845e7c4e7b1358c91e1c5111e2c1021347ea61957c9445c` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.1-win-x64.exe.blockmap`   | `46cc0afb42d53413353f4e9df284f2d1db58227a38f47e154bd713704afb49f4` |
+
 ## 1.5.0 - 2026-07-25
 
 ### 在线更新组件与双入口交互优化

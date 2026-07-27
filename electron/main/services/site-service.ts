@@ -625,6 +625,18 @@ export class SiteService {
     return new Sub2ApiAdapter(client).readChannelStatus(credential.accessToken, channelId);
   }
 
+  getChannelAssociations(siteId: string) {
+    return this.db.getChannelAssociations(siteId);
+  }
+
+  setChannelAssociation(siteId: string, groupId: string, channelIds: string[]) {
+    return this.db.setChannelAssociation(siteId, groupId, channelIds);
+  }
+
+  clearChannelAssociation(siteId: string, groupId: string) {
+    return this.db.clearChannelAssociation(siteId, groupId);
+  }
+
   async apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload> {
     const { adapter, accessToken } = this.apiKeySession(query.siteId);
     const [page, groups] = await Promise.all([

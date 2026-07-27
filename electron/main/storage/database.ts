@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { AvailableRateGroup } from '../../shared/contracts.js';
+import type { ChannelAssociation } from '../../shared/contracts.js';
 
 export interface SiteRow {
   id: string;
@@ -180,6 +181,30 @@ export class AppDatabase {
       ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json`,
       )
       .run(key, JSON.stringify(value));
+  }
+
+  getChannelAssociations(siteId: string): ChannelAssociation[] {
+    return this.getSetting<ChannelAssociation[]>(`channelAssociations:${siteId}`, []);
+  }
+
+  setChannelAssociation(
+    siteId: string,
+    groupId: string,
+    channelIds: string[],
+  ): ChannelAssociation[] {
+    const current = this.getChannelAssociations(siteId).filter((item) => item.groupId !== groupId);
+    const next = [
+      ...current,
+      { siteId, groupId, channelIds: [...new Set(channelIds)], source: 'manual' as const },
+    ].filter((item) => item.channelIds.length > 0);
+    this.setSetting(`channelAssociations:${siteId}`, next);
+    return next;
+  }
+
+  clearChannelAssociation(siteId: string, groupId: string): ChannelAssociation[] {
+    const next = this.getChannelAssociations(siteId).filter((item) => item.groupId !== groupId);
+    this.setSetting(`channelAssociations:${siteId}`, next);
+    return next;
   }
 
   deleteSetting(key: string): void {

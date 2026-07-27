@@ -18,13 +18,14 @@ import claudeLogo from '../../assets/rate-platforms/claude-official.svg';
 import geminiLogo from '../../assets/rate-platforms/gemini-official.svg';
 import grokLogo from '../../assets/rate-platforms/grok-official.svg';
 import type { OverviewProps } from './types';
+import type { ChannelAssociation } from '../../../../electron/shared/contracts';
 import { overviewSites } from './data';
 import { RechargeRatioControl } from './RechargeRatioControl';
 import { RatePopover } from './RatePopover';
 import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
 import {
-  matchGroupToChannel,
+  resolveFinalChannelAssociation,
   resolveOverviewChannelMatch,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
@@ -81,6 +82,9 @@ export function OverviewPage(props: OverviewProps) {
   const [rateChannelStateBySite, setRateChannelStateBySite] = useState<
     Record<string, 'supported' | 'unsupported' | 'error'>
   >({});
+  const [manualAssociationsBySite, setManualAssociationsBySite] = useState<
+    Record<string, ChannelAssociation[]>
+  >({});
   const [inlineChannelListStateBySite, setInlineChannelListStateBySite] = useState<
     Record<string, InlineChannelListState>
   >({});
@@ -99,6 +103,7 @@ export function OverviewPage(props: OverviewProps) {
   if (!channelStatusLoaderRef.current)
     channelStatusLoaderRef.current = desktopRateChannelStatusLoader();
   const runtime = Boolean(window.sub2apiDesktop);
+  const associationsBySite = { ...props.channelAssociationsBySite, ...manualAssociationsBySite };
   const isEmpty =
     props.state === 'empty' || Boolean(props.dashboard && props.dashboard.sites.length === 0);
   const isLoading = props.state === 'loading' || (runtime && !props.dashboard);
@@ -135,6 +140,8 @@ export function OverviewPage(props: OverviewProps) {
       channels: rateChannelsBySite[site.id],
       relationships: rateChannelRelationshipsBySite[site.id],
       channelState: rateChannelStateBySite[site.id],
+      relationshipsState: channelStatusCacheBySite[site.id]?.channels?.availableChannelsState,
+      channelAssociations: associationsBySite[site.id],
     })),
   );
   const pendingRatioCount = liveSites.filter(
@@ -161,15 +168,30 @@ export function OverviewPage(props: OverviewProps) {
       const groups = props.rateContexts?.sites[site.id]?.groups ?? [];
       const groupName =
         currentKey?.groupName ?? groups.find((group) => group.id === currentKey?.groupId)?.name;
-      const strictMatch = groupName
-        ? matchGroupToChannel(
+      const manual = currentKey?.groupId
+        ? associationsBySite[site.id]?.find(
+            (item) => item.groupId === currentKey.groupId && item.source === 'manual',
+          )
+        : undefined;
+      const allMatches = groupName
+        ? resolveFinalChannelAssociation(
             rateChannelsBySite[site.id] ?? [],
             groupName,
             rateChannelRelationshipsBySite[site.id] ?? [],
             currentKey?.groupId,
+            manual?.channelIds ?? [],
+            channelStatusCacheBySite[site.id]?.channels?.availableChannelsState,
           )
-        : undefined;
-      const match = strictMatch
+        : { status: 'unmatched' as const, basis: 'none' as const, source: 'unmatched' as const };
+      const strictMatch =
+        allMatches.status === 'matched'
+          ? {
+              status: 'matched' as const,
+              channel: allMatches.channels[0]!,
+              basis: allMatches.basis,
+            }
+          : allMatches;
+      const match = groupName
         ? resolveOverviewChannelMatch(
             strictMatch,
             groupName,
@@ -177,7 +199,7 @@ export function OverviewPage(props: OverviewProps) {
             currentKey?.groupId,
           )
         : undefined;
-      return [site.id, { currentKey, groupName, match }] as const;
+      return [site.id, { currentKey, groupName, match, allMatches }] as const;
     }),
   );
   const channelSiteIdsKey = JSON.stringify(
@@ -208,6 +230,9 @@ export function OverviewPage(props: OverviewProps) {
     try {
       const envelope = await channelStatusLoaderRef.current!.loadChannels(siteId, force);
       if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
+      const storedAssociations = await window.sub2apiDesktop?.sites.channelAssociations(siteId);
+      if (storedAssociations)
+        setManualAssociationsBySite((current) => ({ ...current, [siteId]: storedAssociations }));
       const channels = envelope.state === 'supported' ? envelope.channels : [];
       setRateChannelsBySite((current) => ({ ...current, [siteId]: channels }));
       setRateChannelRelationshipsBySite((current) => ({
@@ -456,16 +481,26 @@ export function OverviewPage(props: OverviewProps) {
         {rateComparisons.length > 0 ? (
           <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">
             {rateComparisons.map((comparison) => {
-              const recommendation = comparison.state === 'ready' ? comparison.sites[0] : undefined;
+              const recommendation =
+                comparison.state === 'ready'
+                  ? comparison.sites.find((site) => site.recommendationKind === 'with-status')
+                  : undefined;
+              const secondaryRecommendation =
+                comparison.state === 'ready'
+                  ? comparison.sites.find((site) => site.recommendationKind === 'without-status')
+                  : undefined;
+              const leadingRecommendation = recommendation ?? secondaryRecommendation;
               const logo = ratePlatformLogos[comparison.platformKey];
-              const multiplier = recommendation
-                ? formatRateMultiplier(recommendation.effectiveRate).replace(/x$/, '')
+              const multiplier = leadingRecommendation
+                ? formatRateMultiplier(leadingRecommendation.effectiveRate).replace(/x$/, '')
                 : '—';
               const stateLabel = recommendation
                 ? recommendation.stabilityLabel
-                : comparison.state === 'checking'
-                  ? '核验中'
-                  : '待推荐';
+                : secondaryRecommendation
+                  ? '无渠道状态'
+                  : comparison.state === 'checking'
+                    ? '核验中'
+                    : '待推荐';
 
               return (
                 <article
@@ -498,7 +533,7 @@ export function OverviewPage(props: OverviewProps) {
                     <div className="rate-platform-multiplier">
                       <strong>
                         {multiplier}
-                        {recommendation ? <small>x</small> : null}
+                        {leadingRecommendation ? <small>x</small> : null}
                       </strong>
                       <span>倍率</span>
                     </div>
@@ -506,7 +541,7 @@ export function OverviewPage(props: OverviewProps) {
 
                   <div
                     className={`rate-platform-content is-${comparison.state}`}
-                    role={recommendation ? undefined : 'status'}
+                    role={recommendation || secondaryRecommendation ? undefined : 'status'}
                   >
                     {recommendation ? (
                       <>
@@ -542,9 +577,44 @@ export function OverviewPage(props: OverviewProps) {
                           className={`rate-status-label ${recommendation.stabilityLabel === '稳定' ? '稳定' : '待核验'}`}
                         >
                           {recommendation.stabilityLabel === '稳定'
-                            ? '5 分钟稳定'
-                            : '无渠道状态 · 待核验'}
+                            ? '3 分钟稳定'
+                            : recommendation.recommendationKind === 'without-status'
+                              ? '无渠道状态 · 价格优先'
+                              : '待核验'}
                         </span>
+                        {secondaryRecommendation && (
+                          <div
+                            className="rate-platform-secondary"
+                            aria-label="无渠道状态最低价推荐"
+                          >
+                            <span>无渠道状态最低价</span>
+                            <b title={secondaryRecommendation.siteName}>
+                              {secondaryRecommendation.siteName}
+                            </b>
+                            <small>
+                              {secondaryRecommendation.groups[0]?.name ?? '未命名分组'} ·{' '}
+                              {formatRateMultiplier(secondaryRecommendation.effectiveRate)}
+                            </small>
+                          </div>
+                        )}
+                      </>
+                    ) : secondaryRecommendation ? (
+                      <>
+                        <span className="rate-platform-state-icon" aria-hidden="true">
+                          <Activity size={25} />
+                        </span>
+                        <strong>暂无有渠道状态</strong>
+                        <small>以下为无渠道状态最低价推荐</small>
+                        <div className="rate-platform-secondary" aria-label="无渠道状态最低价推荐">
+                          <span>无渠道状态最低价</span>
+                          <b title={secondaryRecommendation.siteName}>
+                            {secondaryRecommendation.siteName}
+                          </b>
+                          <small>
+                            {secondaryRecommendation.groups[0]?.name ?? '未命名分组'} ·{' '}
+                            {formatRateMultiplier(secondaryRecommendation.effectiveRate)}
+                          </small>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -618,6 +688,12 @@ export function OverviewPage(props: OverviewProps) {
                   channelContext?.match?.status === 'matched'
                     ? channelContext.match.channel
                     : undefined;
+                const matchedChannels =
+                  channelContext?.allMatches?.status === 'matched'
+                    ? channelContext.allMatches.channels
+                    : matchedChannel
+                      ? [matchedChannel]
+                      : [];
                 const detailKey = matchedChannel ? `${site.id}:${matchedChannel.id}` : undefined;
                 const matchState = !channelContext?.currentKey
                   ? 'no-key'
@@ -809,6 +885,8 @@ export function OverviewPage(props: OverviewProps) {
                       listState={inlineChannelListStateBySite[site.id] ?? 'loading'}
                       matchState={matchState}
                       channel={matchedChannel}
+                      channels={matchedChannels}
+                      associationSource={channelContext?.allMatches?.source}
                       detailState={detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined}
                       onRetry={() =>
                         matchedChannel

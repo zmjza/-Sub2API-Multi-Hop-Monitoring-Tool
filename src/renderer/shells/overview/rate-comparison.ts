@@ -1,6 +1,7 @@
 import type { AvailableRateGroup } from '../../../../electron/shared/contracts';
 import {
   matchGroupToChannel,
+  resolveFinalChannelAssociation,
   normalizeChannelIdentity,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
@@ -21,6 +22,12 @@ export interface ComparableRateSite {
   channels?: RateChannelSnapshot[];
   relationships?: AvailableChannelRelationship[];
   channelState?: 'supported' | 'unsupported' | 'error';
+  relationshipsState?: 'complete' | 'partial' | 'empty' | 'error';
+  channelAssociations?: Array<{
+    groupId: string;
+    channelIds: string[];
+    source: 'auto' | 'manual' | 'unmatched';
+  }>;
 }
 
 export interface RateChannelSnapshot {
@@ -55,6 +62,7 @@ export interface PlatformRateComparison {
     totalScore: number;
     stabilityLabel: '稳定' | '无渠道状态' | '状态未知' | '存在异常';
     channelId?: string;
+    recommendationKind: 'with-status' | 'without-status';
   }>;
 }
 
@@ -130,7 +138,7 @@ export function resolveGroupPlatform(
   channels: RateChannelSnapshot[] = [],
   relationships: AvailableChannelRelationship[] = [],
 ): { key: string; label: string } {
-  const match = matchGroupToChannel(channels, group.name, relationships);
+  const match = matchGroupToChannel(channels, group.name, relationships, group.id);
   return resolveActualPlatform(
     group,
     match.status === 'matched' ? match.channel : undefined,
@@ -231,7 +239,7 @@ export function channelEligibility(
   if (channelState === 'unsupported') return { eligible: false, reason: 'unsupported' };
   if (channelState === 'error') return { eligible: false, reason: 'request-error' };
   if (!channel) return { eligible: false, reason: 'unmatched' };
-  if (channel.status !== 'normal') return { eligible: false, reason: 'current-issue' };
+  if (isUnstableChannelStatus(channel.status)) return { eligible: false, reason: 'current-issue' };
 
   const parsed = (channel.timeline ?? []).map((point) => ({
     point,
@@ -241,12 +249,21 @@ export function channelEligibility(
     return { eligible: false, reason: 'invalid-record' };
   if (parsed.some((item) => item.checkedAt > now))
     return { eligible: false, reason: 'future-record' };
-  const windowStart = now - 5 * 60_000;
+  const windowStart = now - 3 * 60_000;
   const recent = parsed.filter((item) => item.checkedAt >= windowStart && item.checkedAt <= now);
-  if (!recent.length) return { eligible: false, reason: 'no-recent-record' };
-  if (recent.some((item) => item.point.status !== 'normal'))
+  if (!recent.length) {
+    // An explicitly unknown/empty current status is still an allowed stable value.
+    // Other statuses require a fresh timeline point to prove the three-minute window.
+    if (channel.status === 'unknown') return { eligible: true, score: 10, label: '稳定' };
+    return { eligible: false, reason: 'no-recent-record' };
+  }
+  if (recent.some((item) => isUnstableChannelStatus(item.point.status)))
     return { eligible: false, reason: 'recent-issue' };
   return { eligible: true, score: 10, label: '稳定' };
+}
+
+function isUnstableChannelStatus(status?: string): boolean {
+  return ['failed', 'error', 'down', 'unavailable'].includes((status ?? '').trim().toLowerCase());
 }
 
 export function channelStability(
@@ -274,6 +291,7 @@ type EligibleCandidate = {
   channelId?: string;
   stabilityScore: number;
   stabilityLabel: '稳定' | '无渠道状态';
+  recommendationKind: 'with-status' | 'without-status';
 };
 
 type PlatformPool = {
@@ -281,6 +299,22 @@ type PlatformPool = {
   checking: boolean;
   candidates: EligibleCandidate[];
 };
+
+function channelsForRateGroup(
+  site: ComparableRateSite,
+  group: AvailableRateGroup,
+): RateChannelSnapshot[] {
+  const association = resolveFinalChannelAssociation(
+    site.channels ?? [],
+    group.name,
+    site.relationships ?? [],
+    group.id,
+    site.channelAssociations?.find((item) => item.groupId === group.id && item.source === 'manual')
+      ?.channelIds ?? [],
+    site.relationshipsState,
+  );
+  return association.status === 'matched' ? association.channels : [];
+}
 
 export function normalizedPriceScore(effective: number, minimum: number, maximum: number): number {
   if (Math.abs(maximum - minimum) <= RATE_EPSILON) return 10;
@@ -310,16 +344,15 @@ export function comparePlatformRates(
       const normalizedRate = effectiveRate(group.rate, ratio);
       if (normalizedRate === undefined) continue;
 
-      const match = matchGroupToChannel(site.channels ?? [], group.name, site.relationships ?? []);
-      const channel = match.status === 'matched' ? match.channel : undefined;
+      const matchedChannels = channelsForRateGroup(site, group);
+      const channel = matchedChannels[0];
       const platform = resolveActualPlatform(group, channel, site.relationships);
       const pool = pools.get(platform.key) ?? {
         platformLabel: platform.label,
         checking: false,
         candidates: [],
       };
-      const noChannelStatus =
-        site.channelState === undefined || site.channelState === 'unsupported';
+      const noChannelStatus = site.channelState !== 'supported' || matchedChannels.length === 0;
       if (noChannelStatus) {
         pool.candidates.push({
           siteId: site.siteId,
@@ -331,10 +364,12 @@ export function comparePlatformRates(
           availability7d: -1,
           stabilityScore: 0,
           stabilityLabel: '无渠道状态',
+          recommendationKind: 'without-status',
         });
-      } else if (match.status === 'matched') {
-        const eligibility = channelEligibility(match.channel, now, site.channelState);
-        if (eligibility.eligible)
+      } else {
+        for (const matchedChannel of matchedChannels) {
+          const eligibility = channelEligibility(matchedChannel, now, site.channelState);
+          if (!eligibility.eligible) continue;
           pool.candidates.push({
             siteId: site.siteId,
             siteName: site.siteName,
@@ -342,11 +377,13 @@ export function comparePlatformRates(
             rawRate: group.rate,
             effectiveRate: normalizedRate,
             groups: [group],
-            availability7d: match.channel.availability7d ?? -1,
-            channelId: match.channel.id,
+            availability7d: matchedChannel.availability7d ?? -1,
+            channelId: matchedChannel.id,
             stabilityScore: eligibility.score,
             stabilityLabel: eligibility.label,
+            recommendationKind: 'with-status',
           });
+        }
       }
       pools.set(platform.key, pool);
     }
@@ -363,16 +400,29 @@ export function comparePlatformRates(
           sites: [],
         };
 
-      const minimum = Math.min(...pool.candidates.map((item) => item.effectiveRate));
-      const maximum = Math.max(...pool.candidates.map((item) => item.effectiveRate));
-      const scored = pool.candidates.map((item) => {
-        const priceScore = normalizedPriceScore(item.effectiveRate, minimum, maximum);
-        return {
-          ...item,
-          priceScore,
-          totalScore: priceScore * 0.6 + item.stabilityScore * 0.4,
-        };
-      });
+      const scoreCandidates = (items: EligibleCandidate[], withStatus: boolean) => {
+        if (!items.length) return [];
+        const minimum = Math.min(...items.map((item) => item.effectiveRate));
+        const maximum = Math.max(...items.map((item) => item.effectiveRate));
+        return items.map((item) => {
+          const priceScore = normalizedPriceScore(item.effectiveRate, minimum, maximum);
+          return {
+            ...item,
+            priceScore,
+            totalScore: withStatus ? priceScore * 0.6 + item.stabilityScore * 0.4 : priceScore,
+          };
+        });
+      };
+      const scored = [
+        ...scoreCandidates(
+          pool.candidates.filter((item) => item.recommendationKind === 'with-status'),
+          true,
+        ),
+        ...scoreCandidates(
+          pool.candidates.filter((item) => item.recommendationKind === 'without-status'),
+          false,
+        ),
+      ];
       scored.sort(
         (left, right) =>
           right.totalScore - left.totalScore ||
@@ -384,30 +434,42 @@ export function comparePlatformRates(
           left.siteId.localeCompare(right.siteId) ||
           left.groups[0].id.localeCompare(right.groups[0].id),
       );
-      const first = scored[0]!;
+      const first = scored.find((item) => item.recommendationKind === 'with-status');
+      const second = scored.find((item) => item.recommendationKind === 'without-status');
+      const leading = first ?? second;
+      if (!leading)
+        return {
+          platformKey,
+          platformLabel: pool.platformLabel,
+          state: pool.checking ? 'checking' : 'empty',
+          stabilityLabel: pool.checking ? '正在核验' : '暂无稳定渠道',
+          sites: [],
+        };
+      const recommendations = [first, second].filter((item): item is NonNullable<typeof item> =>
+        Boolean(item),
+      );
       return {
         platformKey,
         platformLabel: pool.platformLabel,
         state: 'ready',
-        effectiveRate: first.effectiveRate,
-        priceScore: first.priceScore,
-        stabilityScore: first.stabilityScore,
-        stabilityLabel: first.stabilityLabel,
-        sites: [
-          {
-            siteId: first.siteId,
-            siteName: first.siteName,
-            ratio: first.ratio,
-            rawRate: first.rawRate,
-            effectiveRate: first.effectiveRate,
-            groups: first.groups,
-            priceScore: first.priceScore,
-            stabilityScore: first.stabilityScore,
-            totalScore: first.totalScore,
-            stabilityLabel: first.stabilityLabel,
-            channelId: first.channelId,
-          },
-        ],
+        effectiveRate: leading.effectiveRate,
+        priceScore: leading.priceScore,
+        stabilityScore: leading.stabilityScore,
+        stabilityLabel: leading.stabilityLabel,
+        sites: recommendations.map((item) => ({
+          siteId: item.siteId,
+          siteName: item.siteName,
+          ratio: item.ratio,
+          rawRate: item.rawRate,
+          effectiveRate: item.effectiveRate,
+          groups: item.groups,
+          priceScore: item.priceScore,
+          stabilityScore: item.stabilityScore,
+          totalScore: item.totalScore,
+          stabilityLabel: item.stabilityLabel,
+          channelId: item.channelId,
+          recommendationKind: item.recommendationKind,
+        })),
       };
     })
     .sort(

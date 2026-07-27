@@ -5,7 +5,7 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
-  shellVersion: '1.5.0',
+  shellVersion: '1.5.1',
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
@@ -26,6 +26,9 @@ const desktopBridge: DesktopBridge = {
     channels: (siteId) => ipcRenderer.invoke('channels:list', siteId),
     channelStatus: (siteId, channelId) =>
       ipcRenderer.invoke('channels:status', { siteId, channelId }),
+    channelAssociations: (siteId) => ipcRenderer.invoke('channels:associations:get', siteId),
+    setChannelAssociation: (input) => ipcRenderer.invoke('channels:associations:set', input),
+    clearChannelAssociation: (input) => ipcRenderer.invoke('channels:associations:clear', input),
     keys: (siteId) => ipcRenderer.invoke('keys:list', siteId),
     apiKeys: (query) => ipcRenderer.invoke('api-keys:list', query),
     updateApiKeyGroup: (input) => ipcRenderer.invoke('api-keys:update-group', input),

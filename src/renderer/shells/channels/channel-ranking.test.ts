@@ -8,8 +8,10 @@ import {
   latestChannelCheckedAt,
   latestTimelinePoint,
   matchGroupToChannel,
+  matchGroupToChannels,
   normalizeChannelIdentity,
   resolveOverviewChannelMatch,
+  resolveFinalChannelAssociation,
   resolveKeyGroupChannel,
   rankChannels,
   selectDisplayedChannel,
@@ -28,6 +30,90 @@ const channels = [
 ];
 
 describe('rankChannels', () => {
+  it('returns every monitor attached to the same group id', () => {
+    const relationships = [
+      {
+        name: 'codex-plus',
+        platforms: [{ platform: 'openai', groupIds: ['120'], groupNames: [], modelNames: [] }],
+      },
+      {
+        name: 'codex-pro',
+        platforms: [{ platform: 'openai', groupIds: ['120'], groupNames: [], modelNames: [] }],
+      },
+    ];
+    expect(
+      matchGroupToChannels(
+        [
+          { id: 'plus', name: 'codex-plus' },
+          { id: 'pro', name: 'codex-pro' },
+          { id: 'other', name: 'codex-other' },
+        ],
+        'unrelated display name',
+        relationships,
+        '120',
+      ),
+    ).toEqual({
+      status: 'matched',
+      channels: [
+        { id: 'plus', name: 'codex-plus' },
+        { id: 'pro', name: 'codex-pro' },
+      ],
+      basis: 'group-id',
+    });
+  });
+
+  it('does not guess by name when a group id has no available relationship', () => {
+    expect(
+      matchGroupToChannels([{ id: 'same', name: 'codex-plus' }], 'codex-plus', [], '120'),
+    ).toEqual({
+      status: 'unmatched',
+      basis: 'none',
+    });
+  });
+
+  it('keeps manual channels when automatic relationships are partial', () => {
+    const result = resolveFinalChannelAssociation(
+      [
+        { id: 'auto', name: 'codex-pro' },
+        { id: 'manual', name: '0.045' },
+      ],
+      'codex-plus',
+      [
+        {
+          name: 'codex-pro',
+          platforms: [{ platform: 'openai', groupIds: ['120'], groupNames: [], modelNames: [] }],
+        },
+      ],
+      '120',
+      ['manual'],
+      'partial',
+    );
+    expect(result).toMatchObject({
+      status: 'matched',
+      source: 'manual',
+      channels: [{ id: 'manual' }],
+    });
+  });
+
+  it('lets a complete automatic relationship take over a stale manual mapping', () => {
+    const result = resolveFinalChannelAssociation(
+      [
+        { id: 'auto', name: 'codex-pro' },
+        { id: 'manual', name: '旧渠道' },
+      ],
+      'codex-plus',
+      [
+        {
+          name: 'codex-pro',
+          platforms: [{ platform: 'openai', groupIds: ['120'], groupNames: [], modelNames: [] }],
+        },
+      ],
+      '120',
+      ['manual'],
+      'complete',
+    );
+    expect(result).toMatchObject({ status: 'matched', source: 'auto', channels: [{ id: 'auto' }] });
+  });
   it('normalizes monitor identities without weakening full-name equality', () => {
     expect(normalizeChannelIdentity('  ChatGPT.Plus【高并发_特惠-通道】 ')).toBe(
       normalizeChannelIdentity('chatgpt plus（高并发特惠通道）'),

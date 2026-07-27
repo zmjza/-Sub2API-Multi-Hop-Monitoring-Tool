@@ -23,6 +23,7 @@ import {
   currentKeyGroup,
   isChannelDataStale,
   rankChannels,
+  resolveFinalChannelAssociation,
   usageModelsForGroup,
 } from './channel-ranking';
 import { channels } from './data';
@@ -120,6 +121,26 @@ export function ChannelsPage(props: ChannelsProps) {
   const keyGroupName = keyGroup?.groupName;
   const usageModels = usageModelsForGroup(props.usageData, keyGroupName);
   const relationships = liveChannels?.availableChannels ?? [];
+  const manualAssociation = keyGroup?.groupId
+    ? props.channelAssociations?.find((item) => item.groupId === keyGroup.groupId)
+    : undefined;
+  const finalAssociation = keyGroup?.groupId
+    ? resolveFinalChannelAssociation(
+        channelItems,
+        keyGroup.groupName,
+        relationships,
+        keyGroup.groupId,
+        manualAssociation?.channelIds ?? [],
+        liveChannels?.availableChannelsState,
+      )
+    : undefined;
+  const [associationDraft, setAssociationDraft] = useState<string[]>([]);
+  const [associationBusy, setAssociationBusy] = useState(false);
+  const [associationMessage, setAssociationMessage] = useState('');
+  useEffect(() => {
+    setAssociationDraft(manualAssociation?.channelIds ?? []);
+  }, [manualAssociation?.groupId, manualAssociation?.channelIds.join(','), keyGroup?.groupId]);
+  useEffect(() => setAssociationMessage(''), [keyGroup?.groupId]);
   const rankedChannels = rankChannels(
     channelItems,
     keyGroupName,
@@ -224,6 +245,72 @@ export function ChannelsPage(props: ChannelsProps) {
           </span>
         </div>
       </div>
+      {keyGroup?.groupId && channelItems.length > 0 && (
+        <section className="channel-association-panel" aria-label="Key 分组渠道关联">
+          <div>
+            <span className="eyebrow">当前 Key 分组渠道关联</span>
+            <strong>{keyGroup.groupName || `分组 ${keyGroup.groupId}`}</strong>
+            <small>
+              {finalAssociation?.status === 'matched' && finalAssociation.source === 'auto'
+                ? `自动关联 ${finalAssociation.channels.length} 个渠道`
+                : finalAssociation?.status === 'matched' && finalAssociation.source === 'manual'
+                  ? `手动指定 ${finalAssociation.channels.length} 个渠道`
+                  : '未找到自动关联，可手动选择'}
+            </small>
+          </div>
+          <div className="channel-association-options">
+            {channelItems.map((channel) => (
+              <label key={channel.id}>
+                <input
+                  type="checkbox"
+                  checked={associationDraft.includes(channel.id)}
+                  onChange={(event) =>
+                    setAssociationDraft((current) =>
+                      event.target.checked
+                        ? [...current, channel.id]
+                        : current.filter((id) => id !== channel.id),
+                    )
+                  }
+                />
+                <span>{channel.name}</span>
+              </label>
+            ))}
+          </div>
+          <div className="channel-association-actions">
+            <button
+              type="button"
+              disabled={associationBusy}
+              onClick={() => {
+                setAssociationBusy(true);
+                setAssociationMessage('');
+                void props
+                  .onChannelAssociationSave?.(keyGroup.groupId!, associationDraft)
+                  .then(() => setAssociationMessage('已保存手动关联'))
+                  .catch(() => setAssociationMessage('保存失败，请重试'))
+                  .finally(() => setAssociationBusy(false));
+              }}
+            >
+              保存关联
+            </button>
+            <button
+              type="button"
+              disabled={associationBusy || !manualAssociation}
+              onClick={() => {
+                setAssociationBusy(true);
+                setAssociationMessage('');
+                void props
+                  .onChannelAssociationClear?.(keyGroup.groupId!)
+                  .then(() => setAssociationMessage('已恢复自动匹配'))
+                  .catch(() => setAssociationMessage('恢复失败，请重试'))
+                  .finally(() => setAssociationBusy(false));
+              }}
+            >
+              恢复自动匹配
+            </button>
+            {associationMessage && <span role="status">{associationMessage}</span>}
+          </div>
+        </section>
+      )}
       {unsupported ? (
         <div className="unsupported-panel">
           <AlertTriangle size={28} />

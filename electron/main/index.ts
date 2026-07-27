@@ -26,6 +26,9 @@ import {
   keyPreferenceSchema,
   notificationSettingsSchema,
   channelStatusRequestSchema,
+  channelAssociationRequestSchema,
+  channelAssociationClearRequestSchema,
+  channelAssociationSchema,
   startupSettingSchema,
   floatingSettingsSchema,
   appSettingsSchema,
@@ -254,6 +257,24 @@ function registerIpc() {
     return channelDetailViewSchema.parse(
       await siteService.channelStatus(request.siteId, request.channelId),
     );
+  });
+  ipcMain.handle('channels:associations:get', (_event, input: unknown) => {
+    const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    return channelAssociationSchema.array().parse(siteService.getChannelAssociations(siteId));
+  });
+  ipcMain.handle('channels:associations:set', (_event, input: unknown) => {
+    const request = channelAssociationRequestSchema.parse(input);
+    return channelAssociationSchema
+      .array()
+      .parse(
+        siteService.setChannelAssociation(request.siteId, request.groupId, request.channelIds),
+      );
+  });
+  ipcMain.handle('channels:associations:clear', (_event, input: unknown) => {
+    const request = channelAssociationClearRequestSchema.parse(input);
+    return channelAssociationSchema
+      .array()
+      .parse(siteService.clearChannelAssociation(request.siteId, request.groupId));
   });
   ipcMain.handle('keys:list', (_event, input: unknown) =>
     apiKeySummarySchema

@@ -29,8 +29,15 @@ const group = (
   ...overrides,
 });
 
+const relationship = (groupId: string, channelName: string, platform = 'openai') => [
+  {
+    name: channelName,
+    platforms: [{ platform, groupIds: [groupId], groupNames: [], modelNames: [] }],
+  },
+];
+
 describe('rate comparison rules', () => {
-  it('requires a wholly normal current five-minute window', () => {
+  it('uses the last three minutes and only excludes explicit failure statuses', () => {
     const now = Date.parse('2026-07-20T10:00:00Z');
     const stable = {
       id: 'stable',
@@ -55,10 +62,34 @@ describe('rate comparison rules', () => {
         now,
         'supported',
       ),
-    ).toMatchObject({ eligible: false, reason: 'recent-issue' });
+    ).toMatchObject({ eligible: true, score: 10 });
+    for (const status of ['unknown', '']) {
+      expect(
+        channelEligibility(
+          {
+            ...stable,
+            status: status as 'unknown',
+            timeline: [{ status: status as 'unknown', checkedAt: '2026-07-20T09:59:30Z' }],
+          },
+          now,
+          'supported',
+        ),
+      ).toMatchObject({ eligible: true, score: 10 });
+    }
     expect(
       channelEligibility(
-        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:54:59Z' }] },
+        {
+          ...stable,
+          status: 'unknown',
+          timeline: [],
+        },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: true, score: 10 });
+    expect(
+      channelEligibility(
+        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:56:59Z' }] },
         now,
         'supported',
       ),
@@ -74,6 +105,19 @@ describe('rate comparison rules', () => {
       eligible: false,
       reason: 'unsupported',
     });
+    for (const status of ['failed', 'error', 'down', 'unavailable']) {
+      expect(
+        channelEligibility(
+          {
+            ...stable,
+            status: status as 'failed',
+            timeline: [{ status: status as 'failed', checkedAt: '2026-07-20T09:59:30Z' }],
+          },
+          now,
+          'supported',
+        ),
+      ).toMatchObject({ eligible: false, reason: 'current-issue' });
+    }
   });
 
   it('classifies a misleading OpenAI group as Grok from stronger evidence', () => {
@@ -111,6 +155,7 @@ describe('rate comparison rules', () => {
         },
       ],
       channelState: 'supported' as const,
+      relationships: relationship(id, `${id} 分组`),
     });
     const result = comparePlatformRates([
       stableSite('cheap', 0.1),
@@ -162,6 +207,35 @@ describe('rate comparison rules', () => {
       state: 'ready',
       stabilityLabel: '无渠道状态',
     });
+  });
+
+  it('uses persisted manual channels while automatic relationship data is partial', () => {
+    const result = comparePlatformRates([
+      {
+        siteId: 'manual-site',
+        siteName: '手动站点',
+        ratio: 1,
+        groups: [group('120', 'openai', 0.2, { name: 'codex-plus' })],
+        channels: [
+          {
+            id: 'codex-pro',
+            name: 'codex-pro',
+            status: 'normal',
+            timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+          },
+        ],
+        relationships: [
+          {
+            name: 'codex-pro',
+            platforms: [{ platform: 'openai', groupIds: ['120'], groupNames: [], modelNames: [] }],
+          },
+        ],
+        relationshipsState: 'partial',
+        channelState: 'supported',
+        channelAssociations: [{ groupId: '120', channelIds: ['codex-pro'], source: 'manual' }],
+      },
+    ]);
+    expect(result[0]?.sites[0]).toMatchObject({ channelId: 'codex-pro', stabilityLabel: '稳定' });
   });
 
   it('maps only the supported automatic refresh periods', () => {
@@ -345,6 +419,7 @@ describe('rate comparison rules', () => {
         ratio: 10,
         groups: [group('maok-cheap', 'openai', 0.4)],
         channelState: 'supported',
+        relationships: relationship('cheap', '分组 cheap'),
         channels: [
           {
             id: 'maok-channel',
@@ -360,6 +435,7 @@ describe('rate comparison rules', () => {
         ratio: 1,
         groups: [group('shark-cheap', 'openai', 0.04)],
         channelState: 'supported',
+        relationships: relationship('stable', '分组 stable'),
         channels: [
           {
             id: 'shark-channel',
@@ -394,6 +470,7 @@ describe('rate comparison rules', () => {
           },
         ],
         channelState: 'supported',
+        relationships: relationship('cheap', '分组 cheap'),
       },
       {
         siteId: 'stable',
@@ -410,6 +487,7 @@ describe('rate comparison rules', () => {
           },
         ],
         channelState: 'supported',
+        relationships: relationship('stable', '分组 stable'),
       },
     ]);
     expect(result[0]).toMatchObject({ platformKey: 'openai', priceScore: 10 });
@@ -432,6 +510,7 @@ describe('rate comparison rules', () => {
         ratio: 1,
         groups: [group('z-group', 'openai', 0.2, { name: '乙分组' })],
         channelState: 'supported',
+        relationships: relationship('z-group', '乙分组'),
         channels: [
           {
             id: 'z',
@@ -447,6 +526,7 @@ describe('rate comparison rules', () => {
         ratio: 1,
         groups: [group('a-group', 'openai', 0.2, { name: '甲分组' })],
         channelState: 'supported',
+        relationships: relationship('a-group', '甲分组'),
         channels: [
           {
             id: 'a',
@@ -461,7 +541,7 @@ describe('rate comparison rules', () => {
     expect(result[0]?.sites.map((site) => site.siteId)).toEqual(['a-site']);
   });
 
-  it('does not borrow a channel status when a group has multiple matches', () => {
+  it('scores every channel when one group has multiple matches', () => {
     const result = comparePlatformRates([
       {
         siteId: 'ambiguous',
@@ -485,10 +565,12 @@ describe('rate comparison rules', () => {
           },
         ],
         channelState: 'supported',
+        relationships: relationship('shared', '共享分组'),
       },
     ]);
 
-    expect(result[0]).toMatchObject({ state: 'empty', sites: [] });
+    expect(result[0]?.sites).toHaveLength(1);
+    expect(result[0]?.sites[0]?.channelId).toBe('one');
   });
 
   it('ranks tied minimum groups independently with their own matched channels', () => {
@@ -519,6 +601,7 @@ describe('rate comparison rules', () => {
           },
         ],
         channelState: 'supported',
+        relationships: [...relationship('fast', '高速分组'), ...relationship('stable', '稳定分组')],
       },
     ]);
 
@@ -553,12 +636,15 @@ describe('rate comparison rules', () => {
           },
         ],
         channelState: 'supported',
+        relationships: relationship('matched', '已匹配分组'),
       },
     ]);
 
-    expect(result[0]?.sites).toEqual([
-      expect.objectContaining({ groups: [expect.objectContaining({ id: 'matched' })] }),
-    ]);
+    expect(result[0]?.sites.map((site) => site.groups[0]?.id)).toEqual(['matched', 'missing']);
+    expect(result[0]?.sites[1]).toMatchObject({
+      recommendationKind: 'without-status',
+      stabilityLabel: '无渠道状态',
+    });
   });
 
   it('keeps a candidate pending while channel status is unavailable', () => {
@@ -640,7 +726,7 @@ describe('rate comparison rules', () => {
     ).toEqual({ score: 10, label: '稳定' });
   });
 
-  it('never marks a recent unknown or contradictory current status as stable', () => {
+  it('treats unknown and degraded values as stable, but failures as unstable', () => {
     const checkedAt = new Date().toISOString();
     expect(
       channelStability(
@@ -653,7 +739,7 @@ describe('rate comparison rules', () => {
         Date.now(),
         'supported',
       ),
-    ).toEqual({ score: 0, label: '存在异常' });
+    ).toEqual({ score: 10, label: '稳定' });
     expect(
       channelStability(
         {
@@ -665,7 +751,7 @@ describe('rate comparison rules', () => {
         Date.now(),
         'supported',
       ),
-    ).toEqual({ score: 0, label: '存在异常' });
+    ).toEqual({ score: 10, label: '稳定' });
     expect(
       channelStability(
         {

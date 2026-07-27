@@ -136,6 +136,7 @@ describe('Sub2ApiAdapter', () => {
 
     expect(result).toEqual({
       state: 'supported',
+      availableChannelsState: 'empty',
       channels: [
         {
           id: '7',
@@ -160,6 +161,28 @@ describe('Sub2ApiAdapter', () => {
       ],
     });
     expect(JSON.stringify(result)).not.toContain('must-not-leave-main');
+  });
+
+  it('normalizes the three upstream channel states used for stability checks', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async () => ({
+        data: {
+          items: [
+            { id: 1, name: 'normal', primary_status: 'operational' },
+            { id: 2, name: 'degraded', primary_status: 'degraded' },
+            { id: 3, name: 'failed', primary_status: 'error' },
+          ],
+        },
+      }),
+    });
+
+    await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
+      channels: [
+        { name: 'normal', status: 'normal' },
+        { name: 'degraded', status: 'degraded' },
+        { name: 'failed', status: 'failed' },
+      ],
+    });
   });
 
   it('normalizes optional channel relationships and orders timeline by checked time', async () => {
@@ -206,6 +229,26 @@ describe('Sub2ApiAdapter', () => {
         },
       ],
       channels: [{ timeline: [{ status: 'degraded' }, { status: 'normal' }] }],
+    });
+  });
+
+  it('marks available relationships partial when upstream omits group ids', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) =>
+        path === '/channels/available'
+          ? {
+              data: [
+                {
+                  name: 'codex-pro',
+                  platforms: [{ platform: 'openai', groups: [{ name: 'codex-plus' }] }],
+                },
+              ],
+            }
+          : { data: [] },
+    });
+    await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
+      state: 'supported',
+      availableChannelsState: 'partial',
     });
   });
 

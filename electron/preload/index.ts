@@ -14,6 +14,7 @@ import type {
   ApiKeyGroupUpdateRequest,
   ApiKeyManagementPayload,
   ManagedApiKey,
+  ChannelAssociation,
 } from '../shared/contracts.js';
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 
@@ -41,6 +42,16 @@ export interface DesktopBridge {
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
     channels(siteId: string): Promise<unknown>;
     channelStatus(siteId: string, channelId: string): Promise<unknown>;
+    channelAssociations(siteId: string): Promise<ChannelAssociation[]>;
+    setChannelAssociation(input: {
+      siteId: string;
+      groupId: string;
+      channelIds: string[];
+    }): Promise<ChannelAssociation[]>;
+    clearChannelAssociation(input: {
+      siteId: string;
+      groupId: string;
+    }): Promise<ChannelAssociation[]>;
     keys(siteId: string): Promise<unknown>;
     apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload>;
     updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey>;

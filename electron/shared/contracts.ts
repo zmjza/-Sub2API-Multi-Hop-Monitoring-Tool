@@ -246,6 +246,26 @@ const numericEntityIdSchema = z
   .min(1)
   .max(128)
   .refine((value) => Number.isSafeInteger(Number(value)) && Number(value) > 0, 'ID 超出安全范围');
+const channelGroupIdSchema = z.string().trim().min(1).max(128);
+export const channelAssociationRequestSchema = z
+  .object({
+    siteId: siteIdSchema,
+    groupId: channelGroupIdSchema,
+    channelIds: z.array(z.string().min(1).max(128)).max(200),
+  })
+  .strict();
+export const channelAssociationClearRequestSchema = z
+  .object({ siteId: siteIdSchema, groupId: channelGroupIdSchema })
+  .strict();
+export const channelAssociationSchema = z
+  .object({
+    siteId: siteIdSchema,
+    groupId: channelGroupIdSchema,
+    channelIds: z.array(z.string().min(1).max(128)).max(200),
+    source: z.enum(['auto', 'manual', 'unmatched']),
+  })
+  .strict();
+export type ChannelAssociation = z.infer<typeof channelAssociationSchema>;
 export const apiKeyListQuerySchema = z
   .object({
     siteId: siteIdSchema,
@@ -428,7 +448,7 @@ export const channelViewSchema = z
                 z
                   .object({
                     platform: z.string().min(1).max(100),
-                    groupIds: z.array(numericEntityIdSchema).max(500),
+                    groupIds: z.array(channelGroupIdSchema).max(500),
                     groupNames: z.array(z.string().min(1).max(200)).max(500),
                     modelNames: z.array(z.string().min(1).max(200)).max(500),
                   })
@@ -440,6 +460,7 @@ export const channelViewSchema = z
       )
       .max(200)
       .optional(),
+    availableChannelsState: z.enum(['complete', 'empty', 'partial', 'error']).optional(),
   })
   .strict();
 export const channelDetailViewSchema = z

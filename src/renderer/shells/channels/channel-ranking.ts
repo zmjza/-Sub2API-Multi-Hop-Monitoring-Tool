@@ -42,6 +42,22 @@ export type ChannelMatchResult<T extends RankableChannel> =
       basis: 'group-id' | 'name' | 'relationship';
     };
 
+export type ChannelMatchesResult<T extends RankableChannel> =
+  | { status: 'matched'; channels: T[]; basis: 'group-id' | 'name' | 'relationship' }
+  | { status: 'unmatched'; basis: 'none' }
+  | { status: 'ambiguous'; candidates: T[]; basis: 'name' | 'relationship' };
+
+export type AutomaticRelationshipState = 'complete' | 'partial' | 'empty' | 'error';
+
+export type FinalChannelAssociation<T extends RankableChannel & { id: string }> =
+  | {
+      status: 'matched';
+      channels: T[];
+      basis: 'group-id' | 'name' | 'relationship';
+      source: 'auto' | 'manual';
+    }
+  | { status: 'unmatched'; basis: 'none'; source: 'unmatched' };
+
 type RelatedSection = {
   relationshipName: string;
   section: AvailableChannelRelationship['platforms'][number];
@@ -117,6 +133,65 @@ export function matchGroupToChannel<T extends RankableChannel>(
       basis: 'none',
     }
   );
+}
+
+/** Resolves every monitor belonging to a key group. ID relations never fall back to names. */
+export function matchGroupToChannels<T extends RankableChannel>(
+  channels: T[],
+  groupName?: string,
+  relationships: AvailableChannelRelationship[] = [],
+  groupId?: string,
+): ChannelMatchesResult<T> {
+  const normalizedGroupId = normalized(groupId);
+  if (normalizedGroupId) {
+    const relationshipNames = relationships.flatMap((relationship) =>
+      relationship.platforms.flatMap((section) =>
+        section.groupIds?.some((id) => normalized(id) === normalizedGroupId)
+          ? [relationship.name]
+          : [],
+      ),
+    );
+    if (!relationshipNames.length) return { status: 'unmatched', basis: 'none' };
+    const matched = channels.filter((channel) =>
+      relationshipNames.some(
+        (name) =>
+          normalized(channel.name) === normalized(name) ||
+          normalized(channel.groupName) === normalized(name),
+      ),
+    );
+    return matched.length
+      ? { status: 'matched', channels: matched, basis: 'group-id' }
+      : { status: 'unmatched', basis: 'none' };
+  }
+
+  const group = normalized(groupName);
+  if (!group) return { status: 'unmatched', basis: 'none' };
+  const exact = channels.filter(
+    (channel) => normalized(channel.name) === group || normalized(channel.groupName) === group,
+  );
+  if (exact.length === 1) return { status: 'matched', channels: exact, basis: 'name' };
+  if (exact.length > 1) return { status: 'ambiguous', candidates: exact, basis: 'name' };
+  return { status: 'unmatched', basis: 'none' };
+}
+
+/** Resolves the final channels used by every surface. Partial automatic data never replaces a manual mapping. */
+export function resolveFinalChannelAssociation<T extends RankableChannel & { id: string }>(
+  channels: T[],
+  groupName: string | undefined,
+  relationships: AvailableChannelRelationship[] = [],
+  groupId?: string,
+  manualChannelIds: string[] = [],
+  automaticState: AutomaticRelationshipState = relationships.length ? 'complete' : 'empty',
+): FinalChannelAssociation<T> {
+  const automatic = matchGroupToChannels(channels, groupName, relationships, groupId);
+  if (automaticState === 'complete' && automatic.status === 'matched')
+    return { ...automatic, source: 'auto' };
+
+  const manual = channels.filter((channel) => manualChannelIds.includes(String(channel.id)));
+  if (manual.length)
+    return { status: 'matched', channels: manual, basis: 'group-id', source: 'manual' };
+
+  return { status: 'unmatched', basis: 'none', source: 'unmatched' };
 }
 
 function textSimilarity(left: string, right: string): number {

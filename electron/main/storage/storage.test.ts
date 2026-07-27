@@ -69,6 +69,28 @@ describe('AppDatabase', () => {
     raw.close();
   });
 
+  it('persists site-scoped multi-channel group associations and clears them explicitly', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    expect(db.getChannelAssociations('site-a')).toEqual([]);
+    db.setChannelAssociation('site-a', '120', ['channel-a', 'channel-b', 'channel-a']);
+    expect(db.getChannelAssociations('site-a')).toEqual([
+      {
+        siteId: 'site-a',
+        groupId: '120',
+        channelIds: ['channel-a', 'channel-b'],
+        source: 'manual',
+      },
+    ]);
+    db.setChannelAssociation('site-b', '120', ['channel-other']);
+    expect(db.getChannelAssociations('site-a')).toHaveLength(1);
+    db.clearChannelAssociation('site-a', '120');
+    expect(db.getChannelAssociations('site-a')).toEqual([]);
+    expect(db.getChannelAssociations('site-b')).toHaveLength(1);
+    raw.close();
+  });
+
   it('persists safe rate caches and positive recharge ratios per site', () => {
     const raw = new DatabaseSync(':memory:');
     const db = new AppDatabase(raw);
