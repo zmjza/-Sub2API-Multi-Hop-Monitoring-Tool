@@ -887,3 +887,36 @@ macOS Electron 内部分发、DMG 安装、下载隔离属性与后续 Developer
 **适用范围**
 
 在线更新跳过/稍后提醒、应用重启后的更新检查和所有持久化提醒状态。
+
+## 渠道详情卡片不能嵌套 button
+
+**现象**
+
+渠道状态弹层原先用整张 `button` 表示详情卡片；新增右上角关联按钮后如果直接嵌套，会产生非法 HTML、点击冒泡异常和 Playwright 定位不稳定。
+
+**根因**
+
+HTML 不允许交互式 `button` 嵌套 `button`。详情查看与关联切换是两个独立动作，不能共用一个嵌套按钮层级。
+
+**正确做法**
+
+使用非交互式卡片容器，内部放独立的详情按钮和关联按钮；关联按钮显式阻止冒泡，详情按钮只负责加载当前渠道详情。
+
+**验证方式**
+
+运行渠道状态 Electron E2E，分别点击关联按钮和详情按钮，确认关联状态变化、详情渠道不误切换，并检查最终 DOM 不存在嵌套 `button`。
+
+**禁止事项**
+
+不要通过 CSS 或事件补丁掩盖嵌套交互元素；不要让整张卡片和右上角按钮共享同一个点击处理器。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/ChannelStatusPopover.tsx`
+- `src/renderer/shells/overview/overview.css`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有需要在渠道、列表、表格或卡片内部增加独立操作按钮的 Renderer UI。
