@@ -56,6 +56,59 @@ describe('update service', () => {
     );
     await expect(service.check()).resolves.toMatchObject({ status: 'available', manifest });
   });
+  it('recognizes the published 1.5.2 manifest from a 1.5.1 client', async () => {
+    const published = { ...manifest, version: '1.5.2', testOnly: false };
+    const fetchImpl = async (url: RequestInfo | URL) =>
+      new Response(
+        url.toString().includes('api.github.com')
+          ? JSON.stringify({
+              tag_name: '1.5.2',
+              assets: [
+                {
+                  name: 'update-manifest.json',
+                  browser_download_url:
+                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.5.2/update-manifest.json',
+                },
+              ],
+            })
+          : JSON.stringify(published),
+        { status: 200 },
+      );
+    const service = new UpdateService(
+      '1.5.1',
+      { get: (_key, fallback) => fallback, set: () => undefined },
+      fetchImpl,
+    );
+    await expect(service.check()).resolves.toMatchObject({
+      status: 'available',
+      manifest: published,
+    });
+  });
+  it('bypasses cached GitHub latest release responses', async () => {
+    const requestUrls: string[] = [];
+    const fetchImpl = async (url: RequestInfo | URL) => {
+      requestUrls.push(url.toString());
+      return new Response(
+        JSON.stringify({
+          assets: [
+            {
+              name: 'update-manifest.json',
+              browser_download_url:
+                'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    };
+    const service = new UpdateService(
+      '1.4.5',
+      { get: (_key, fallback) => fallback, set: () => undefined },
+      fetchImpl,
+    );
+    await service.check();
+    expect(requestUrls[0]).toMatch(/releases\/latest\?cacheBust=\d+/);
+  });
   it('uses single-flight for concurrent checks', async () => {
     let calls = 0;
     const fetchImpl = async () => {

@@ -110,8 +110,13 @@ export class UpdateService {
   private async checkInternal(): Promise<UpdateCheckResult> {
     try {
       const response = await this.fetchWithTimeout(
-        'https://api.github.com/repos/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/latest',
-        { headers: { Accept: 'application/vnd.github+json' } },
+        `https://api.github.com/repos/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/latest?cacheBust=${Date.now()}`,
+        {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            'Cache-Control': 'no-cache',
+          },
+        },
       );
       if (!response.ok) throw new Error(`HTTP_${response.status}`);
       const release = (await response.json()) as {

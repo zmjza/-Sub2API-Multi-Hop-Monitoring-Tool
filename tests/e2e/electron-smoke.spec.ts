@@ -866,7 +866,13 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
   expect(await main.evaluate(() => typeof window.sub2apiDesktop)).toBe('object');
   await expect(main.getByText('最后更新：', { exact: false })).toBeVisible();
-  await expect(main.locator('.app-version-badge')).toContainText('v1.5.1');
+  await expect(main.locator('.app-version-badge')).toContainText('v1.5.3');
+  await expect(main.locator('.app-version-badge')).toBeEnabled({ timeout: 20_000 });
+  await main.locator('.app-version-badge').click();
+  await expect(main.locator('.update-toast')).toContainText(
+    /正在检查更新|当前已是最新版本|发现新版本|检查更新失败/,
+    { timeout: 5_000 },
+  );
   await expect(main.getByRole('heading', { name: '添加新站点' })).toBeVisible();
   await main.getByPlaceholder('例如: OpenAI 备用节点').fill('本地集成站点');
   await main.getByPlaceholder('https://api.example.com').fill(`http://127.0.0.1:${address.port}`);

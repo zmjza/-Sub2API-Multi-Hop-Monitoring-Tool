@@ -130,6 +130,9 @@ function broadcastRefreshState(
 }
 
 function registerIpc() {
+  ipcMain.on('app:version', (event) => {
+    event.returnValue = app.getVersion();
+  });
   ipcMain.handle('sites:list', () => dashboardSnapshotSchema.parse(siteService.listSites()));
   ipcMain.handle('sites:select', (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
