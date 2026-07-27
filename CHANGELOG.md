@@ -9,6 +9,16 @@
 - 支持同一 Key 分组关联多个渠道、逐个取消关联、保存中反馈、保存失败回滚和成功状态同步；点击关联按钮不会切换渠道详情。
 - 保留 `group_id` 精确匹配、自动关联优先级、手动关系持久化、IPC 白名单和缓存刷新规则。
 
+### 1.5.2 远程 Release 资产校验
+
+| 平台 | 文件 | SHA-256 |
+| ---- | ---- | ------- |
+| macOS ARM64 | `Sub2API-Multi-Hub-Monitor-1.5.2-mac-arm64.dmg` | `99e9a4158ba0f1d64ae01f127ee71baf44530264b0c10014b87a7a6e2e87e9bc` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.2-mac-arm64.dmg.blockmap` | `092a6bccbc6c10d18f0ac8475004b5648229eea6df5765fe4088eba7cdba2081` |
+| Windows x64 NSIS | `Sub2API-Multi-Hub-Monitor-1.5.2-win-x64.exe` | `d93b7c48b43622324852c5646cd971a8952bf29881266eab156a95025234c62b` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.2-win-x64.exe.blockmap` | `429b0fb1e3a6a5cbfc51f2938fdef07f1a7f8e342afa02144eeb1159546b1d41` |
+| 更新清单 | `update-manifest.json` | `c5fff7c08d0891cc735ebbe079a61386b941ae85b0212c1026dc1e348cb52562` |
+
 
 ## 1.5.1 - 2026-07-26
 
