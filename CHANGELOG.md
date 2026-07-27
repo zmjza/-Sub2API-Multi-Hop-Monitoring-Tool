@@ -8,6 +8,16 @@
 - 更新检查请求增加缓存绕过参数和 `Cache-Control: no-cache`，避免 GitHub `releases/latest` CDN 返回旧 Release。
 - 更新服务的实际版本比较逻辑保持不变：`1.5.1` 检测到 `1.5.2` 时返回可用更新，当前版本不会被错误标记为最新。
 
+### 1.5.3 远程 Release 资产校验
+
+| 平台                 | 文件                                                     | SHA-256                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+| macOS ARM64          | `Sub2API-Multi-Hub-Monitor-1.5.3-mac-arm64.dmg`          | `4b15c4f77c30162b7708a100950f8a06688f57e6df1f3b93217697870727809f` |
+| macOS ARM64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.3-mac-arm64.dmg.blockmap` | `736c82bae7a0191d519c66569ab78a58bb13c53205f3984daace74bfcf56f9b0` |
+| Windows x64 NSIS     | `Sub2API-Multi-Hub-Monitor-1.5.3-win-x64.exe`            | `677343a0da2172efc524ab2e2b978747ad64cca0994ef5fd72cc6f8e1ee353eb` |
+| Windows x64 blockmap | `Sub2API-Multi-Hub-Monitor-1.5.3-win-x64.exe.blockmap`   | `eb28b5bcbdfcf2923f55ac333ed01a2a64067b1a09ef13aa94134f56e1e657d9` |
+| 更新清单             | `update-manifest.json`                                   | `3c9d1e3334c8507d3a2193792cdc160b6fd54e0b413653a1205bb575b369ec4c` |
+
 ## 1.5.2 - 2026-07-27
 
 ### 渠道关联入口与交互优化
