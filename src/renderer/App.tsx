@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertCircle,
-  CheckCircle2,
   Bell,
   ChevronDown,
   Download,
@@ -60,6 +58,7 @@ import type {
   RateContexts,
   ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
+import { safeRendererError, useNotifications } from './notifications';
 import type {
   UpdateCheckResult,
   UpdateManifest,
@@ -69,6 +68,7 @@ const showPreviewControls =
   import.meta.env.DEV || new URLSearchParams(window.location.search).get('preview') === 'true';
 const hasExplicitShell = new URLSearchParams(window.location.search).has('shell');
 export function App() {
+  const { notify } = useNotifications();
   const [shell, setShell] = useState<MainShell>(initialLocation.shell);
   const [state, setState] = useState<PreviewState>(initialLocation.state);
   const [queryPhase, setQueryPhase] = useState<string>();
@@ -123,11 +123,6 @@ export function App() {
   const [updateProgress, setUpdateProgress] = useState(0);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
-  const [updateNotice, setUpdateNotice] = useState<{
-    tone: 'info' | 'success' | 'error';
-    message: string;
-  }>();
-  const updateNoticeTimerRef = useRef<number | undefined>(undefined);
   const updateCheckingRef = useRef(false);
   const updateTriggerRef = useRef<HTMLButtonElement>(null);
   const updateCloseRef = useRef<HTMLButtonElement>(null);
@@ -149,9 +144,11 @@ export function App() {
   );
   const versionLabel = normalizeVersionLabel(window.sub2apiDesktop?.shellVersion);
   const showUpdateNotice = (message: string, tone: 'info' | 'success' | 'error' = 'info') => {
-    if (updateNoticeTimerRef.current) window.clearTimeout(updateNoticeTimerRef.current);
-    setUpdateNotice({ message, tone });
-    updateNoticeTimerRef.current = window.setTimeout(() => setUpdateNotice(undefined), 4_500);
+    notify({
+      id: 'app-update',
+      kind: tone === 'info' && message.startsWith('正在') ? 'loading' : tone,
+      message,
+    });
   };
   const checkForUpdate = async () => {
     if (updateCheckingRef.current) return;
@@ -224,7 +221,6 @@ export function App() {
     return () => {
       window.clearTimeout(timer);
       unsubscribe();
-      if (updateNoticeTimerRef.current) window.clearTimeout(updateNoticeTimerRef.current);
     };
   }, []);
   useEffect(() => {
@@ -421,8 +417,15 @@ export function App() {
         if (value) setDashboard(value);
         setState('success');
       })
-      .catch(() => {
-        if (currentSiteRef.current === siteId) setState('error');
+      .catch((error) => {
+        if (currentSiteRef.current === siteId) {
+          setState('error');
+          notify({
+            id: `site-refresh:${siteId}`,
+            kind: 'error',
+            message: safeRendererError(error, '站点刷新失败，请稍后重试'),
+          });
+        }
       });
   };
   const refreshAll = () => {
@@ -435,6 +438,13 @@ export function App() {
       .then((value) => {
         if (value) setDashboard(value);
       })
+      .catch((error) =>
+        notify({
+          id: 'site-refresh-all',
+          kind: 'error',
+          message: safeRendererError(error, '全部站点刷新失败，请稍后重试'),
+        }),
+      )
       .finally(() => {
         setIsRefreshingAll(false);
         setRefreshingSiteIds(new Set());
@@ -467,16 +477,26 @@ export function App() {
       .catch(() => undefined);
   };
   context.onSiteNoteChange = async (siteId, note) => {
-    const updated = await window.sub2apiDesktop?.sites.setNote(siteId, note);
-    if (!updated) return;
-    setDashboard((current) =>
-      current
-        ? {
-            ...current,
-            sites: current.sites.map((site) => (site.id === updated.id ? updated : site)),
-          }
-        : current,
-    );
+    try {
+      const updated = await window.sub2apiDesktop?.sites.setNote(siteId, note);
+      if (!updated) return;
+      setDashboard((current) =>
+        current
+          ? {
+              ...current,
+              sites: current.sites.map((site) => (site.id === updated.id ? updated : site)),
+            }
+          : current,
+      );
+      notify({ id: `site-note:${siteId}`, kind: 'success', message: '站点备注已保存' });
+    } catch (error) {
+      notify({
+        id: `site-note:${siteId}`,
+        kind: 'error',
+        message: safeRendererError(error, '备注保存失败，请重试'),
+      });
+      throw error;
+    }
   };
   context.onRefreshAllRates = async () => {
     const desktop = window.sub2apiDesktop?.sites;
@@ -515,12 +535,18 @@ export function App() {
     try {
       const next = await window.sub2apiDesktop?.sites.setRechargeRatio(siteId, ratio);
       if (next) setRateContexts(next);
+      notify({ id: `recharge-ratio:${siteId}`, kind: 'success', message: '充值比例已保存' });
     } catch (error) {
       setRateContexts((current) => {
         const ratios = { ...current.ratios };
         if (previous === undefined) delete ratios[siteId];
         else ratios[siteId] = previous;
         return { ...current, ratios };
+      });
+      notify({
+        id: `recharge-ratio:${siteId}`,
+        kind: 'error',
+        message: safeRendererError(error, '充值比例保存失败'),
       });
       throw error;
     }
@@ -544,7 +570,14 @@ export function App() {
   };
   context.onRefreshChannels = async () => {
     if (!selectedSite) return { ok: false };
-    return loadChannels(selectedSite.id, true);
+    const result = await loadChannels(selectedSite.id, true);
+    if (!result.ok)
+      notify({
+        id: `channel-refresh:${selectedSite.id}`,
+        kind: result.terminal ? 'warning' : 'error',
+        message: result.terminal ? '渠道状态需要重新验证' : '渠道状态刷新失败，已保留上次数据',
+      });
+    return result;
   };
   const saveChannelAssociationForSite = async (
     siteId: string,
@@ -560,6 +593,7 @@ export function App() {
     setChannelAssociations((current) => (selectedSite?.id === siteId ? next : current));
     setChannelAssociationsBySite((current) => ({ ...current, [siteId]: next }));
     await loadChannels(siteId, true);
+    notify({ id: `channel-association:${siteId}`, kind: 'success', message: '渠道关联已保存' });
   };
   const clearChannelAssociationForSite = async (siteId: string, groupId: string) => {
     if (!window.sub2apiDesktop) return;
@@ -567,6 +601,7 @@ export function App() {
     setChannelAssociations((current) => (selectedSite?.id === siteId ? next : current));
     setChannelAssociationsBySite((current) => ({ ...current, [siteId]: next }));
     await loadChannels(siteId, true);
+    notify({ id: `channel-association:${siteId}`, kind: 'success', message: '渠道关联已清除' });
   };
   context.onChannelAssociationSave = async (groupId, channelIds) => {
     if (!selectedSite || !window.sub2apiDesktop) return;
@@ -977,11 +1012,21 @@ export function App() {
       onRefresh={() => selectedSite && void loadApiKeys(selectedSite.id, apiKeyFilters, true)}
       onCopyKey={async (keyId) => {
         if (!selectedSite) throw new Error('SITE_REQUIRED');
-        const result = await window.sub2apiDesktop?.sites.copyApiKey({
-          siteId: selectedSite.id,
-          keyId,
-        });
-        if (!result?.copied) throw new Error('API_KEY_COPY_FAILED');
+        try {
+          const result = await window.sub2apiDesktop?.sites.copyApiKey({
+            siteId: selectedSite.id,
+            keyId,
+          });
+          if (!result?.copied) throw new Error('API_KEY_COPY_FAILED');
+          notify({ id: 'api-key-copy', kind: 'success', message: 'API Key 已复制' });
+        } catch (error) {
+          notify({
+            id: 'api-key-copy',
+            kind: 'error',
+            message: safeRendererError(error, 'API Key 复制失败'),
+          });
+          throw error;
+        }
       }}
       onPageChange={(page) => {
         const next = { ...apiKeyFilters, page };
@@ -997,11 +1042,20 @@ export function App() {
           .updateApiKeyGroup({ siteId, keyId, groupId })
           .then(() => {
             if (currentSiteRef.current !== siteId) return;
-            setApiKeyMessage('分组已同步到远程站点');
+            notify({
+              id: `api-key-group:${keyId}`,
+              kind: 'success',
+              message: '分组已同步到远程站点',
+            });
             return loadApiKeys(siteId, apiKeyFilters, true);
           })
-          .catch(() => {
-            if (currentSiteRef.current === siteId) setApiKeyMessage('分组切换失败，已保留原分组');
+          .catch((error) => {
+            if (currentSiteRef.current === siteId)
+              notify({
+                id: `api-key-group:${keyId}`,
+                kind: 'error',
+                message: safeRendererError(error, '分组切换失败，已保留原分组'),
+              });
           })
           .finally(() => {
             if (currentSiteRef.current === siteId)
@@ -1024,7 +1078,6 @@ export function App() {
       <SitesPage
         {...context}
         updateChecking={updateChecking}
-        updateNotice={updateNotice}
         updateState={updateState}
         onCheckForUpdate={checkForUpdate}
       />
@@ -1147,22 +1200,6 @@ export function App() {
             <span aria-hidden>×</span>
           </button>
         </header>
-        {updateNotice && (
-          <div className={`update-toast is-${updateNotice.tone}`} role="status" aria-live="polite">
-            {updateNotice.tone === 'success' ? (
-              <CheckCircle2 size={17} aria-hidden="true" />
-            ) : updateNotice.tone === 'error' ? (
-              <AlertCircle size={17} aria-hidden="true" />
-            ) : (
-              <LoaderCircle
-                size={17}
-                className={updateChecking ? 'spin' : undefined}
-                aria-hidden="true"
-              />
-            )}
-            <span>{updateNotice.message}</span>
-          </div>
-        )}
         <div className="content-scroll">
           {(state === 'loading' || state === 'refreshing' || isRefreshingAll) && (
             <div className="refresh-progress" role="status">

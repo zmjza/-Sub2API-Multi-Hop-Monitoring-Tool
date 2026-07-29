@@ -46,6 +46,44 @@ describe('Sub2ApiClient', () => {
     });
   });
 
+  it('detects GeeTest from public settings without exposing unrelated settings', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse({
+          data: {
+            geetest_enabled: true,
+            geetest_captcha_id: 'public-captcha-id',
+            unrelated_private_value: 'must-not-leave-adapter',
+          },
+        }),
+      ),
+    );
+
+    await expect(client.authenticationMode()).resolves.toEqual({ geetestEnabled: true });
+  });
+
+  it('classifies a GeeTest login rejection without leaking the upstream response', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            code: 'GEETEST_VERIFICATION_FAILED',
+            message: 'private upstream response',
+          },
+          400,
+        ),
+      ),
+    );
+
+    await expect(client.login('safe@example.invalid', 'runtime-secret')).rejects.toMatchObject({
+      code: 'GEETEST_REQUIRED',
+      message: '需要完成安全验证',
+      retryable: false,
+    });
+  });
+
   it('classifies optional 404 capabilities without leaking response content', async () => {
     const client = new Sub2ApiClient(
       'https://example.invalid/api/v1',

@@ -15,6 +15,102 @@ afterEach(async () => {
 });
 
 describe('SiteService authentication recovery', () => {
+  it('does not save a partial site when an interactive session cannot be validated', async () => {
+    const server = createServer((_request, response) => {
+      response.statusCode = 401;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ message: 'expired' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.addWithInteractiveSession(
+        {
+          name: 'interactive',
+          url: `http://127.0.0.1:${address.port}`,
+          account: 'safe@example.invalid',
+          password: 'runtime-only',
+        },
+        { accessToken: 'invalid-access', refreshToken: 'invalid-refresh' },
+      ),
+    ).rejects.toThrow();
+
+    expect(service.listSites().sites).toEqual([]);
+    expect(values.size).toBe(0);
+  });
+
+  it('never falls back to password login for an expired GeeTest session', async () => {
+    let loginCount = 0;
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      if (request.url === '/api/v1/auth/login') loginCount += 1;
+      response.statusCode = 401;
+      response.end(JSON.stringify({ message: 'expired' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'geetest-site',
+      name: 'GeeTest',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('geetest-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'expired-access',
+      refreshToken: 'expired-refresh',
+      authenticationMode: 'geetest',
+    });
+    const service = new SiteService(db, vault);
+
+    await expect(service.refresh('geetest-site')).resolves.toMatchObject({
+      status: 'auth-required',
+    });
+    expect(loginCount).toBe(0);
+    expect(vault.read('geetest-site')).toMatchObject({
+      accessToken: 'expired-access',
+      refreshToken: 'expired-refresh',
+      authenticationMode: 'geetest',
+    });
+  });
+
   it('maps preset usage periods to inclusive local calendar dates', () => {
     const now = new Date(2026, 6, 13, 13, 30, 0);
     expect(usageDateRange('today', undefined, undefined, now)).toEqual({

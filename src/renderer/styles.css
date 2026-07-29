@@ -225,37 +225,6 @@ input {
 .update-banner button {
   min-height: 30px;
 }
-.update-toast {
-  position: fixed;
-  z-index: 90;
-  top: 88px;
-  right: 32px;
-  max-width: min(420px, calc(100vw - 48px));
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 15px;
-  border: 1px solid #d8d4f5;
-  border-radius: 16px;
-  background: #fff;
-  color: #343248;
-  box-shadow: 0 10px 28px rgba(31, 28, 61, 0.16);
-  font-size: 13px;
-  font-weight: 700;
-  animation: update-toast-in 220ms ease-out both;
-}
-.update-toast.is-success {
-  border-color: #a7e3c9;
-  color: #087443;
-}
-.update-toast.is-error {
-  border-color: #f1b8b8;
-  color: #a32727;
-}
-.update-toast svg {
-  flex: 0 0 auto;
-}
 .update-modal-backdrop {
   position: fixed;
   z-index: 85;
@@ -404,16 +373,6 @@ input {
   background: #fff;
   color: #514f60;
 }
-@keyframes update-toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @keyframes update-card-in {
   from {
     opacity: 0;
@@ -425,12 +384,6 @@ input {
   }
 }
 @media (max-width: 720px) {
-  .update-toast {
-    top: 76px;
-    right: 16px;
-    left: 16px;
-    max-width: none;
-  }
   .update-modal-backdrop {
     padding: 16px;
   }

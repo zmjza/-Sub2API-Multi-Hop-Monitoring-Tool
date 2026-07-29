@@ -387,3 +387,100 @@ HTTP client 单测覆盖秒数、日期、非法值和无 header；IPC/调度单
 **适用范围**
 
 渠道实时监控和后续任何需要跨 IPC 协调 HTTP 限流退避的轮询任务。
+
+## GeeTest 登录受阻必须与地址或网络故障区分
+
+**现象**
+
+站点首页、TLS 和 `/api/v1/auth/login` 路由均可访问，但站点管理添加时显示“站点地址无效、网络不可用或服务异常”；登录接口实际返回 HTTP 400 `GEETEST_VERIFICATION_FAILED`。
+
+**根因**
+
+站点公开配置启用了 GeeTest，登录请求必须包含交互式验证码结果。当前客户端只提交邮箱和密码；HTTP 层又把登录接口的非 401/403 错误统一归类为 `SERVER_ERROR`，服务层因此显示通用地址或网络错误。
+
+**正确做法**
+
+把结果记录为认证受阻，并在安全错误模型中将已确认的验证码错误映射为明确提示。若要支持此类站点，应设计用户可见的交互式验证流程，不得由后台 HTTP 客户端模拟或绕过验证码。
+
+**验证方式**
+
+分别检查首页、证书、公开设置和登录端点：公开设置确认 `geetest_enabled=true`，无验证码登录返回 HTTP 400 且错误类别为 `GEETEST_VERIFICATION_FAILED`；应用同一 `Sub2ApiClient` 请求可复现当前通用错误映射。验证记录必须脱敏。
+
+**禁止事项**
+
+不要把 GeeTest 失败归因于 URL、DNS、TLS、账号密码或接口不存在；不要记录账号密码、验证码结果或完整响应上下文；不要尝试绕过人机验证。
+
+**相关文件或命令**
+
+- `electron/main/adapters/http-client.ts`
+- `electron/main/adapters/schemas.ts`
+- `electron/main/services/site-service.ts`
+- `curl https://<site>/api/v1/settings/public`
+
+**适用范围**
+
+开启 GeeTest 或类似交互式验证码的 sub2api 二开站登录与站点添加流程。
+
+## GeeTest 登录成功不能只等待通用 access_token 键
+
+**现象**
+
+用户已在官方登录窗口完成人机验证并进入管理界面，但应用持续等待，无法自动继续添加站点。
+
+**根因**
+
+实际 sub2api 二开站把访问令牌写入 localStorage 的 `auth_token`，刷新令牌写入 `refresh_token`。只读取 `access_token` 或仅依据页面跳转判断登录成功都会漏掉有效会话，后者还可能把未验证完成的页面状态误判为成功。
+
+**正确做法**
+
+仅在严格同源、沙箱化、临时 Electron session 内读取有限白名单，至少兼容已确认的 `auth_token`/`refresh_token`；拿到令牌后必须调用核心 profile、Key、usage 等读取门禁验证会话，全部满足保存条件后再原子写入站点与凭据。进入核心验证与保存阶段后临时禁止关闭验证窗口，失败后恢复关闭能力，避免 UI 已报告取消但后台仍完成保存。取消、超时、令牌无效或核心读取失败均不得留下半成品。
+
+**验证方式**
+
+策略单测覆盖直接键、结构化白名单、未知键拒绝、缺少 refresh token 拒绝和同源导航；服务集成测试断言无效交互令牌不产生站点、凭据或缓存；macOS 真机完成用户本人 GeeTest 后自动添加，并在重启后恢复站点和会话。
+
+**禁止事项**
+
+不要遍历或导出全部 localStorage、Cookie、响应体或页面全局对象；不要在 Renderer、日志、截图、IPC 返回值或文档中暴露令牌；不要把页面出现“控制台”等文字作为认证成功依据。
+
+**相关文件或命令**
+
+- `electron/main/services/interactive-auth-policy.ts`
+- `electron/main/services/interactive-auth-window.ts`
+- `electron/main/services/site-service.ts`
+
+**适用范围**
+
+通过 Electron 官方站点窗口承接 GeeTest、Turnstile 或其他用户交互式登录会话。
+
+## 自动轮询退避与人工重试必须使用独立语义
+
+**现象**
+
+渠道自动刷新失败后，要么“重试”按钮仍被退避拦截，要么定时轮询因复用 `force=true` 每分钟绕过退避，造成持续请求；缓存存在时还可能被错误地当作本轮刷新成功。
+
+**根因**
+
+`force` 同时承担“跳过新鲜缓存”和“跳过失败退避”两个不同含义。自动轮询确实需要绕过新鲜缓存发起更新，但不应绕过 Retry-After 或 2/4/8/15 分钟退避；用户明确点击重试时才允许单次绕过普通退避。
+
+**正确做法**
+
+将 `forceRefresh` 与 `bypassBackoff` 分开：定时轮询传入前者但不传后者，人工重试同时传入二者。退避命中必须返回失败语义而不是旧缓存成功语义；UI 继续展示最近成功缓存，并标注更新失败和最后成功时间。
+
+**验证方式**
+
+fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次绕过、Retry-After 生效、成功后清除警告；真实 macOS 观察两个 60 秒轮询周期，手动渠道关联和最后成功数据持续显示。
+
+**禁止事项**
+
+不要用一个布尔参数混合缓存与退避策略；不要在后台轮询失败时清空渠道列表、手动关联或弹出全局通知；不要把返回旧缓存当成本轮网络请求成功。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/rate-channel-status-loader.ts`
+- `src/renderer/shells/overview/OverviewPage.tsx`
+- `src/renderer/channel-polling.ts`
+
+**适用范围**
+
+渠道列表、倍率或其他同时具有 stale-while-revalidate、自动调度和人工重试的 Renderer 数据源。

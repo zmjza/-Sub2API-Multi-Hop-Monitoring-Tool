@@ -34,6 +34,7 @@ import {
   appSettingsSchema,
   usageFilterOptionsSchema,
   siteSummarySchema,
+  siteAddResultSchema,
   dashboardSnapshotSchema,
   usagePayloadSchema,
   usageStatsSchema,
@@ -60,6 +61,7 @@ import { intervalInRange } from './domain/scheduler.js';
 import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
 import { floatingWindowPolicy, resolveFloatingBounds } from './domain/window-bounds.js';
 import { compareSemver, UpdateService, updateManifestSchema } from './services/update-service.js';
+import { runInteractiveAuthentication } from './services/interactive-auth-window.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -150,10 +152,31 @@ function registerIpc() {
     return dashboardSnapshotSchema.parse(result);
   });
   ipcMain.handle('sites:add-and-verify', async (_event, input: unknown) => {
-    const result = await siteService.addAndVerify(siteInputSchema.parse(input));
+    const parsed = siteInputSchema.parse(input);
+    if (await siteService.requiresInteractiveVerification(parsed))
+      return siteAddResultSchema.parse({ status: 'verification-required' });
+    let result;
+    try {
+      result = await siteService.addAndVerify(parsed);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'GEETEST_REQUIRED')
+        return siteAddResultSchema.parse({ status: 'verification-required' });
+      throw error;
+    }
     scheduler.setSites(siteService.listSites().sites.map((site) => site.id));
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
-    return siteSummarySchema.parse(result);
+    return siteAddResultSchema.parse({ status: 'added', site: result });
+  });
+  ipcMain.handle('sites:add-with-interactive-verification', async (event, input: unknown) => {
+    const parsed = siteInputSchema.parse(input);
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (!parent) throw new Error('INTERACTIVE_AUTH_WINDOW_UNAVAILABLE');
+    const result = await runInteractiveAuthentication(parent, parsed, (tokens) =>
+      siteService.addWithInteractiveSession(parsed, tokens),
+    );
+    scheduler.setSites(siteService.listSites().sites.map((site) => site.id));
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
+    return siteAddResultSchema.parse({ status: 'added', site: result });
   });
   ipcMain.handle('sites:add-batch', async (event, input: unknown) => {
     const result = await siteService.addBatch(batchSiteInputSchema.parse(input), (value) =>

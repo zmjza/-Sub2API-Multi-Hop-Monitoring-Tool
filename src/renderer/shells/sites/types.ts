@@ -12,10 +12,6 @@ export interface SiteEvents {
 }
 export type SitesProps = PreviewContext & {
   updateChecking?: boolean;
-  updateNotice?: {
-    tone: 'info' | 'success' | 'error';
-    message: string;
-  };
   updateState?: UpdateCheckResult;
   onCheckForUpdate?: () => void;
 };

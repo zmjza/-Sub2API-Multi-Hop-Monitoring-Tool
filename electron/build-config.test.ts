@@ -20,7 +20,7 @@ describe('electron-builder manifest', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
 
-    expect(manifest.version).toBe('1.5.3');
+    expect(manifest.version).toBe('1.6.0');
     expect(preloadSource).toContain("shellVersion: ipcRenderer.sendSync('app:version')");
   });
 

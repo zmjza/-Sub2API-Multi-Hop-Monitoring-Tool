@@ -1,6 +1,16 @@
-import { useEffect, useState } from 'react';
-import { AlertCircle, Check, CheckCircle2, Circle, LoaderCircle, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  Circle,
+  LoaderCircle,
+  Plus,
+  ShieldCheck,
+} from 'lucide-react';
 import type { SitesProps } from './types';
+import type { SiteInput } from '../../../../electron/shared/contracts';
+import { safeRendererError, useNotifications } from '../../notifications';
 import { siteDrafts } from './data';
 import './sites.css';
 
@@ -15,6 +25,7 @@ export function batchProgressPercent(current: number, total: number): number {
 }
 
 export function SitesPage(props: SitesProps) {
+  const { dismiss, notify } = useNotifications();
   const draft = siteDrafts[0];
   const runtime = Boolean(window.sub2apiDesktop);
   const [name, setName] = useState(runtime ? '' : draft.name);
@@ -31,7 +42,10 @@ export function SitesPage(props: SitesProps) {
   const [batchResults, setBatchResults] = useState<
     Array<{ url: string; status: 'success' | 'failed'; error?: string }>
   >([]);
-  const [message, setMessage] = useState('');
+  const [pendingVerification, setPendingVerification] = useState<SiteInput>();
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const cancelVerifyButtonRef = useRef<HTMLButtonElement>(null);
+  const verifyButtonRef = useRef<HTMLButtonElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationThreshold, setNotificationThreshold] = useState(0.5);
   const [startupEnabled, setStartupEnabled] = useState(false);
@@ -123,6 +137,70 @@ export function SitesPage(props: SitesProps) {
       props.sitesSection === 'notifications' ? 'notification-settings' : 'general-settings';
     document.getElementById(target)?.scrollIntoView({ block: 'start' });
   }, [props.sitesSection]);
+  useEffect(() => {
+    if (!pendingVerification) return;
+    verifyButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        cancelInteractiveVerification();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const cancel = cancelVerifyButtonRef.current;
+      const verify = verifyButtonRef.current;
+      if (!cancel || !verify) return;
+      if (event.shiftKey && document.activeElement === cancel) {
+        event.preventDefault();
+        verify.focus();
+      } else if (!event.shiftKey && document.activeElement === verify) {
+        event.preventDefault();
+        cancel.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [notify, pendingVerification]);
+
+  const finishSiteAdd = () => {
+    setValidationPhase('验证完成');
+    setPassword('');
+    notify({ id: 'site-add', kind: 'success', message: '站点验证成功，已添加' });
+    window.dispatchEvent(new Event('sub2api:refresh'));
+  };
+
+  const cancelInteractiveVerification = () => {
+    setPendingVerification(undefined);
+    notify({ id: 'site-add', kind: 'info', message: '已暂不添加站点' });
+    window.setTimeout(() => submitButtonRef.current?.focus(), 0);
+  };
+
+  const startInteractiveVerification = async () => {
+    const input = pendingVerification;
+    if (!input || submitting) return;
+    setPendingVerification(undefined);
+    setSubmitting(true);
+    setValidationPhase('等待安全验证');
+    notify({
+      id: 'site-add',
+      kind: 'loading',
+      message: '请在官方登录窗口完成安全验证…',
+    });
+    try {
+      const result = await window.sub2apiDesktop?.sites.addWithInteractiveVerification(input);
+      if (!result || result.status !== 'added') throw new Error('站点验证未完成');
+      finishSiteAdd();
+    } catch (error) {
+      const message = safeRendererError(error, '站点验证失败，请稍后重试');
+      notify({
+        id: 'site-add',
+        kind: message.startsWith('已取消') ? 'info' : 'error',
+        message,
+      });
+    } finally {
+      setSubmitting(false);
+      window.setTimeout(() => submitButtonRef.current?.focus(), 0);
+    }
+  };
   return (
     <section className={`sites-shell state-${props.state}`}>
       <div className="sites-prototype-grid">
@@ -183,7 +261,11 @@ export function SitesPage(props: SitesProps) {
                   ),
                 ];
                 if (!urls.length) {
-                  setMessage('请至少输入一个有效站点地址');
+                  notify({
+                    id: 'site-batch',
+                    kind: 'warning',
+                    message: '请至少输入一个有效站点地址',
+                  });
                   setBatchPhase('输入无效');
                   return;
                 }
@@ -193,11 +275,15 @@ export function SitesPage(props: SitesProps) {
                 setBatchResults([]);
                 setBatchCurrentUrl('');
                 setBatchPhase('准备验证');
-                setMessage(`正在批量验证 ${urls.length} 个站点…`);
+                notify({
+                  id: 'site-batch',
+                  kind: 'loading',
+                  message: `正在批量验证 ${urls.length} 个站点…`,
+                });
                 const request = window.sub2apiDesktop?.sites.addBatch({ urls, account, password });
                 if (!request) {
                   setBatchPhase('无法连接桌面服务');
-                  setMessage('当前环境不支持批量验证');
+                  notify({ id: 'site-batch', kind: 'error', message: '当前环境不支持批量验证' });
                   setSubmitting(false);
                   return;
                 }
@@ -205,9 +291,11 @@ export function SitesPage(props: SitesProps) {
                   .then((result) => {
                     setBatchProgress({ current: urls.length, total: urls.length });
                     setBatchPhase('全部完成');
-                    setMessage(
-                      `批量验证完成：成功 ${result.successes.length}，失败 ${result.failures.length}`,
-                    );
+                    notify({
+                      id: 'site-batch',
+                      kind: result.failures.length ? 'warning' : 'success',
+                      message: `批量验证完成：成功 ${result.successes.length}，失败 ${result.failures.length}`,
+                    });
                     if (!result.failures.length) {
                       setBatchUrls('');
                       setPassword('');
@@ -215,7 +303,11 @@ export function SitesPage(props: SitesProps) {
                   })
                   .catch((error: unknown) => {
                     setBatchPhase('验证中断');
-                    setMessage(error instanceof Error ? error.message : '批量验证失败');
+                    notify({
+                      id: 'site-batch',
+                      kind: 'error',
+                      message: safeRendererError(error, '批量验证失败'),
+                    });
                   })
                   .finally(() => setSubmitting(false));
               }}
@@ -283,25 +375,33 @@ export function SitesPage(props: SitesProps) {
             </div>
           </div>
           <button
+            ref={submitButtonRef}
             className="site-submit-button"
             disabled={submitting || !name || !url || !account || !password}
-            onClick={() => {
+            onClick={async () => {
               setSubmissionMode('single');
               setSubmitting(true);
               setValidationPhase('登录与连通性');
-              setMessage('正在验证站点…');
-              void window.sub2apiDesktop?.sites
-                .addAndVerify({ name, url, account, password })
-                .then(() => {
-                  setValidationPhase('验证完成');
-                  setMessage('站点验证成功');
-                  setPassword('');
-                  window.dispatchEvent(new Event('sub2api:refresh'));
-                })
-                .catch((error: unknown) =>
-                  setMessage(error instanceof Error ? error.message : '站点验证失败'),
-                )
-                .finally(() => setSubmitting(false));
+              notify({ id: 'site-add', kind: 'loading', message: '正在检测站点登录方式…' });
+              const input = { name, url, account, password };
+              try {
+                const result = await window.sub2apiDesktop?.sites.addAndVerify(input);
+                if (!result) throw new Error('桌面服务不可用');
+                if (result.status === 'verification-required') {
+                  dismiss('site-add');
+                  setPendingVerification(input);
+                  return;
+                }
+                finishSiteAdd();
+              } catch (error) {
+                notify({
+                  id: 'site-add',
+                  kind: 'error',
+                  message: safeRendererError(error, '站点验证失败，请稍后重试'),
+                });
+              } finally {
+                setSubmitting(false);
+              }
             }}
           >
             {submitting && submissionMode === 'single' ? (
@@ -311,7 +411,6 @@ export function SitesPage(props: SitesProps) {
             )}
             {submitting ? '验证中…' : '添加并验证'}
           </button>
-          {message && <small className="site-form-message">{message}</small>}
         </section>
         <div className="sites-lower-grid">
           <section className="site-table-panel">
@@ -371,7 +470,21 @@ export function SitesPage(props: SitesProps) {
                               return;
                             void window.sub2apiDesktop?.sites
                               .delete(site.id)
-                              .then(() => window.dispatchEvent(new Event('sub2api:refresh')));
+                              .then(() => {
+                                notify({
+                                  id: `site-delete:${site.id}`,
+                                  kind: 'success',
+                                  message: `站点“${site.name}”已删除`,
+                                });
+                                window.dispatchEvent(new Event('sub2api:refresh'));
+                              })
+                              .catch((error) =>
+                                notify({
+                                  id: `site-delete:${site.id}`,
+                                  kind: 'error',
+                                  message: safeRendererError(error, '站点删除失败'),
+                                }),
+                              );
                           }}
                         >
                           删除
@@ -418,7 +531,7 @@ export function SitesPage(props: SitesProps) {
             <div className="notification-row">
               <div>
                 <b>在线更新</b>
-                <small>{props.updateNotice?.message || '检查 GitHub 稳定版更新'}</small>
+                <small>检查 GitHub 稳定版更新</small>
               </div>
               <button
                 className="site-batch-button"
@@ -768,6 +881,46 @@ export function SitesPage(props: SitesProps) {
           </section>
         </div>
       </div>
+      {pendingVerification && (
+        <div className="security-verification-backdrop" role="presentation">
+          <section
+            className="security-verification-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="security-verification-title"
+            aria-describedby="security-verification-description"
+          >
+            <div className="security-verification-icon" aria-hidden="true">
+              <ShieldCheck size={22} />
+            </div>
+            <div className="security-verification-copy">
+              <h2 id="security-verification-title">需要完成安全验证</h2>
+              <p id="security-verification-description">
+                该站点已启用 GeeTest。请在官方登录窗口完成人机验证，
+                <br />
+                验证成功后将自动继续添加站点。
+              </p>
+            </div>
+            <div className="security-verification-actions">
+              <button
+                type="button"
+                ref={cancelVerifyButtonRef}
+                onClick={cancelInteractiveVerification}
+              >
+                暂不添加
+              </button>
+              <button
+                type="button"
+                className="primary"
+                ref={verifyButtonRef}
+                onClick={() => void startInteractiveVerification()}
+              >
+                开始验证
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

@@ -61,13 +61,16 @@ export class RateChannelStatusLoader {
     }
   }
 
-  async loadChannels(siteId: string, force = false): Promise<ChannelViewPayload> {
+  async loadChannels(
+    siteId: string,
+    force = false,
+    bypassBackoff = false,
+  ): Promise<ChannelViewPayload> {
     const blockedUntil = this.channelBackoffUntil.get(siteId) ?? 0;
-    if (force && blockedUntil > Date.now()) {
+    if (force && !bypassBackoff && blockedUntil > Date.now()) {
       const cached = this.channelCache.get(siteId);
       if (cached?.state === 'unsupported') return cached;
       if (blockedUntil === Number.POSITIVE_INFINITY) throw new Error('CHANNEL_AUTH_REQUIRED');
-      if (cached) return cached;
       throw new Error('CHANNEL_REFRESH_BACKOFF');
     }
     if (!force) {

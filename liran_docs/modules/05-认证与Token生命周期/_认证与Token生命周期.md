@@ -34,3 +34,10 @@
 ## 任务范围
 
 TASK-03-04 至 TASK-03-06、TASK-12-02。
+
+## 2026-07-29 交互式认证增量（待开发）
+
+- 公开设置或登录错误可将站点认证模式标记为 `password` 或 `interactive-geetest`。
+- 交互窗口使用临时 Electron session；只在严格同源页面自动填充，有限白名单读取 access/refresh token，并以真实 profile/core 请求确认会话。
+- GeeTest 站点 refresh 失效后进入 `auth-required`，不得后台密码重登或自动弹窗；用户主动重新验证后才能轮换凭据。
+- Token、Cookie、密码、验证码结果和页面内容不得经过 Renderer、普通数据库、日志、截图或文档。

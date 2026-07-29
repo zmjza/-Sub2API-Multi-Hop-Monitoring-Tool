@@ -1,5 +1,14 @@
 # IPC、安全与日志脱敏
 
+## 2026-07-29 交互认证窗口安全边界（待实施）
+
+- GeeTest 窗口使用系统原生边框的模态 `BrowserWindow`，Windows/macOS 共享业务逻辑；`nodeIntegration:false`、`contextIsolation:true`、`sandbox:true`，不加载项目 preload。
+- 使用非持久化临时 session；仅允许目标站点同源顶层导航，拒绝新窗口和跨站顶层跳转，但允许 GeeTest iframe、脚本及网络子资源正常完成挑战。
+- 账号密码只在严格同源页面尝试自动填写；无法可靠定位表单时允许用户在官方页面手动输入。Renderer 不获得密码、Token、Cookie、验证码结果或页面 HTML。
+- Token 读取限制为有限白名单并在主进程验证会话；成功、取消、超时或失败后清理临时 session，任何未验证结果不得保存站点或凭据。
+- GeeTest 站点 refresh 失败后标记“需要重新验证”；禁止后台密码重登和非用户触发的验证窗口。
+- 新 IPC 必须使用固定 channel、严格输入输出 schema、重复点击去重和安全错误模型；日志、SQLite、截图、测试夹具与发布说明执行敏感扫描。状态：`待安全负面测试与打包应用验收`。
+
 ## 2026-07-23 规划影响
 
 新增 API 密钥、过滤 stats、所选 Key 汇总和渠道调度 IPC 必须逐项建立严格 Zod 输入/输出，禁止把 `unknown`、完整上游对象、任意 URL/方法或 Token 暴露给 Renderer。分组写入对象必须 `.strict()` 且只含 siteId、keyId、groupId；Key 输出 schema 不得存在完整 key 字段。日志、错误、测试快照、CSV 和 E2E 截图纳入敏感模式扫描。当前状态为待实现，不得继承旧版本安全测试结论。

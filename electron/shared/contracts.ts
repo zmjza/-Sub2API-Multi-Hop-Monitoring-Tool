@@ -206,6 +206,11 @@ export const siteSummarySchema = z.object({
   capabilities: z.record(z.string(), z.string()).optional(),
   estimatedDurationMs: z.tuple([z.number(), z.number()]).optional(),
 });
+export const siteAddResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('added'), site: siteSummarySchema }).strict(),
+  z.object({ status: z.literal('verification-required') }).strict(),
+]);
+export type SiteAddResult = z.infer<typeof siteAddResultSchema>;
 export const dashboardSnapshotSchema = z.object({
   sites: z.array(siteSummarySchema),
   totals: z.object({

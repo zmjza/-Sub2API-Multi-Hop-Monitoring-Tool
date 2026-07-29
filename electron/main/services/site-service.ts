@@ -43,6 +43,11 @@ interface StoredSite {
   capabilities?: Record<string, string>;
 }
 
+interface VerifiedSession {
+  accessToken: string;
+  refreshToken?: string;
+}
+
 export class SiteService {
   private readonly snapshots = new Map<string, SiteSnapshot>();
   private readonly errors = new Map<string, string[]>();
@@ -240,6 +245,8 @@ export class SiteService {
           }
         }
         if (!recovered) {
+          if (credential.authenticationMode === 'geetest')
+            throw { code: 'AUTH_REQUIRED', message: '需要重新验证', retryable: false };
           const relogin = await client.login(credential.account, credential.password);
           this.vault.write(siteId, {
             ...credential,
@@ -308,6 +315,32 @@ export class SiteService {
   }
 
   async addAndVerify(input: SiteInput): Promise<SiteSummary> {
+    const normalized = this.normalizedNewSite(input);
+    const client = new Sub2ApiClient(normalized.apiBaseUrl);
+    const session = await client.login(input.account, input.password).catch((error: unknown) => {
+      throw new Error(siteInputErrorMessage(error));
+    });
+    return this.verifyAndSave(input, normalized, session, 'password');
+  }
+
+  async requiresInteractiveVerification(input: SiteInput): Promise<boolean> {
+    const normalized = this.normalizedNewSite(input);
+    try {
+      return (await new Sub2ApiClient(normalized.apiBaseUrl).authenticationMode()).geetestEnabled;
+    } catch {
+      return false;
+    }
+  }
+
+  async addWithInteractiveSession(
+    input: SiteInput,
+    session: VerifiedSession,
+  ): Promise<SiteSummary> {
+    const normalized = this.normalizedNewSite(input);
+    return this.verifyAndSave(input, normalized, session, 'geetest');
+  }
+
+  private normalizedNewSite(input: SiteInput): ReturnType<typeof normalizeSiteUrl> {
     let normalized: ReturnType<typeof normalizeSiteUrl>;
     try {
       normalized = normalizeSiteUrl(input.url);
@@ -316,12 +349,18 @@ export class SiteService {
     }
     if (this.db.listSites().some((site) => site.baseUrl === normalized.baseUrl))
       throw new Error('站点已存在');
+    return normalized;
+  }
+
+  private async verifyAndSave(
+    input: SiteInput,
+    normalized: ReturnType<typeof normalizeSiteUrl>,
+    session: VerifiedSession,
+    authenticationMode: 'password' | 'geetest',
+  ): Promise<SiteSummary> {
     const id = randomUUID();
-    const client = new Sub2ApiClient(normalized.apiBaseUrl);
     const started = Date.now();
-    const session = await client.login(input.account, input.password).catch((error: unknown) => {
-      throw new Error(siteInputErrorMessage(error));
-    });
+    const client = new Sub2ApiClient(normalized.apiBaseUrl);
     const adapter = new Sub2ApiAdapter(client, undefined, (phase) =>
       this.progressListener?.(id, phase),
     );
@@ -336,6 +375,15 @@ export class SiteService {
     } catch {
       channelCapability = 'error';
     }
+    const requestsByKey = await adapter
+      .readTodayRequestsByKey(
+        session.accessToken,
+        core.keys,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+      )
+      .catch((error: unknown) => {
+        throw new Error(siteInputErrorMessage(error));
+      });
     this.db.saveSite({
       id,
       name: input.name,
@@ -357,6 +405,7 @@ export class SiteService {
       password: input.password,
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      authenticationMode,
     });
     this.db.saveCredentialReference(id, maskAccount(input.account), `credential:${id}`);
     const snapshot = createSnapshot(id, core.profile.balance, core.usage);
@@ -368,11 +417,6 @@ export class SiteService {
       snapshot.fetchedAt + 120_000,
     );
     this.durations.set(id, [Date.now() - started]);
-    const requestsByKey = await adapter.readTodayRequestsByKey(
-      session.accessToken,
-      core.keys,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
     this.cacheKeys(id, withRates(core.keys, core.rates));
     this.updateRuntimeKey(id, core.keys, core.rates, requestsByKey);
     return this.toSummary({
@@ -445,6 +489,10 @@ export class SiteService {
     const started = Date.now();
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const accessToken = credential.accessToken;
+    if (!accessToken && credential.authenticationMode === 'geetest') {
+      this.errors.set(siteId, ['auth-required']);
+      return this.toSummary(site);
+    }
     let session = accessToken
       ? { accessToken, refreshToken: credential.refreshToken, expiresAt: Date.now() + 60_000 }
       : undefined;
@@ -509,6 +557,10 @@ export class SiteService {
           this.errors.delete(siteId);
           return this.toSummary(site);
         } catch {
+          if (credential.authenticationMode === 'geetest') {
+            this.errors.set(siteId, ['auth-required']);
+            return this.toSummary(site);
+          }
           try {
             const relogin = await client.login(credential.account, credential.password);
             this.vault.write(siteId, {
@@ -1024,6 +1076,7 @@ function siteInputErrorMessage(error: unknown): string {
   if (code === 'NETWORK_TIMEOUT') return '网络超时';
   if (code === 'UNSUPPORTED_CAPABILITY' || code === 'INCOMPATIBLE_RESPONSE') return '接口不兼容';
   if (code === 'AUTH_REQUIRED') return '账号状态异常或需要重新登录';
+  if (code === 'GEETEST_REQUIRED') return 'GEETEST_REQUIRED';
   return '站点地址无效、网络不可用或服务异常';
 }
 

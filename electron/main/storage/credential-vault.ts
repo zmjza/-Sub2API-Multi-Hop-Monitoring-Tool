@@ -3,6 +3,7 @@ export interface CredentialValue {
   password: string;
   accessToken?: string;
   refreshToken?: string;
+  authenticationMode?: 'password' | 'geetest';
 }
 
 export interface CredentialCodec {

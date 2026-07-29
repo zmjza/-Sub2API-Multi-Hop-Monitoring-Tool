@@ -49,4 +49,16 @@ describe('SitesPage runtime state', () => {
     expect(source).toContain('常驻桌面且不会遮挡前台应用');
     expect(source).not.toContain('悬浮窗保持普通桌面层级');
   });
+
+  it('uses the approved GeeTest dialog copy and interactive verification bridge', () => {
+    const source = readFileSync(fileURLToPath(new URL('./SitesPage.tsx', import.meta.url)), 'utf8');
+
+    expect(source).toContain('需要完成安全验证');
+    expect(source).toContain('该站点已启用 GeeTest。请在官方登录窗口完成人机验证，');
+    expect(source).toContain('验证成功后将自动继续添加站点。');
+    expect(source).toContain('暂不添加');
+    expect(source).toContain('开始验证');
+    expect(source).toContain('.addWithInteractiveVerification(input)');
+    expect(source).not.toContain('site-form-message');
+  });
 });

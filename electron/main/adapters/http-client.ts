@@ -28,6 +28,17 @@ export class Sub2ApiClient {
     };
   }
 
+  async authenticationMode(): Promise<{ geetestEnabled: boolean }> {
+    const raw = await this.request(
+      '/settings/public',
+      { method: 'GET', headers: { accept: 'application/json' } },
+      'publicSettings',
+    );
+    const record = asRecord(raw);
+    const data = asRecord(record?.data) ?? record;
+    return { geetestEnabled: data?.geetest_enabled === true };
+  }
+
   async refresh(refreshToken: string) {
     const raw = await this.request(
       '/auth/refresh',
@@ -107,6 +118,18 @@ export class Sub2ApiClient {
         signal: controller.signal,
       });
       if (!response.ok) {
+        if (capability === 'authLogin' && response.status === 400) {
+          const body = await safeJson(response);
+          const code = String(asRecord(body)?.code ?? '');
+          if (code === 'GEETEST_VERIFICATION_FAILED' || code === 'GEETEST_REQUIRED')
+            throw {
+              code: 'GEETEST_REQUIRED',
+              message: '需要完成安全验证',
+              capability,
+              httpStatus: 400,
+              retryable: false,
+            };
+        }
         const normalized = normalizeError(undefined, capability, response.status);
         const retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
         throw retryAfterSeconds === undefined ? normalized : { ...normalized, retryAfterSeconds };
@@ -128,6 +151,20 @@ export class Sub2ApiClient {
       clearTimeout(timer);
     }
   }
+}
+
+async function safeJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function parseRetryAfter(value: string | null): number | undefined {

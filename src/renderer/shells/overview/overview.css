@@ -1176,6 +1176,7 @@
 }
 
 .rate-inline-channel {
+  position: relative;
   grid-column: 1 / -1;
   min-height: 86px;
   margin-top: 12px;
@@ -1183,6 +1184,46 @@
   border: 1px solid rgba(16, 185, 129, 0.18);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.58);
+}
+.rate-inline-channel-refresh,
+.rate-inline-channel-stale {
+  min-height: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+}
+.rate-inline-channel-stale {
+  color: #92400e;
+}
+.rate-inline-channel-stale time {
+  margin-left: auto;
+  color: #78716c;
+  font-weight: 500;
+}
+.rate-inline-channel-stale button {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #92400e;
+  cursor: pointer;
+}
+.rate-inline-channel-stale button:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
+}
+.rate-inline-channel:has(> .rate-inline-channel-refresh) .rate-inline-channel-timeline,
+.rate-inline-channel:has(> .rate-inline-channel-stale) .rate-inline-channel-timeline {
+  display: none;
 }
 .rate-inline-channel-associated {
   display: flex;

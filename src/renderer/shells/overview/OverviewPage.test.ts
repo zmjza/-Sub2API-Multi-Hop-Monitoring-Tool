@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSiteBalance, quotaForSite } from './OverviewPage';
+import { formatSiteBalance, quotaForSite, reduceInlineChannelRefreshState } from './OverviewPage';
 import type { OverviewProps } from './types';
 
 const props = (
@@ -92,5 +92,48 @@ describe('overview quota display', () => {
 
     expect(quotaForSite(site, multiSiteProps)?.remaining).toBe(12);
     expect(formatSiteBalance(site, multiSiteProps)).toBe('$12.00');
+  });
+});
+
+describe('overview channel refresh state', () => {
+  it('keeps the last successful channel list visible while polling and after a failure', () => {
+    const successful = {
+      state: 'success' as const,
+      lastSuccessAt: Date.parse('2026-07-29T10:00:00Z'),
+    };
+
+    const refreshing = reduceInlineChannelRefreshState(successful, {
+      type: 'refresh-started',
+      now: Date.parse('2026-07-29T10:01:00Z'),
+    });
+    const failed = reduceInlineChannelRefreshState(refreshing, {
+      type: 'refresh-failed',
+      now: Date.parse('2026-07-29T10:01:01Z'),
+      reason: 'network',
+    });
+
+    expect(refreshing).toMatchObject({ state: 'success', refreshing: true });
+    expect(failed).toEqual({
+      state: 'success',
+      refreshing: false,
+      stale: true,
+      failureReason: 'network',
+      lastSuccessAt: successful.lastSuccessAt,
+    });
+  });
+
+  it('uses the full error state only when no successful channel list exists', () => {
+    expect(
+      reduceInlineChannelRefreshState(undefined, {
+        type: 'refresh-failed',
+        now: Date.parse('2026-07-29T10:01:01Z'),
+        reason: 'network',
+      }),
+    ).toEqual({
+      state: 'error',
+      refreshing: false,
+      stale: false,
+      failureReason: 'network',
+    });
   });
 });

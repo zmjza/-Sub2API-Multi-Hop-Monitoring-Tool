@@ -20,6 +20,7 @@ import {
   apiKeyBatchUsageRequestSchema,
   apiKeySummarySchema,
   siteSummarySchema,
+  siteAddResultSchema,
   usageStatsSchema,
   channelAssociationRequestSchema,
 } from './contracts.js';
@@ -81,6 +82,15 @@ describe('IPC boundary schemas', () => {
         channelIds: ['channel-a', 'channel-b'],
       }),
     ).toEqual({ siteId: 'site-a', groupId: 'g1', channelIds: ['channel-a', 'channel-b'] });
+  });
+
+  it('keeps site-add outcomes finite and never returns credentials to the renderer', () => {
+    expect(siteAddResultSchema.parse({ status: 'verification-required' })).toEqual({
+      status: 'verification-required',
+    });
+    expect(() =>
+      siteAddResultSchema.parse({ status: 'verification-required', accessToken: 'secret' }),
+    ).toThrow();
   });
 
   it('allows only the safe reasoning effort field on usage records', () => {

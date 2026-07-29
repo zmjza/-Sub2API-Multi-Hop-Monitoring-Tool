@@ -68,6 +68,10 @@ describe('controlled UI shell preview', () => {
       'utf8',
     );
     const styles = readFileSync(fileURLToPath(new URL('../styles.css', import.meta.url)), 'utf8');
+    const notificationStyles = readFileSync(
+      fileURLToPath(new URL('../notifications.css', import.meta.url)),
+      'utf8',
+    );
 
     expect(app).toContain('正在检查更新');
     expect(app).toContain('当前已是最新版本');
@@ -85,7 +89,9 @@ describe('controlled UI shell preview', () => {
     expect(sitesPage).not.toContain('sites.updateCheck()');
     expect(sitesPage).toContain('检查 GitHub 稳定版更新');
     expect(sitesPage).not.toContain('检查 Gitee 稳定版更新');
-    expect(styles).toContain('.update-toast');
+    expect(app).toContain('useNotifications()');
+    expect(notificationStyles).toContain('.app-notification-viewport');
+    expect(styles).not.toContain('.update-toast');
     expect(styles).toContain('.update-modal-backdrop');
   });
 

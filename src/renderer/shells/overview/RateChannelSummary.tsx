@@ -1,6 +1,7 @@
 import { Activity, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { ChannelDetailPayload } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
+import type { InlineChannelRefreshState } from './OverviewPage';
 
 type Channel = RateChannelSnapshot;
 
@@ -14,12 +15,14 @@ export function RateChannelSummary(props: {
   siteName: string;
   groupName: string;
   listState: InlineChannelListState;
+  refreshState?: InlineChannelRefreshState;
   matchState: InlineChannelMatchState;
   channel?: Channel;
   channels?: Channel[];
   associationSource?: 'auto' | 'manual' | 'unmatched';
   detailState?: InlineChannelDetailState;
   onRetry: () => void;
+  onListRetry?: () => void;
 }) {
   if (props.matchState === 'no-key') return <InlineMessage text="未确定当前生效 Key" />;
   if (props.matchState === 'no-group') return <InlineMessage text="当前 Key 未关联分组" />;
@@ -59,6 +62,35 @@ export function RateChannelSummary(props: {
 
   return (
     <div className={`rate-inline-channel is-${status}`} aria-label={`${props.groupName} 当前渠道`}>
+      {props.refreshState?.refreshing && (
+        <small className="rate-inline-channel-refresh" role="status">
+          <RefreshCw size={11} className="spin" /> 正在更新
+        </small>
+      )}
+      {props.refreshState?.stale && (
+        <small className="rate-inline-channel-stale" role="status">
+          <AlertTriangle size={11} />
+          {props.refreshState.failureReason === 'auth'
+            ? '需要重新验证，显示上次数据'
+            : '更新失败，显示上次数据'}
+          {props.refreshState.lastSuccessAt && (
+            <time dateTime={new Date(props.refreshState.lastSuccessAt).toISOString()}>
+              {new Date(props.refreshState.lastSuccessAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </time>
+          )}
+          <button
+            type="button"
+            aria-label={`重试 ${props.siteName} ${props.groupName} 渠道状态`}
+            title="重试渠道状态"
+            onClick={props.onListRetry ?? props.onRetry}
+          >
+            <RefreshCw size={12} />
+          </button>
+        </small>
+      )}
       {(props.channels ?? [props.channel]).length > 1 && (
         <div className="rate-inline-channel-associated" aria-label="全部关联渠道">
           {(props.channels ?? [props.channel]).map((item) => (

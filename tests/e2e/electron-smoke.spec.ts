@@ -866,10 +866,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
   expect(await main.evaluate(() => typeof window.sub2apiDesktop)).toBe('object');
   await expect(main.getByText('最后更新：', { exact: false })).toBeVisible();
-  await expect(main.locator('.app-version-badge')).toContainText('v1.5.3');
+  await expect(main.locator('.app-version-badge')).toContainText('v1.6.0');
   await expect(main.locator('.app-version-badge')).toBeEnabled({ timeout: 20_000 });
   await main.locator('.app-version-badge').click();
-  await expect(main.locator('.update-toast')).toContainText(
+  await expect(main.locator('.app-notification')).toContainText(
     /正在检查更新|当前已是最新版本|发现新版本|检查更新失败/,
     { timeout: 5_000 },
   );
@@ -957,15 +957,16 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       { port: ports[2], name: '第五个布局测试站点' },
     ];
     const sites = [];
-    for (const input of inputs)
-      sites.push(
-        await desktop.addAndVerify({
-          name: input.name,
-          url: `http://127.0.0.1:${input.port}`,
-          account: 'e2e@example.invalid',
-          password: 'runtime-only',
-        }),
-      );
+    for (const input of inputs) {
+      const result = await desktop.addAndVerify({
+        name: input.name,
+        url: `http://127.0.0.1:${input.port}`,
+        account: 'e2e@example.invalid',
+        password: 'runtime-only',
+      });
+      if (result.status !== 'added') throw new Error('Unexpected interactive verification');
+      sites.push(result.site);
+    }
     await desktop.setNote(
       sites[0]!.id,
       '这是一段用于验证长备注不会改变当前渠道摘要和底部操作区基线的测试备注',

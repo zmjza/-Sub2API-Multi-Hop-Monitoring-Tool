@@ -399,3 +399,95 @@
   background: #fff;
   color: #1b1b24;
 }
+.security-verification-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(31, 28, 43, 0.28);
+}
+
+.security-verification-dialog {
+  width: min(440px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 0 14px;
+  border: 1px solid #d9d5e5;
+  border-radius: 8px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 20px 52px rgba(31, 28, 43, 0.2);
+  color: #2b2937;
+}
+
+.security-verification-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eeecff;
+  color: #4f46e5;
+}
+
+.security-verification-copy h2 {
+  margin: 0;
+  color: #24212f;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.security-verification-copy p {
+  margin: 7px 0 0;
+  color: #666174;
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.security-verification-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.security-verification-actions button {
+  min-width: 88px;
+  height: 36px;
+  border: 1px solid #d8d4e2;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #4f4b5b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.security-verification-actions button.primary {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.security-verification-actions button:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px), (max-height: 720px) {
+  .security-verification-backdrop {
+    padding: 16px;
+  }
+  .security-verification-dialog {
+    padding: 18px;
+  }
+  .security-verification-copy p br {
+    display: none;
+  }
+}

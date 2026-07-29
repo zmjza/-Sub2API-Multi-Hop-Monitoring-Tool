@@ -5,6 +5,7 @@ import type {
   DashboardSnapshot,
   SiteInput,
   SiteSummary,
+  SiteAddResult,
   SiteKeyContexts,
   UsageQuery,
   UsageStats,
@@ -25,7 +26,8 @@ export interface DesktopBridge {
     list(): Promise<DashboardSnapshot>;
     select(siteId: string): Promise<DashboardSnapshot>;
     delete(siteId: string): Promise<DashboardSnapshot>;
-    addAndVerify(input: SiteInput): Promise<SiteSummary>;
+    addAndVerify(input: SiteInput): Promise<SiteAddResult>;
+    addWithInteractiveVerification(input: SiteInput): Promise<SiteAddResult>;
     addBatch(
       input: BatchSiteInput,
     ): Promise<{ successes: SiteSummary[]; failures: Array<{ url: string; error: string }> }>;

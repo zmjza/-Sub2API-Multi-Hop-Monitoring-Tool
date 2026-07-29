@@ -165,10 +165,29 @@ describe('RateChannelStatusLoader', () => {
 
     await loader.loadChannels('site-a');
     await expect(loader.loadChannels('site-a', true)).rejects.toThrow('RETRY_AFTER=600');
-    await expect(loader.loadChannels('site-a', true)).resolves.toEqual(channels('site-a'));
+    await expect(loader.loadChannels('site-a', true)).rejects.toThrow('CHANNEL_REFRESH_BACKOFF');
+    expect(loader.cacheForSite('site-a').channels).toEqual(channels('site-a'));
     expect(readChannels).toHaveBeenCalledTimes(2);
     vi.advanceTimersByTime(600_000);
     await loader.loadChannels('site-a', true);
+    expect(readChannels).toHaveBeenCalledTimes(3);
+  });
+
+  it('allows an explicit user retry to bypass ordinary backoff once', async () => {
+    vi.useFakeTimers();
+    const readChannels = vi
+      .fn<(siteId: string) => Promise<ChannelViewPayload>>()
+      .mockResolvedValueOnce(channels('site-a'))
+      .mockRejectedValueOnce(new Error('CHANNEL_REFRESH_FAILED'))
+      .mockResolvedValueOnce(channels('site-a'));
+    const loader = new RateChannelStatusLoader({
+      readChannels,
+      readDetail: async (_siteId, channelId) => detail(channelId),
+    });
+
+    await loader.loadChannels('site-a');
+    await expect(loader.loadChannels('site-a', true)).rejects.toThrow('CHANNEL_REFRESH_FAILED');
+    await expect(loader.loadChannels('site-a', true, true)).resolves.toEqual(channels('site-a'));
     expect(readChannels).toHaveBeenCalledTimes(3);
   });
 });

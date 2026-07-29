@@ -60,6 +60,60 @@ const ratePlatformLogos: Record<string, string> = {
   grok: grokLogo,
 };
 
+export type InlineChannelRefreshState = {
+  state: InlineChannelListState;
+  refreshing: boolean;
+  stale: boolean;
+  lastSuccessAt?: number;
+  failureReason?: 'network' | 'auth';
+};
+
+type InlineChannelRefreshEvent =
+  | { type: 'refresh-started'; now: number }
+  | {
+      type: 'refresh-succeeded';
+      now: number;
+      state: Exclude<InlineChannelListState, 'loading' | 'error'>;
+    }
+  | { type: 'refresh-failed'; now: number; reason: 'network' | 'auth' };
+
+export function reduceInlineChannelRefreshState(
+  current: Partial<InlineChannelRefreshState> | undefined,
+  event: InlineChannelRefreshEvent,
+): InlineChannelRefreshState {
+  if (event.type === 'refresh-succeeded')
+    return {
+      state: event.state,
+      refreshing: false,
+      stale: false,
+      lastSuccessAt: event.now,
+    };
+  if (event.type === 'refresh-started') {
+    if (current?.lastSuccessAt)
+      return {
+        state: current.state ?? 'success',
+        refreshing: true,
+        stale: false,
+        lastSuccessAt: current.lastSuccessAt,
+      };
+    return { state: 'loading', refreshing: true, stale: false };
+  }
+  if (current?.lastSuccessAt)
+    return {
+      state: current.state ?? 'success',
+      refreshing: false,
+      stale: true,
+      failureReason: event.reason,
+      lastSuccessAt: current.lastSuccessAt,
+    };
+  return {
+    state: 'error',
+    refreshing: false,
+    stale: false,
+    failureReason: event.reason,
+  };
+}
+
 export function OverviewPage(props: OverviewProps) {
   const [editingId, setEditingId] = useState<string>();
   const [draftNote, setDraftNote] = useState('');
@@ -86,7 +140,7 @@ export function OverviewPage(props: OverviewProps) {
     Record<string, ChannelAssociation[]>
   >({});
   const [inlineChannelListStateBySite, setInlineChannelListStateBySite] = useState<
-    Record<string, InlineChannelListState>
+    Record<string, InlineChannelRefreshState>
   >({});
   const [inlineChannelDetailStateByKey, setInlineChannelDetailStateByKey] = useState<
     Record<string, InlineChannelDetailState>
@@ -223,12 +277,18 @@ export function OverviewPage(props: OverviewProps) {
     ].sort((left, right) => left.localeCompare(right)),
   );
 
-  const loadInlineChannels = useCallback(async (siteId: string, force = false) => {
+  const loadInlineChannels = useCallback(async (siteId: string, force = false, manual = false) => {
     const requestId = ++inlineRequestIdRef.current;
     inlineChannelRequestBySiteRef.current.set(siteId, requestId);
-    setInlineChannelListStateBySite((current) => ({ ...current, [siteId]: 'loading' }));
+    setInlineChannelListStateBySite((current) => ({
+      ...current,
+      [siteId]: reduceInlineChannelRefreshState(current[siteId], {
+        type: 'refresh-started',
+        now: Date.now(),
+      }),
+    }));
     try {
-      const envelope = await channelStatusLoaderRef.current!.loadChannels(siteId, force);
+      const envelope = await channelStatusLoaderRef.current!.loadChannels(siteId, force, manual);
       if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
       const storedAssociations = await window.sub2apiDesktop?.sites.channelAssociations(siteId);
       if (storedAssociations)
@@ -245,21 +305,37 @@ export function OverviewPage(props: OverviewProps) {
       }));
       setInlineChannelListStateBySite((current) => ({
         ...current,
-        [siteId]:
-          envelope.state === 'unsupported'
-            ? 'unsupported'
-            : channels.length === 0
-              ? 'no-data'
-              : 'success',
+        [siteId]: reduceInlineChannelRefreshState(current[siteId], {
+          type: 'refresh-succeeded',
+          now: Date.now(),
+          state:
+            envelope.state === 'unsupported'
+              ? 'unsupported'
+              : channels.length === 0
+                ? 'no-data'
+                : 'success',
+        }),
       }));
       setChannelStatusCacheBySite((current) => ({
         ...current,
         [siteId]: channelStatusLoaderRef.current!.cacheForSite(siteId),
       }));
-    } catch {
+    } catch (error) {
       if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
-      setRateChannelStateBySite((current) => ({ ...current, [siteId]: 'error' }));
-      setInlineChannelListStateBySite((current) => ({ ...current, [siteId]: 'error' }));
+      const cached = channelStatusLoaderRef.current!.cacheForSite(siteId).channels;
+      if (!cached) setRateChannelStateBySite((current) => ({ ...current, [siteId]: 'error' }));
+      const reason =
+        error instanceof Error && error.message.includes('CHANNEL_AUTH_REQUIRED')
+          ? 'auth'
+          : 'network';
+      setInlineChannelListStateBySite((current) => ({
+        ...current,
+        [siteId]: reduceInlineChannelRefreshState(current[siteId], {
+          type: 'refresh-failed',
+          now: Date.now(),
+          reason,
+        }),
+      }));
     }
   }, []);
 
@@ -301,7 +377,11 @@ export function OverviewPage(props: OverviewProps) {
       }));
       setInlineChannelListStateBySite((current) => ({
         ...current,
-        [siteId]: cache.channels?.channels.length ? 'success' : 'no-data',
+        [siteId]: reduceInlineChannelRefreshState(current[siteId], {
+          type: 'refresh-succeeded',
+          now: Date.now(),
+          state: cache.channels?.channels.length ? 'success' : 'no-data',
+        }),
       }));
     }
     setInlineChannelDetailStateByKey((current) => {
@@ -882,7 +962,8 @@ export function OverviewPage(props: OverviewProps) {
                     <RateChannelSummary
                       siteName={site.name}
                       groupName={channelContext?.groupName ?? '当前分组'}
-                      listState={inlineChannelListStateBySite[site.id] ?? 'loading'}
+                      listState={inlineChannelListStateBySite[site.id]?.state ?? 'loading'}
+                      refreshState={inlineChannelListStateBySite[site.id]}
                       matchState={matchState}
                       channel={matchedChannel}
                       channels={matchedChannels}
@@ -893,6 +974,7 @@ export function OverviewPage(props: OverviewProps) {
                           ? void loadInlineDetail(site.id, matchedChannel.id, true)
                           : void loadInlineChannels(site.id, true)
                       }
+                      onListRetry={() => void loadInlineChannels(site.id, true, true)}
                     />
                     <div className="site-card-actions">
                       <RechargeRatioControl
@@ -961,7 +1043,7 @@ export function OverviewPage(props: OverviewProps) {
           siteName={liveSites.find((site) => site.id === channelPopover.siteId)?.name ?? '当前站点'}
           cache={channelStatusCacheBySite[channelPopover.siteId]}
           loadChannels={(force) =>
-            channelStatusLoaderRef.current!.loadChannels(channelPopover.siteId, force)
+            channelStatusLoaderRef.current!.loadChannels(channelPopover.siteId, force, force)
           }
           loadDetail={(channelId, force) =>
             channelStatusLoaderRef.current!.loadDetail(channelPopover.siteId, channelId, force)
@@ -1008,7 +1090,14 @@ export function OverviewPage(props: OverviewProps) {
             }));
             setInlineChannelListStateBySite((current) => ({
               ...current,
-              [channelPopover.siteId]: channels.length ? 'success' : 'no-data',
+              [channelPopover.siteId]: reduceInlineChannelRefreshState(
+                current[channelPopover.siteId],
+                {
+                  type: 'refresh-succeeded',
+                  now: Date.now(),
+                  state: channels.length ? 'success' : 'no-data',
+                },
+              ),
             }));
           }}
           onStateChange={(state) => {
@@ -1019,7 +1108,18 @@ export function OverviewPage(props: OverviewProps) {
             if (state !== 'supported')
               setInlineChannelListStateBySite((current) => ({
                 ...current,
-                [channelPopover.siteId]: state === 'unsupported' ? 'unsupported' : 'error',
+                [channelPopover.siteId]:
+                  state === 'unsupported'
+                    ? reduceInlineChannelRefreshState(current[channelPopover.siteId], {
+                        type: 'refresh-succeeded',
+                        now: Date.now(),
+                        state: 'unsupported',
+                      })
+                    : reduceInlineChannelRefreshState(current[channelPopover.siteId], {
+                        type: 'refresh-failed',
+                        now: Date.now(),
+                        reason: 'network',
+                      }),
               }));
           }}
           onClose={() => setChannelPopover(undefined)}
