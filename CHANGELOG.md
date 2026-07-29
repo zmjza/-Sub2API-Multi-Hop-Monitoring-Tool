@@ -19,7 +19,7 @@
 ### 验证与产物
 
 - Prettier、ESLint、TypeScript、40 个 Vitest 文件/261 项、生产构建和 Electron E2E 6/6 通过；macOS 真机完成 GeeTest 添加、通知视觉、两个渠道轮询周期和重启恢复。
-- macOS ARM64 DMG 通过镜像和 ad-hoc 签名校验；Windows x64 NSIS 完成交叉构建、PE/asar/版本/入口检查。最终 Release 资产 SHA-256 以统一发布命令生成的 manifest 为准。
+- macOS ARM64 DMG 通过镜像和 ad-hoc 签名校验，Release SHA-256 为 `a913239d462b6db46d77c66e7e0cef77f50a33fbf25cee01661d9e0bbeba7a97`；Windows x64 NSIS 完成交叉构建、PE/asar/版本/入口检查，Release SHA-256 为 `35cd3ad40bb031084217bb02032c182c5bbc1ed3e93b505ea7d3a413be92f74f`。
 - 依赖审计已应用所有非破坏性补丁；仍报告 16 个仅位于 `electron-builder` 打包工具链的高危传递依赖。npm 的唯一自动方案会破坏性降级打包器，因此本版不采用；应用运行时不加载该工具链。
 - Windows 无可用真机时只记录交叉构建与结构校验证据，不表述为 Windows 真机通过。
 
