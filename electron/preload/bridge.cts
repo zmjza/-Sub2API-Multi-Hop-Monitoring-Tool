@@ -11,8 +11,9 @@ const desktopBridge: DesktopBridge = {
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),
     delete: (siteId) => ipcRenderer.invoke('sites:delete', siteId),
     addAndVerify: (input) => ipcRenderer.invoke('sites:add-and-verify', input),
-    addWithInteractiveVerification: (input) =>
-      ipcRenderer.invoke('sites:add-with-interactive-verification', input),
+    addWithInteractiveVerification: (input, provider) =>
+      ipcRenderer.invoke('sites:add-with-interactive-verification', { ...input, provider }),
+    reverify: (siteId) => ipcRenderer.invoke('sites:reverify', siteId),
     addBatch: (input) => ipcRenderer.invoke('sites:add-batch', input),
     refresh: (siteId) => ipcRenderer.invoke('sites:refresh', siteId),
     refreshAll: () => ipcRenderer.invoke('sites:refresh-all'),

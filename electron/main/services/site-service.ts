@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { AppDatabase } from '../storage/database.js';
 import { CredentialVault } from '../storage/credential-vault.js';
 import { normalizeSiteUrl } from '../adapters/url.js';
-import { Sub2ApiClient } from '../adapters/http-client.js';
+import { getInteractiveVerificationProvider, Sub2ApiClient } from '../adapters/http-client.js';
 import { Sub2ApiAdapter } from '../adapters/sub2api-adapter.js';
 import { aggregateSnapshots } from '../domain/snapshot.js';
 import { selectDefaultKey } from '../domain/key-policy.js';
@@ -25,6 +25,7 @@ import type {
   ApiKeyManagementPayload,
   ManagedApiKey,
   ApiKeyBatchUsage,
+  InteractiveVerificationProvider,
 } from '../../shared/contracts.js';
 import {
   apiKeySummarySchema,
@@ -48,6 +49,20 @@ interface VerifiedSession {
   refreshToken?: string;
 }
 
+export interface InteractiveAuthContext {
+  input: SiteInput;
+  provider: InteractiveVerificationProvider;
+}
+
+export class InteractiveVerificationRequiredError extends Error {
+  readonly code = 'INTERACTIVE_VERIFICATION_REQUIRED';
+
+  constructor(readonly provider: InteractiveVerificationProvider) {
+    super('需要完成安全验证');
+    this.name = 'InteractiveVerificationRequiredError';
+  }
+}
+
 export class SiteService {
   private readonly snapshots = new Map<string, SiteSnapshot>();
   private readonly errors = new Map<string, string[]>();
@@ -69,6 +84,7 @@ export class SiteService {
     string,
     { fetchedAt: number; todayActualCost?: number; last30DaysActualCost?: number }
   >();
+  private siteSaveQueue: Promise<void> = Promise.resolve();
   private progressListener?: (
     siteId: string,
     phase: 'profile' | 'keys' | 'groups' | 'rates' | 'usage',
@@ -245,7 +261,7 @@ export class SiteService {
           }
         }
         if (!recovered) {
-          if (credential.authenticationMode === 'geetest')
+          if (isInteractiveAuthenticationMode(credential.authenticationMode))
             throw { code: 'AUTH_REQUIRED', message: '需要重新验证', retryable: false };
           const relogin = await client.login(credential.account, credential.password);
           this.vault.write(siteId, {
@@ -298,19 +314,33 @@ export class SiteService {
   deleteSite(siteId: string): DashboardSnapshot {
     if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
     this.vault.remove(siteId);
-    this.db.setSiteNote(siteId, '');
+    this.db.deleteSetting(`site:${siteId}:note`);
+    this.db.deleteSetting(`channelAssociations:${siteId}`);
     this.db.deleteSetting(`site:${siteId}:keyPreference`);
     this.db.deleteSetting(`site:${siteId}:keyCache`);
     this.db.deleteSetting(`site:${siteId}:rateCache`);
     this.db.deleteSetting(`site:${siteId}:rechargeRatio`);
+    if (this.db.getSetting<string | undefined>('currentSiteId', undefined) === siteId)
+      this.db.deleteSetting('currentSiteId');
+    const notificationSettings = this.db.getNotificationSettings();
+    if (Object.prototype.hasOwnProperty.call(notificationSettings.sites, siteId)) {
+      const sites = Object.fromEntries(
+        Object.entries(notificationSettings.sites).filter(([id]) => id !== siteId),
+      );
+      this.db.setNotificationSettings({ ...notificationSettings, sites });
+    }
     this.db.deleteSite(siteId);
     this.snapshots.delete(siteId);
     this.errors.delete(siteId);
+    this.durations.delete(siteId);
     this.runtime.delete(siteId);
     this.automaticRuntime.delete(siteId);
     this.keys.delete(siteId);
     this.rateStates.delete(siteId);
+    this.inflightRefresh.delete(siteId);
     this.inflightRateRefresh.delete(siteId);
+    this.apiKeyWrites.delete(siteId);
+    this.apiKeyUsageCache.delete(siteId);
     return this.listSites();
   }
 
@@ -318,26 +348,173 @@ export class SiteService {
     const normalized = this.normalizedNewSite(input);
     const client = new Sub2ApiClient(normalized.apiBaseUrl);
     const session = await client.login(input.account, input.password).catch((error: unknown) => {
+      const provider = getInteractiveVerificationProvider(error);
+      if (provider) throw new InteractiveVerificationRequiredError(provider);
       throw new Error(siteInputErrorMessage(error));
     });
     return this.verifyAndSave(input, normalized, session, 'password');
   }
 
-  async requiresInteractiveVerification(input: SiteInput): Promise<boolean> {
+  async requiresInteractiveVerification(
+    input: SiteInput,
+  ): Promise<InteractiveVerificationProvider | undefined> {
     const normalized = this.normalizedNewSite(input);
     try {
-      return (await new Sub2ApiClient(normalized.apiBaseUrl).authenticationMode()).geetestEnabled;
+      const mode = await new Sub2ApiClient(normalized.apiBaseUrl).authenticationMode();
+      return mode.interactiveVerification.required
+        ? mode.interactiveVerification.provider
+        : undefined;
     } catch {
-      return false;
+      return undefined;
     }
   }
 
   async addWithInteractiveSession(
     input: SiteInput,
     session: VerifiedSession,
+    provider: InteractiveVerificationProvider = 'geetest',
   ): Promise<SiteSummary> {
     const normalized = this.normalizedNewSite(input);
-    return this.verifyAndSave(input, normalized, session, 'geetest');
+    return this.verifyAndSave(input, normalized, session, 'interactive', provider);
+  }
+
+  getInteractiveAuthContext(siteId: string): InteractiveAuthContext {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    let credential: ReturnType<CredentialVault['read']>;
+    try {
+      credential = site ? this.vault.read(site.id) : undefined;
+    } catch {
+      throw new Error('INTERACTIVE_VERIFICATION_UNAVAILABLE');
+    }
+    if (!site || !credential) throw new Error('SITE_NOT_FOUND');
+    const provider =
+      credential.authenticationProvider ??
+      (credential.authenticationMode === 'geetest' ? 'geetest' : undefined);
+    if (!provider || !isInteractiveAuthenticationMode(credential.authenticationMode))
+      throw new Error('INTERACTIVE_VERIFICATION_UNAVAILABLE');
+    return {
+      input: {
+        name: site.name,
+        url: site.baseUrl,
+        account: credential.account,
+        password: credential.password,
+      },
+      provider,
+    };
+  }
+
+  async reverifyWithInteractiveSession(
+    siteId: string,
+    session: VerifiedSession,
+    provider: InteractiveVerificationProvider,
+  ): Promise<SiteSummary> {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    let credential: ReturnType<CredentialVault['read']>;
+    try {
+      credential = site ? this.vault.read(site.id) : undefined;
+    } catch {
+      throw new Error('INTERACTIVE_VERIFICATION_UNAVAILABLE');
+    }
+    if (!site || !credential) throw new Error('SITE_NOT_FOUND');
+    const started = Date.now();
+    const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+    const adapter = new Sub2ApiAdapter(client, undefined, (phase) =>
+      this.progressListener?.(siteId, phase),
+    );
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const core = await adapter.readCore(session.accessToken, timezone);
+    assertProfileIdentity(credential.account, core.profile.account);
+    const requestsByKey = await adapter.readTodayRequestsByKey(
+      session.accessToken,
+      core.keys,
+      timezone,
+    );
+    const snapshot = createSnapshot(siteId, core.profile.balance, core.usage);
+    const nextKeys = withRates(core.keys, core.rates);
+    apiKeySummarySchema.array().parse(nextKeys);
+    const previousSnapshot = this.snapshots.get(siteId);
+    const previousPersistedSnapshot = this.db.listSnapshots().find((row) => row.siteId === siteId);
+    const previousKeys = this.keys.get(siteId);
+    const previousPersistedKeyCache = this.db.getSetting<unknown | undefined>(
+      `site:${siteId}:keyCache`,
+      undefined,
+    );
+    const previousPersistedKeyPreference = this.db.getSetting<KeyPreference | undefined>(
+      `site:${siteId}:keyPreference`,
+      undefined,
+    );
+    const previousRuntime = this.runtime.get(siteId);
+    const previousAutomaticRuntime = this.automaticRuntime.get(siteId);
+    const previousErrors = this.errors.get(siteId);
+    const previousDurations = this.durations.get(siteId);
+    let credentialWriteAttempted = false;
+    try {
+      this.snapshots.set(siteId, snapshot);
+      this.db.saveSnapshot(
+        siteId,
+        JSON.stringify(snapshot),
+        snapshot.fetchedAt,
+        snapshot.fetchedAt + 120_000,
+      );
+      this.cacheKeys(siteId, nextKeys);
+      this.updateRuntimeKey(siteId, core.keys, core.rates, requestsByKey);
+      this.errors.delete(siteId);
+      this.durations.set(
+        siteId,
+        [...(this.durations.get(siteId) ?? []), Date.now() - started].slice(-10),
+      );
+      credentialWriteAttempted = true;
+      this.vault.write(siteId, {
+        ...credential,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        authenticationMode: 'interactive',
+        authenticationProvider: provider,
+      });
+      return this.toSummary(site);
+    } catch (error) {
+      if (credentialWriteAttempted) {
+        try {
+          this.vault.write(siteId, credential);
+        } catch {
+          /* Preserve the original error; secure storage may be temporarily unavailable. */
+        }
+      }
+      if (previousSnapshot) this.snapshots.set(siteId, previousSnapshot);
+      else this.snapshots.delete(siteId);
+      try {
+        if (previousPersistedSnapshot) {
+          this.db.saveSnapshot(
+            siteId,
+            previousPersistedSnapshot.snapshotJson,
+            previousPersistedSnapshot.fetchedAt,
+            previousPersistedSnapshot.expiresAt,
+          );
+        } else {
+          this.db.deleteSnapshot(siteId);
+        }
+        if (previousPersistedKeyCache === undefined)
+          this.db.deleteSetting(`site:${siteId}:keyCache`);
+        else this.db.setSetting(`site:${siteId}:keyCache`, previousPersistedKeyCache);
+        if (previousPersistedKeyPreference === undefined)
+          this.db.deleteSetting(`site:${siteId}:keyPreference`);
+        else this.db.setSetting(`site:${siteId}:keyPreference`, previousPersistedKeyPreference);
+      } catch {
+        /* Preserve the original error; rollback is best-effort at the storage boundary. */
+      }
+      if (previousKeys) this.keys.set(siteId, previousKeys);
+      else this.keys.delete(siteId);
+      if (previousRuntime) this.runtime.set(siteId, previousRuntime);
+      else this.runtime.delete(siteId);
+      if (previousAutomaticRuntime) this.automaticRuntime.set(siteId, previousAutomaticRuntime);
+      else this.automaticRuntime.delete(siteId);
+      if (previousErrors) this.errors.set(siteId, previousErrors);
+      else this.errors.delete(siteId);
+      if (previousDurations) this.durations.set(siteId, previousDurations);
+      else this.durations.delete(siteId);
+      this.keyContextListener?.(siteId);
+      throw error;
+    }
   }
 
   private normalizedNewSite(input: SiteInput): ReturnType<typeof normalizeSiteUrl> {
@@ -347,16 +524,32 @@ export class SiteService {
     } catch {
       throw new Error('站点地址无效');
     }
-    if (this.db.listSites().some((site) => site.baseUrl === normalized.baseUrl))
-      throw new Error('站点已存在');
+    this.assertUniqueSiteAccount(normalized.baseUrl, input.account);
     return normalized;
+  }
+
+  private assertUniqueSiteAccount(baseUrl: string, account: string): void {
+    const identity = normalizeAccountIdentity(account);
+    for (const site of this.db.listSites()) {
+      if (site.baseUrl !== baseUrl) continue;
+      let credential;
+      try {
+        credential = this.vault.read(site.id);
+      } catch {
+        throw new Error('SITE_ACCOUNT_IDENTITY_UNAVAILABLE');
+      }
+      if (!credential?.account) throw new Error('SITE_ACCOUNT_IDENTITY_UNAVAILABLE');
+      if (normalizeAccountIdentity(credential.account) === identity)
+        throw new Error('SITE_DUPLICATE_ACCOUNT');
+    }
   }
 
   private async verifyAndSave(
     input: SiteInput,
     normalized: ReturnType<typeof normalizeSiteUrl>,
     session: VerifiedSession,
-    authenticationMode: 'password' | 'geetest',
+    authenticationMode: 'password' | 'interactive',
+    authenticationProvider?: InteractiveVerificationProvider,
   ): Promise<SiteSummary> {
     const id = randomUUID();
     const started = Date.now();
@@ -369,6 +562,7 @@ export class SiteService {
       .catch((error: unknown) => {
         throw new Error(siteInputErrorMessage(error));
       });
+    assertProfileIdentity(input.account, core.profile.account);
     let channelCapability: string;
     try {
       channelCapability = (await adapter.readOptionalChannels(session.accessToken)).state;
@@ -384,48 +578,91 @@ export class SiteService {
       .catch((error: unknown) => {
         throw new Error(siteInputErrorMessage(error));
       });
-    this.db.saveSite({
-      id,
-      name: input.name,
-      baseUrl: normalized.baseUrl,
-      apiPrefix: normalized.apiPrefix,
+    return this.serializeSiteSave(async () => {
+      this.assertUniqueSiteAccount(normalized.baseUrl, input.account);
+      let persistenceStarted = false;
+      try {
+        this.db.saveSite({
+          id,
+          name: input.name,
+          baseUrl: normalized.baseUrl,
+          apiPrefix: normalized.apiPrefix,
+        });
+        persistenceStarted = true;
+        const capabilities = {
+          profile: 'supported',
+          keys: 'supported',
+          groups: 'supported',
+          rates: 'supported',
+          usageStats: 'supported',
+          usageList: 'unknown',
+          channelMonitors: channelCapability,
+        };
+        this.db.setCapabilities(id, capabilities);
+        this.vault.write(id, {
+          account: input.account,
+          password: input.password,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          authenticationMode,
+          authenticationProvider,
+        });
+        this.db.saveCredentialReference(id, maskAccount(input.account), `credential:${id}`);
+        const snapshot = createSnapshot(id, core.profile.balance, core.usage);
+        this.snapshots.set(id, snapshot);
+        this.db.saveSnapshot(
+          id,
+          JSON.stringify(snapshot),
+          snapshot.fetchedAt,
+          snapshot.fetchedAt + 120_000,
+        );
+        this.durations.set(id, [Date.now() - started]);
+        this.cacheKeys(id, withRates(core.keys, core.rates));
+        this.updateRuntimeKey(id, core.keys, core.rates, requestsByKey);
+        return this.toSummary({
+          id,
+          name: input.name,
+          baseUrl: normalized.baseUrl,
+          apiPrefix: normalized.apiPrefix,
+          capabilities,
+        });
+      } catch (error) {
+        if (persistenceStarted) {
+          try {
+            this.vault.remove(id);
+          } catch {
+            /* Best-effort cleanup; the site is still removed below. */
+          }
+          this.db.deleteSite(id);
+          this.db.deleteSetting(`site:${id}:keyCache`);
+          this.db.deleteSetting(`site:${id}:keyPreference`);
+          this.db.deleteSetting(`site:${id}:rateCache`);
+          this.db.deleteSetting(`site:${id}:rechargeRatio`);
+        }
+        this.snapshots.delete(id);
+        this.errors.delete(id);
+        this.durations.delete(id);
+        this.runtime.delete(id);
+        this.automaticRuntime.delete(id);
+        this.keys.delete(id);
+        this.rateStates.delete(id);
+        throw error;
+      }
     });
-    const capabilities = {
-      profile: 'supported',
-      keys: 'supported',
-      groups: 'supported',
-      rates: 'supported',
-      usageStats: 'supported',
-      usageList: 'unknown',
-      channelMonitors: channelCapability,
-    };
-    this.db.setCapabilities(id, capabilities);
-    this.vault.write(id, {
-      account: input.account,
-      password: input.password,
-      accessToken: session.accessToken,
-      refreshToken: session.refreshToken,
-      authenticationMode,
+  }
+
+  private async serializeSiteSave<T>(task: () => Promise<T>): Promise<T> {
+    const previous = this.siteSaveQueue;
+    let release!: () => void;
+    this.siteSaveQueue = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    this.db.saveCredentialReference(id, maskAccount(input.account), `credential:${id}`);
-    const snapshot = createSnapshot(id, core.profile.balance, core.usage);
-    this.snapshots.set(id, snapshot);
-    this.db.saveSnapshot(
-      id,
-      JSON.stringify(snapshot),
-      snapshot.fetchedAt,
-      snapshot.fetchedAt + 120_000,
-    );
-    this.durations.set(id, [Date.now() - started]);
-    this.cacheKeys(id, withRates(core.keys, core.rates));
-    this.updateRuntimeKey(id, core.keys, core.rates, requestsByKey);
-    return this.toSummary({
-      id,
-      name: input.name,
-      baseUrl: normalized.baseUrl,
-      apiPrefix: normalized.apiPrefix,
-      capabilities,
-    });
+    await previous;
+    try {
+      return await task();
+    } finally {
+      release();
+    }
   }
 
   async addBatch(
@@ -448,16 +685,22 @@ export class SiteService {
         } catch {
           throw new Error('站点地址无效');
         }
-        const site = await this.addAndVerify({
+        const siteInput = {
           name: host,
           url,
           account: input.account,
           password: input.password,
-        });
+        };
+        const provider = await this.requiresInteractiveVerification(siteInput);
+        if (provider) throw new InteractiveVerificationRequiredError(provider);
+        const site = await this.addAndVerify(siteInput);
         successes.push(site);
         onProgress({ current: index + 1, total: input.urls.length, url, status: 'success' });
       } catch (error) {
-        const message = safeMessage(error);
+        const message =
+          error instanceof InteractiveVerificationRequiredError
+            ? '需要单独完成安全验证'
+            : safeMessage(error);
         failures.push({ url, error: message });
         onProgress({
           current: index + 1,
@@ -489,15 +732,28 @@ export class SiteService {
     const started = Date.now();
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const accessToken = credential.accessToken;
-    if (!accessToken && credential.authenticationMode === 'geetest') {
+    if (!accessToken && isInteractiveAuthenticationMode(credential.authenticationMode)) {
       this.errors.set(siteId, ['auth-required']);
       return this.toSummary(site);
     }
     let session = accessToken
       ? { accessToken, refreshToken: credential.refreshToken, expiresAt: Date.now() + 60_000 }
       : undefined;
-    if (!session || !accessToken)
-      session = await client.login(credential.account, credential.password);
+    if (!session || !accessToken) {
+      try {
+        session = await client.login(credential.account, credential.password);
+      } catch (error) {
+        const provider = getInteractiveVerificationProvider(error);
+        if (provider)
+          this.vault.write(siteId, {
+            ...credential,
+            authenticationMode: 'interactive',
+            authenticationProvider: provider,
+          });
+        this.errors.set(siteId, ['auth-required']);
+        return this.toSummary(site);
+      }
+    }
     const adapter = new Sub2ApiAdapter(
       client,
       undefined,
@@ -529,6 +785,12 @@ export class SiteService {
       );
       return this.toSummary(site);
     } catch (error) {
+      if (isAuthError(error) && isInteractiveAuthenticationMode(credential.authenticationMode)) {
+        if (!session.refreshToken) {
+          this.errors.set(siteId, ['auth-required']);
+          return this.toSummary(site);
+        }
+      }
       if (isAuthError(error) && session.refreshToken) {
         try {
           const renewed = await client.refresh(session.refreshToken);
@@ -557,7 +819,7 @@ export class SiteService {
           this.errors.delete(siteId);
           return this.toSummary(site);
         } catch {
-          if (credential.authenticationMode === 'geetest') {
+          if (isInteractiveAuthenticationMode(credential.authenticationMode)) {
             this.errors.set(siteId, ['auth-required']);
             return this.toSummary(site);
           }
@@ -587,7 +849,14 @@ export class SiteService {
             this.updateRuntimeKey(siteId, core.keys, core.rates, requestsByKey);
             this.errors.delete(siteId);
             return this.toSummary(site);
-          } catch {
+          } catch (reloginError) {
+            const provider = getInteractiveVerificationProvider(reloginError);
+            if (provider)
+              this.vault.write(siteId, {
+                ...credential,
+                authenticationMode: 'interactive',
+                authenticationProvider: provider,
+              });
             this.errors.set(siteId, ['auth-required']);
             return this.toSummary(site);
           }
@@ -941,10 +1210,26 @@ export class SiteService {
     const errors = this.errors.get(site.id) ?? [];
     const partial = Object.values(site.capabilities ?? {}).includes('error');
     const staleAfterMs = this.db.getAppSettings().staleAfterMinutes * 60_000;
+    let credential: ReturnType<CredentialVault['read']>;
+    try {
+      credential = this.vault.read(site.id);
+    } catch {
+      credential = undefined;
+    }
+    const interactiveVerificationProvider = credential
+      ? (credential.authenticationProvider ??
+        (credential.authenticationMode === 'geetest' ? 'geetest' : undefined))
+      : undefined;
     return {
       id: site.id,
       name: site.name,
       baseUrl: site.baseUrl,
+      accountLabel: this.db.getCredentialReference(site.id)?.accountLabel,
+      interactiveVerificationProvider: isInteractiveAuthenticationMode(
+        credential?.authenticationMode,
+      )
+        ? interactiveVerificationProvider
+        : undefined,
       balance: snapshot?.balance,
       todayTokens: snapshot?.todayTokens,
       todayActualCost: snapshot?.todayActualCost,
@@ -1055,6 +1340,23 @@ function maskAccount(value: string): string {
   if (value.includes('@')) return `${value.slice(0, 2)}***${value.slice(value.indexOf('@'))}`;
   return `${value.slice(0, 2)}***`;
 }
+
+export function normalizeAccountIdentity(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.includes('@') ? trimmed.toLowerCase() : trimmed;
+}
+
+export function assertProfileIdentity(expected: string, returned: string | undefined): void {
+  if (returned && normalizeAccountIdentity(expected) !== normalizeAccountIdentity(returned))
+    throw new Error('SITE_ACCOUNT_IDENTITY_MISMATCH');
+}
+
+function isInteractiveAuthenticationMode(
+  mode: 'password' | 'geetest' | 'interactive' | undefined,
+): boolean {
+  return mode === 'geetest' || mode === 'interactive';
+}
+
 function safeMessage(error: unknown): string {
   return typeof error === 'object' &&
     error !== null &&
@@ -1076,7 +1378,13 @@ function siteInputErrorMessage(error: unknown): string {
   if (code === 'NETWORK_TIMEOUT') return '网络超时';
   if (code === 'UNSUPPORTED_CAPABILITY' || code === 'INCOMPATIBLE_RESPONSE') return '接口不兼容';
   if (code === 'AUTH_REQUIRED') return '账号状态异常或需要重新登录';
-  if (code === 'GEETEST_REQUIRED') return 'GEETEST_REQUIRED';
+  if (code === 'SITE_DUPLICATE_ACCOUNT') return '该站点已添加此用户名';
+  if (code === 'SITE_ACCOUNT_IDENTITY_UNAVAILABLE') return '无法确认已有站点的用户名，请先检查凭据';
+  if (code === 'SITE_ACCOUNT_IDENTITY_MISMATCH') return '登录账号与添加站点用户名不一致';
+  if (code === 'INTERACTIVE_VERIFICATION_UNAVAILABLE')
+    return '无法确认安全验证方式，请重新添加站点';
+  if (code === 'INTERACTIVE_VERIFICATION_REQUIRED' || code === 'GEETEST_REQUIRED')
+    return '需要完成安全验证';
   return '站点地址无效、网络不可用或服务异常';
 }
 

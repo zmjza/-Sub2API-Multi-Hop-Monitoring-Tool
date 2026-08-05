@@ -1,9 +1,12 @@
+import type { InteractiveVerificationProvider } from '../../shared/contracts.js';
+
 export interface CredentialValue {
   account: string;
   password: string;
   accessToken?: string;
   refreshToken?: string;
-  authenticationMode?: 'password' | 'geetest';
+  authenticationMode?: 'password' | 'geetest' | 'interactive';
+  authenticationProvider?: InteractiveVerificationProvider;
 }
 
 export interface CredentialCodec {

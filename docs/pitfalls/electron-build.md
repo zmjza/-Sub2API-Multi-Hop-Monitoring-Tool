@@ -1,5 +1,40 @@
 # Electron 构建避坑
 
+## SemVer 递增后测试不能硬编码上一版本
+
+**现象**
+
+版本从 `1.7.3` 递增到 `1.7.4` 后，业务和构建均正常，但 Electron E2E 的版本徽标断言仍期待 `v1.7.3`，导致 6 项中仅版本断言失败；构建清单单测也出现同类旧版本断言。
+
+**根因**
+
+测试把发布版本写成固定字符串，没有从当前清单读取版本，也没有验证 CHANGELOG 的首个版本标题与清单同步。
+
+**正确做法**
+
+E2E 从当前 `package.json` 读取期望版本；构建清单测试校验 SemVer 格式并确认 CHANGELOG 首个 `## <version> -` 标题匹配。每次递增版本后串行重跑 Vitest、构建和 Electron E2E。
+
+**验证方式**
+
+运行 `npm test -- --run electron/build-config.test.ts`、`npm run build` 和 `npm run test:e2e`；1.7.4 本轮分别为 7 项通过、构建成功、E2E 6/6。
+
+**禁止事项**
+
+不要只替换测试中的旧版本字符串后跳过完整 E2E；不要把旧版本断言失败写成业务回归；不要在构建和 E2E 并行时判断 `dist/` 产物。
+
+**相关文件或命令**
+
+- `electron/build-config.test.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `package.json`
+- `CHANGELOG.md`
+- `npm run build`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有 Electron 版本徽标、构建清单、安装包版本和发布前 E2E 断言。
+
 ## 总览内容变高后页面切换必须操作真实滚动容器
 
 **现象**
@@ -954,3 +989,70 @@ GitHub `releases/latest` 请求可能命中缓存；同时 preload 中硬编码�
 **适用范围**
 
 所有 GitHub Release 在线更新检查、版本徽标、设置页检查按钮和双平台安装包发布。
+
+## 应用退出必须等待 Chrome 会话清理完成
+
+**现象**
+
+应用触发 `before-quit` 后如果只启动异步清理而不阻止 Electron 默认退出，主进程可能先结束，Chrome 临时 Profile 和带远程调试端口的子进程来不及清理，随后真机测试会看到残留目录或残留进程。
+
+**根因**
+
+Electron 的 `before-quit` 回调不会等待异步 Promise；没有调用 `event.preventDefault()` 时，异步 `closeAllChromeAuthenticationSessions()` 只是后台启动，默认退出流程会继续执行。
+
+**正确做法**
+
+退出第一次触发时停止调度器和定时器，调用 `preventDefault()`，等待所有 Chrome 会话终止并删除临时 Profile，最后显式调用 `app.quit()`。用一次性门禁避免重复 `before-quit` 事件反复清理。
+
+**验证方式**
+
+运行 `app-shutdown.test.ts`，确认第一次退出只调用一次清理且默认退出被阻止；再运行打包应用 Chrome 烟测，关闭应用后检查本次 `sub2api-chrome-*` Profile 与带回环 CDP 参数的 Chrome 进程均不存在。
+
+**禁止事项**
+
+不要依赖 `before-quit` 中未等待的 async 回调；不要按进程名批量终止用户日常 Chrome；不要把历史临时目录或用户 Chrome Profile 当作本次会话清理对象。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/main/services/app-shutdown.ts`
+- `electron/main/services/app-shutdown.test.ts`
+- `electron/main/services/chrome-auth-window.ts`
+- `SUB2API_PACKAGED_EXECUTABLE=<app-executable> npm run test:e2e`
+
+**适用范围**
+
+所有 Electron 退出时需要等待外部子进程、临时目录、网络会话或安全凭据清理的流程。
+
+## macOS 临时目录不能硬编码为 `/tmp`
+
+**现象**
+
+真实打包应用启动 Chrome 登录器后，按 `/tmp/sub2api-chrome-*` 搜索不到进程，容易误判为 Chrome 没有启动。
+
+**根因**
+
+macOS 的 Node `os.tmpdir()` 通常返回 `/var/folders/...` 下的系统临时目录；应用实际创建的 Profile 名称仍包含 `sub2api-chrome-`，但路径不在 `/tmp`。
+
+**正确做法**
+
+真机观测使用进程参数中的 `sub2api-chrome-` 前缀和应用本次生成的 Profile 路径进行匹配，不要假设平台临时目录的固定前缀。清理验证必须同时检查带该 Profile 的 Chrome 进程和对应目录是否消失。
+
+**验证方式**
+
+运行打包应用的 Chrome 启动烟测，确认进程参数包含回环 CDP、独立 `sub2api-chrome-*` Profile；关闭应用后再次检查进程和目录均不存在。当前 1.7.10 证据位于 `real-test-evidence/macos-1.7.10-final/`，未记录真实账号或令牌。
+
+**禁止事项**
+
+不要把 `/tmp` 搜索失败写成应用启动失败；不要用进程名批量终止用户日常 Chrome；不要为了让测试通过修改应用的临时目录或关闭 Profile 清理。
+
+**相关文件或命令**
+
+- `electron/main/services/chrome-auth-window.ts`
+- `electron/main/services/chrome-auth-policy.ts`
+- `npm run pack`
+- `SUB2API_PACKAGED_EXECUTABLE=<app-executable> npm run test:e2e`
+
+**适用范围**
+
+macOS/Windows Chrome 真实启动、临时 Profile 隔离、CDP 进程观察和应用退出清理验收。

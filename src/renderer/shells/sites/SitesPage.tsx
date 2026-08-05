@@ -7,9 +7,13 @@ import {
   LoaderCircle,
   Plus,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import type { SitesProps } from './types';
-import type { SiteInput } from '../../../../electron/shared/contracts';
+import type {
+  InteractiveVerificationProvider,
+  SiteInput,
+} from '../../../../electron/shared/contracts';
 import { safeRendererError, useNotifications } from '../../notifications';
 import { siteDrafts } from './data';
 import './sites.css';
@@ -42,8 +46,12 @@ export function SitesPage(props: SitesProps) {
   const [batchResults, setBatchResults] = useState<
     Array<{ url: string; status: 'success' | 'failed'; error?: string }>
   >([]);
-  const [pendingVerification, setPendingVerification] = useState<SiteInput>();
+  const [pendingVerification, setPendingVerification] = useState<
+    | { mode: 'add'; input: SiteInput; provider: InteractiveVerificationProvider }
+    | { mode: 'reauth'; siteId: string; provider: InteractiveVerificationProvider }
+  >();
   const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const closeVerifyButtonRef = useRef<HTMLButtonElement>(null);
   const cancelVerifyButtonRef = useRef<HTMLButtonElement>(null);
   const verifyButtonRef = useRef<HTMLButtonElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -146,16 +154,18 @@ export function SitesPage(props: SitesProps) {
         return;
       }
       if (event.key !== 'Tab') return;
+      const close = closeVerifyButtonRef.current;
       const cancel = cancelVerifyButtonRef.current;
       const verify = verifyButtonRef.current;
-      if (!cancel || !verify) return;
-      if (event.shiftKey && document.activeElement === cancel) {
-        event.preventDefault();
-        verify.focus();
-      } else if (!event.shiftKey && document.activeElement === verify) {
-        event.preventDefault();
-        cancel.focus();
-      }
+      if (!close || !cancel || !verify) return;
+      const focusables = [close, cancel, verify];
+      const currentIndex = focusables.indexOf(document.activeElement as HTMLButtonElement);
+      if (currentIndex < 0) return;
+      /* Keep keyboard focus inside the modal while the provider is pending. */
+      event.preventDefault();
+      const nextIndex =
+        (currentIndex + (event.shiftKey ? -1 : 1) + focusables.length) % focusables.length;
+      focusables[nextIndex]?.focus();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -169,27 +179,48 @@ export function SitesPage(props: SitesProps) {
   };
 
   const cancelInteractiveVerification = () => {
+    const wasReauthentication = pendingVerification?.mode === 'reauth';
     setPendingVerification(undefined);
-    notify({ id: 'site-add', kind: 'info', message: '已暂不添加站点' });
+    setValidationPhase('等待开始');
+    notify({
+      id: 'site-add',
+      kind: 'info',
+      message: wasReauthentication ? '已取消重新验证，站点未修改' : '已暂不添加站点',
+    });
     window.setTimeout(() => submitButtonRef.current?.focus(), 0);
   };
 
   const startInteractiveVerification = async () => {
-    const input = pendingVerification;
-    if (!input || submitting) return;
+    const pending = pendingVerification;
+    if (!pending || submitting) return;
     setPendingVerification(undefined);
     setSubmitting(true);
     setValidationPhase('等待安全验证');
     notify({
       id: 'site-add',
       kind: 'loading',
-      message: '请在官方登录窗口完成安全验证…',
+      message:
+        pending.provider === 'turnstile'
+          ? '请在 Google Chrome 登录窗口完成人机验证和账号登录…'
+          : '请在官方登录窗口完成人机验证…',
     });
     try {
-      const result = await window.sub2apiDesktop?.sites.addWithInteractiveVerification(input);
-      if (!result || result.status !== 'added') throw new Error('站点验证未完成');
-      finishSiteAdd();
+      if (pending.mode === 'add') {
+        const result = await window.sub2apiDesktop?.sites.addWithInteractiveVerification(
+          pending.input,
+          pending.provider,
+        );
+        if (!result || result.status !== 'added') throw new Error('站点验证未完成');
+        finishSiteAdd();
+      } else {
+        const result = await window.sub2apiDesktop?.sites.reverify(pending.siteId);
+        if (!result) throw new Error('站点重新验证未完成');
+        setValidationPhase('验证完成');
+        notify({ id: 'site-add', kind: 'success', message: '安全验证成功，站点已恢复' });
+        window.dispatchEvent(new Event('sub2api:refresh'));
+      }
     } catch (error) {
+      if (shouldKeepInteractiveVerificationPrompt(error)) setPendingVerification(pending);
       const message = safeRendererError(error, '站点验证失败，请稍后重试');
       notify({
         id: 'site-add',
@@ -200,6 +231,23 @@ export function SitesPage(props: SitesProps) {
       setSubmitting(false);
       window.setTimeout(() => submitButtonRef.current?.focus(), 0);
     }
+  };
+  const beginSiteReverification = (site: {
+    id: string;
+    status: string;
+    interactiveVerificationProvider?: InteractiveVerificationProvider;
+  }) => {
+    if (submitting || site.status !== 'auth-required') return;
+    const provider = site.interactiveVerificationProvider;
+    if (!provider) {
+      notify({
+        id: `site-reverify:${site.id}`,
+        kind: 'error',
+        message: '无法确认验证方式，请重新添加站点',
+      });
+      return;
+    }
+    setPendingVerification({ mode: 'reauth', siteId: site.id, provider });
   };
   return (
     <section className={`sites-shell state-${props.state}`}>
@@ -389,7 +437,7 @@ export function SitesPage(props: SitesProps) {
                 if (!result) throw new Error('桌面服务不可用');
                 if (result.status === 'verification-required') {
                   dismiss('site-add');
-                  setPendingVerification(input);
+                  setPendingVerification({ mode: 'add', input, provider: result.provider });
                   return;
                 }
                 finishSiteAdd();
@@ -445,7 +493,12 @@ export function SitesPage(props: SitesProps) {
                 {!batchResults.length &&
                   props.dashboard?.sites.map((site) => (
                     <tr key={site.id}>
-                      <td>{site.baseUrl}</td>
+                      <td>
+                        <div>{site.baseUrl}</div>
+                        {site.accountLabel && (
+                          <small className="site-account-label">账号：{site.accountLabel}</small>
+                        )}
+                      </td>
                       <td>
                         <span
                           className={`verify-tag ${site.status === 'success' ? 'success' : site.status === 'auth-required' || site.status === 'error' ? 'failed' : 'pending'}`}
@@ -459,6 +512,16 @@ export function SitesPage(props: SitesProps) {
                       </td>
                       <td>
                         {site.errors[0] ?? (site.source === 'cache' ? '缓存数据' : '核心能力可用')}{' '}
+                        {site.status === 'auth-required' &&
+                          site.interactiveVerificationProvider && (
+                            <button
+                              className="site-reverify-button"
+                              type="button"
+                              onClick={() => beginSiteReverification(site)}
+                            >
+                              重新验证
+                            </button>
+                          )}
                         <button
                           className="site-delete-button"
                           onClick={() => {
@@ -890,13 +953,25 @@ export function SitesPage(props: SitesProps) {
             aria-labelledby="security-verification-title"
             aria-describedby="security-verification-description"
           >
+            <button
+              type="button"
+              className="security-verification-close"
+              ref={closeVerifyButtonRef}
+              aria-label="关闭安全验证"
+              title="关闭安全验证"
+              onClick={cancelInteractiveVerification}
+            >
+              <X size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
             <div className="security-verification-icon" aria-hidden="true">
               <ShieldCheck size={22} />
             </div>
             <div className="security-verification-copy">
               <h2 id="security-verification-title">需要完成安全验证</h2>
               <p id="security-verification-description">
-                该站点已启用 GeeTest。请在官方登录窗口完成人机验证，
+                {pendingVerification.provider === 'turnstile'
+                  ? '该站点已启用 Cloudflare Turnstile。请在 Google Chrome 登录窗口完成人机验证和账号登录，'
+                  : `该站点已启用 ${providerDisplayName(pendingVerification.provider)}。请在官方登录窗口完成人机验证，`}
                 <br />
                 验证成功后将自动继续添加站点。
               </p>
@@ -915,7 +990,7 @@ export function SitesPage(props: SitesProps) {
                 ref={verifyButtonRef}
                 onClick={() => void startInteractiveVerification()}
               >
-                开始验证
+                开始登录
               </button>
             </div>
           </section>
@@ -935,4 +1010,26 @@ function validationPhaseLabel(phase: string | undefined) {
       usage: '读取今日统计',
     }[phase ?? ''] ?? '登录与连通性'
   );
+}
+
+function providerDisplayName(provider: InteractiveVerificationProvider): string {
+  return provider === 'turnstile' ? 'Cloudflare Turnstile' : 'GeeTest';
+}
+
+export function shouldKeepInteractiveVerificationPrompt(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  return [
+    'INTERACTIVE_AUTH_TIMEOUT',
+    'INTERACTIVE_AUTH_LOAD_FAILED',
+    'INTERACTIVE_AUTH_CHALLENGE_NETWORK',
+    'CHROME_NOT_INSTALLED',
+    'CHROME_START_FAILED',
+    'CHROME_CDP_UNAVAILABLE',
+    'CHROME_CLOSED',
+    'CHROME_AUTH_TIMEOUT',
+    'CHROME_AUTH_TOKEN_NOT_FOUND',
+    'CHROME_AUTH_ORIGIN_BLOCKED',
+    'CHROME_AUTH_FAILED',
+    'CHROME_AUTH_ALREADY_RUNNING',
+  ].some((code) => raw.includes(code));
 }

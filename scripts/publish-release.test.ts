@@ -7,8 +7,18 @@ describe('publish release command', () => {
       notes: '修复更新问题',
       testOnly: true,
       dryRun: false,
+      reuseArtifacts: false,
     });
     expect(() => parseArgs([])).toThrow('必须提供 --notes');
+  });
+
+  it('supports reusing a separately audited artifact set', () => {
+    expect(parseArgs(['--notes', '发布已审计产物', '--reuse-artifacts'])).toEqual({
+      notes: '发布已审计产物',
+      testOnly: false,
+      dryRun: false,
+      reuseArtifacts: true,
+    });
   });
 
   it('rejects invalid versions', () => {

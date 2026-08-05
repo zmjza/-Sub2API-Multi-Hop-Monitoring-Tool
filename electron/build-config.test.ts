@@ -18,9 +18,14 @@ interface PackageManifest {
 describe('electron-builder manifest', () => {
   it('keeps the public application version synchronized with the current release', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
+    const changelog = readFileSync('CHANGELOG.md', 'utf8');
     const preloadSource = readFileSync('electron/preload/bridge.cts', 'utf8');
+    const version = manifest.version;
 
-    expect(manifest.version).toBe('1.6.0');
+    expect(version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
+    expect(changelog.split('\n').find((line) => line.startsWith('## '))).toContain(
+      `## ${version} - `,
+    );
     expect(preloadSource).toContain("shellVersion: ipcRenderer.sendSync('app:version')");
   });
 

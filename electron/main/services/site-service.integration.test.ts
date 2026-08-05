@@ -15,6 +15,139 @@ afterEach(async () => {
 });
 
 describe('SiteService authentication recovery', () => {
+  it('blocks only the same account at the same normalized site address', async () => {
+    let loginRequests = 0;
+    const server = createServer((request, response) => {
+      if (request.url === '/api/v1/auth/login') loginRequests += 1;
+      response.statusCode = 401;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ message: 'invalid credentials' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'existing-site',
+      name: 'Existing',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('existing-site', {
+      account: 'Existing@Example.com',
+      password: 'runtime-only',
+      accessToken: 'existing-access',
+      refreshToken: 'existing-refresh',
+      authenticationMode: 'password',
+    });
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.addAndVerify({
+        name: 'Same account',
+        url: `http://127.0.0.1:${address.port}/api/v1/`,
+        account: ' existing@example.com ',
+        password: 'runtime-only',
+      }),
+    ).rejects.toThrow('SITE_DUPLICATE_ACCOUNT');
+    expect(loginRequests).toBe(0);
+
+    await expect(
+      service.addAndVerify({
+        name: 'Different account',
+        url: `http://127.0.0.1:${address.port}`,
+        account: 'other@example.com',
+        password: 'runtime-only',
+      }),
+    ).rejects.not.toThrow('SITE_DUPLICATE_ACCOUNT');
+    expect(loginRequests).toBe(1);
+  });
+
+  it('deletes only the selected account and all of its site-scoped state', () => {
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    for (const [id, account] of [
+      ['site-a', 'first@example.invalid'],
+      ['site-b', 'second@example.invalid'],
+    ] as const) {
+      db.saveSite({
+        id,
+        name: id,
+        baseUrl: 'https://same.invalid',
+        apiPrefix: '/api/v1',
+      });
+      vault.write(id, { account, password: 'runtime-only', accessToken: `${id}-access` });
+    }
+    db.setSiteNote('site-a', 'remove me');
+    db.setChannelAssociation('site-a', 'group-a', ['channel-a']);
+    db.setKeyCache('site-a', [
+      { id: 'key-a', name: 'A', maskedLabel: 'A · ••••', status: 'active' },
+    ]);
+    db.setKeyPreference('site-a', { mode: 'manual', keyId: 'key-a' });
+    db.setRateCache('site-a', { groups: [], fetchedAt: 100 });
+    db.setRechargeRatio('site-a', 10);
+    db.setChannelAssociation('site-b', 'group-b', ['channel-b']);
+    db.setSiteNote('site-b', 'keep me');
+    db.setNotificationSettings({
+      enabled: true,
+      threshold: 0.5,
+      cooldownMs: 1_000,
+      siteFailures: true,
+      channelFailures: true,
+      recoveryNotifications: true,
+      sites: {
+        'site-a': { enabled: true, threshold: 0.2 },
+        'site-b': { enabled: false, threshold: 0.8 },
+      },
+    });
+    db.setSetting('currentSiteId', 'site-a');
+    const service = new SiteService(db, vault);
+
+    expect(service.deleteSite('site-a').sites.map((site) => site.id)).toEqual(['site-b']);
+    expect(vault.read('site-a')).toBeUndefined();
+    expect(vault.read('site-b')?.accessToken).toBe('site-b-access');
+    expect(db.getSiteNote('site-a')).toBe('');
+    expect(db.getChannelAssociations('site-a')).toEqual([]);
+    expect(db.getKeyCache('site-a')).toEqual([]);
+    expect(db.getKeyPreference('site-a')).toEqual({ mode: 'auto' });
+    expect(db.getRateCache('site-a')).toEqual({ groups: [] });
+    expect(db.getRechargeRatio('site-a')).toBeUndefined();
+    expect(db.getChannelAssociations('site-b')).toHaveLength(1);
+    expect(db.getSiteNote('site-b')).toBe('keep me');
+    expect(db.getNotificationSettings().sites).toEqual({
+      'site-b': { enabled: false, threshold: 0.8 },
+    });
+    expect(db.getSetting('currentSiteId', undefined)).toBeUndefined();
+  });
+
   it('does not save a partial site when an interactive session cannot be validated', async () => {
     const server = createServer((_request, response) => {
       response.statusCode = 401;
@@ -100,6 +233,14 @@ describe('SiteService authentication recovery', () => {
     });
     const service = new SiteService(db, vault);
 
+    expect(service.getInteractiveAuthContext('geetest-site')).toMatchObject({
+      provider: 'geetest',
+      input: {
+        name: 'GeeTest',
+        account: 'safe@example.invalid',
+      },
+    });
+
     await expect(service.refresh('geetest-site')).resolves.toMatchObject({
       status: 'auth-required',
     });
@@ -110,6 +251,487 @@ describe('SiteService authentication recovery', () => {
       authenticationMode: 'geetest',
     });
   });
+
+  it('marks an interactive site auth-required when an expired token has no refresh token', async () => {
+    let loginCount = 0;
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      if (request.url === '/api/v1/auth/login') loginCount += 1;
+      response.statusCode = 401;
+      response.end(JSON.stringify({ message: 'expired' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'turnstile-site',
+      name: 'Turnstile',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('turnstile-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'expired-access',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    const service = new SiteService(db, vault);
+
+    await expect(service.refresh('turnstile-site')).resolves.toMatchObject({
+      status: 'auth-required',
+    });
+    expect(loginCount).toBe(0);
+  });
+
+  it('updates the existing site after interactive re-verification without creating a site', async () => {
+    const authorizationHeaders: string[] = [];
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      authorizationHeaders.push(String(request.headers.authorization ?? ''));
+      const url = request.url ?? '';
+      if (url === '/api/v1/user/profile')
+        return response.end(JSON.stringify({ data: { balance: 9, status: 'active' } }));
+      if (url === '/api/v1/keys') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/available') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: {} }));
+      if (url.startsWith('/api/v1/usage/stats'))
+        return response.end(JSON.stringify({ data: { total_requests: 0, total_tokens: 0 } }));
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'interactive-site',
+      name: 'Interactive',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('interactive-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'geetest',
+    });
+    const service = new SiteService(db, vault);
+
+    const result = await service.reverifyWithInteractiveSession(
+      'interactive-site',
+      { accessToken: 'new-access', refreshToken: 'new-refresh' },
+      'turnstile',
+    );
+
+    expect(result).toMatchObject({ id: 'interactive-site', status: 'success', balance: 9 });
+    expect(service.listSites().sites).toHaveLength(1);
+    expect(vault.read('interactive-site')).toMatchObject({
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    expect(authorizationHeaders).toEqual([
+      'Bearer new-access',
+      'Bearer new-access',
+      'Bearer new-access',
+      'Bearer new-access',
+      'Bearer new-access',
+    ]);
+  }, 20_000);
+
+  it('saves independent credentials for different accounts at the same normalized address', async () => {
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      const url = request.url ?? '';
+      if (url === '/api/v1/auth/login') {
+        let body = '';
+        request.on('data', (chunk) => (body += String(chunk)));
+        request.on('end', () => {
+          const account = JSON.parse(body).email as string;
+          response.end(
+            JSON.stringify({
+              code: 0,
+              data: {
+                access_token: `access-${account}`,
+                refresh_token: `refresh-${account}`,
+                expires_in: 60,
+                token_type: 'Bearer',
+                user: { id: account, role: 'user', balance: 8, status: 'active' },
+              },
+            }),
+          );
+        });
+        return;
+      }
+      if (url === '/api/v1/user/profile')
+        return response.end(JSON.stringify({ data: { balance: 8 } }));
+      if (url === '/api/v1/keys') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/available') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: {} }));
+      if (url.startsWith('/api/v1/usage/stats'))
+        return response.end(JSON.stringify({ data: { total_requests: 0, total_tokens: 0 } }));
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    const service = new SiteService(db, vault);
+    const base = `http://127.0.0.1:${address.port}`;
+
+    const first = await service.addAndVerify({
+      name: 'first',
+      url: `${base}/api/v1/`,
+      account: 'first@example.invalid',
+      password: 'runtime-only',
+    });
+    const second = await service.addAndVerify({
+      name: 'second',
+      url: base,
+      account: 'second@example.invalid',
+      password: 'runtime-only',
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(service.listSites().sites).toHaveLength(2);
+    expect(vault.read(first.id)?.accessToken).toBe('access-first@example.invalid');
+    expect(vault.read(second.id)?.accessToken).toBe('access-second@example.invalid');
+    expect(service.listSites().sites.map((site) => site.accountLabel)).toEqual([
+      'fi***@example.invalid',
+      'se***@example.invalid',
+    ]);
+  }, 20_000);
+
+  it('rolls back the site row when secure credential persistence fails', async () => {
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      const url = request.url ?? '';
+      if (url === '/api/v1/auth/login')
+        return response.end(
+          JSON.stringify({
+            code: 0,
+            data: {
+              access_token: 'access-value',
+              refresh_token: 'refresh-value',
+              expires_in: 60,
+              token_type: 'Bearer',
+              user: { id: 1, role: 'user', balance: 1, status: 'active' },
+            },
+          }),
+        );
+      if (url === '/api/v1/user/profile')
+        return response.end(JSON.stringify({ data: { balance: 1 } }));
+      if (url === '/api/v1/keys') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/available') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: {} }));
+      if (url.startsWith('/api/v1/usage/stats'))
+        return response.end(JSON.stringify({ data: { total_requests: 0, total_tokens: 0 } }));
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: () => {
+          throw new Error('SECURE_STORAGE_WRITE_FAILED');
+        },
+        decrypt: (value) => value.toString(),
+      },
+      { read: () => undefined, write: () => undefined, remove: () => undefined },
+    );
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.addAndVerify({
+        name: 'secure storage failure',
+        url: `http://127.0.0.1:${address.port}`,
+        account: 'safe@example.invalid',
+        password: 'runtime-only',
+      }),
+    ).rejects.toThrow();
+    expect(db.listSites()).toEqual([]);
+  }, 20_000);
+
+  it('keeps the previous credentials when interactive re-verification fails', async () => {
+    const server = createServer((_request, response) => {
+      response.statusCode = 401;
+      response.setHeader('content-type', 'application/json');
+      response.end(JSON.stringify({ message: 'expired' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'interactive-site',
+      name: 'Interactive',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('interactive-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.reverifyWithInteractiveSession(
+        'interactive-site',
+        { accessToken: 'failed-access', refreshToken: 'failed-refresh' },
+        'turnstile',
+      ),
+    ).rejects.toThrow();
+
+    expect(service.listSites().sites).toHaveLength(1);
+    expect(vault.read('interactive-site')).toMatchObject({
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationProvider: 'turnstile',
+    });
+  });
+
+  it('rolls back credentials and runtime state when re-verification persistence fails', async () => {
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      const url = request.url ?? '';
+      if (url === '/api/v1/user/profile')
+        return response.end(JSON.stringify({ data: { balance: 12, status: 'active' } }));
+      if (url === '/api/v1/keys') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/available') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: {} }));
+      if (url.startsWith('/api/v1/usage/stats'))
+        return response.end(JSON.stringify({ data: { total_requests: 4, total_tokens: 12 } }));
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'interactive-site',
+      name: 'Interactive',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('interactive-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    const oldSnapshot = {
+      siteId: 'interactive-site',
+      balance: 3,
+      todayTokens: 1,
+      todayActualCost: 0,
+      todayRequests: 1,
+      todayInputTokens: 1,
+      todayOutputTokens: 0,
+      todayCacheReadTokens: 0,
+      todayCacheCreationTokens: 0,
+      todayTotalCost: 0,
+      averageDurationMs: 10,
+      fetchedAt: Date.now() - 10_000,
+    };
+    db.saveSnapshot(
+      'interactive-site',
+      JSON.stringify(oldSnapshot),
+      oldSnapshot.fetchedAt,
+      oldSnapshot.fetchedAt + 120_000,
+    );
+    const originalSaveSnapshot = db.saveSnapshot.bind(db);
+    let snapshotWrites = 0;
+    db.saveSnapshot = (...args: Parameters<AppDatabase['saveSnapshot']>) => {
+      snapshotWrites += 1;
+      if (snapshotWrites === 1) throw new Error('SNAPSHOT_WRITE_FAILED');
+      return originalSaveSnapshot(...args);
+    };
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.reverifyWithInteractiveSession(
+        'interactive-site',
+        { accessToken: 'new-access', refreshToken: 'new-refresh' },
+        'turnstile',
+      ),
+    ).rejects.toThrow('SNAPSHOT_WRITE_FAILED');
+
+    expect(vault.read('interactive-site')).toMatchObject({
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    expect(db.listSnapshots()[0]?.snapshotJson).toBe(JSON.stringify(oldSnapshot));
+    expect(service.listSites().sites[0]).toMatchObject({
+      id: 'interactive-site',
+      balance: 3,
+      source: 'live',
+    });
+  }, 20_000);
+
+  it('rejects interactive re-verification when the logged-in profile belongs to another account', async () => {
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      const url = request.url ?? '';
+      if (url === '/api/v1/user/profile')
+        return response.end(
+          JSON.stringify({
+            data: { balance: 9, status: 'active', email: 'other@example.invalid' },
+          }),
+        );
+      if (url === '/api/v1/keys') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/available') return response.end(JSON.stringify({ data: [] }));
+      if (url === '/api/v1/groups/rates') return response.end(JSON.stringify({ data: {} }));
+      if (url.startsWith('/api/v1/usage/stats'))
+        return response.end(JSON.stringify({ data: { total_requests: 0, total_tokens: 0 } }));
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'identity-site',
+      name: 'Identity',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      apiPrefix: '/api/v1',
+    });
+    vault.write('identity-site', {
+      account: 'safe@example.invalid',
+      password: 'runtime-only',
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+      authenticationMode: 'interactive',
+      authenticationProvider: 'turnstile',
+    });
+    const service = new SiteService(db, vault);
+
+    await expect(
+      service.reverifyWithInteractiveSession(
+        'identity-site',
+        { accessToken: 'other-access', refreshToken: 'other-refresh' },
+        'turnstile',
+      ),
+    ).rejects.toThrow('SITE_ACCOUNT_IDENTITY_MISMATCH');
+
+    expect(vault.read('identity-site')).toMatchObject({
+      account: 'safe@example.invalid',
+      accessToken: 'old-access',
+      refreshToken: 'old-refresh',
+    });
+    expect(db.listSnapshots()).toEqual([]);
+  }, 20_000);
 
   it('maps preset usage periods to inclusive local calendar dates', () => {
     const now = new Date(2026, 6, 13, 13, 30, 0);
@@ -189,6 +811,123 @@ describe('SiteService authentication recovery', () => {
     expect(params.get('sort_by')).toBe('created_at');
     expect(params.get('sort_order')).toBe('asc');
     expect(params.has('sort')).toBe(false);
+  });
+
+  it('reports interactive verification as an individual batch failure and continues', async () => {
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      if (request.url === '/api/v1/auth/login') {
+        response.statusCode = 400;
+        response.end(JSON.stringify({ code: 'TURNSTILE_REQUIRED', message: 'challenge required' }));
+        return;
+      }
+      response.end(JSON.stringify({ data: {} }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      { read: () => undefined, write: () => undefined, remove: () => undefined },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    const service = new SiteService(db, vault);
+
+    const progress: Array<{ url: string; error?: string }> = [];
+    const result = await service.addBatch(
+      {
+        urls: [`http://127.0.0.1:${address.port}`, `http://127.0.0.1:${address.port}/api/v1`],
+        account: 'safe@example.invalid',
+        password: 'runtime-secret',
+      },
+      (value) => progress.push({ url: value.url, error: value.error }),
+    );
+
+    expect(result.successes).toHaveLength(0);
+    expect(result.failures).toEqual([
+      {
+        url: `http://127.0.0.1:${address.port}`,
+        error: '需要单独完成安全验证',
+      },
+      {
+        url: `http://127.0.0.1:${address.port}/api/v1`,
+        error: '需要单独完成安全验证',
+      },
+    ]);
+    expect(progress.map((item) => item.error)).toEqual([
+      '需要单独完成安全验证',
+      '需要单独完成安全验证',
+    ]);
+  });
+
+  it('does not bypass a public interactive requirement when batch login succeeds', async () => {
+    let loginRequests = 0;
+    const server = createServer((request, response) => {
+      response.setHeader('content-type', 'application/json');
+      if (request.url === '/api/v1/settings/public') {
+        response.end(JSON.stringify({ data: { turnstile_enabled: true } }));
+        return;
+      }
+      if (request.url === '/api/v1/auth/login') {
+        loginRequests += 1;
+        response.end(
+          JSON.stringify({
+            code: 0,
+            data: {
+              access_token: 'batch-access',
+              refresh_token: 'batch-refresh',
+              expires_in: 60,
+              token_type: 'Bearer',
+              user: { id: 1, role: 'user', balance: 2, status: 'active' },
+            },
+          }),
+        );
+        return;
+      }
+      response.statusCode = 404;
+      response.end(JSON.stringify({ message: 'unsupported' }));
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('server unavailable');
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      { read: () => undefined, write: () => undefined, remove: () => undefined },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    const service = new SiteService(db, vault);
+
+    const result = await service.addBatch({
+      urls: [`http://127.0.0.1:${address.port}`, `http://127.0.0.1:${address.port}/api/v1`],
+      account: 'safe@example.invalid',
+      password: 'runtime-secret',
+    });
+
+    expect(result.successes).toHaveLength(0);
+    expect(result.failures).toEqual([
+      {
+        url: `http://127.0.0.1:${address.port}`,
+        error: '需要单独完成安全验证',
+      },
+      {
+        url: `http://127.0.0.1:${address.port}/api/v1`,
+        error: '需要单独完成安全验证',
+      },
+    ]);
+    expect(loginRequests).toBe(0);
+    expect(service.listSites().sites).toHaveLength(0);
   });
 
   it('uses the same scoped filters for the usage list and server statistics', async () => {

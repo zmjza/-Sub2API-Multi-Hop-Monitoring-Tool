@@ -1,5 +1,35 @@
 # IPC、安全与日志脱敏
 
+## 2026-08-05 1.7.9 Chrome CDP 与身份边界
+
+- Chrome 认证只在主进程执行，同源顶层导航和令牌字段白名单由策略层限制；Renderer 不接收 Cookie、验证码结果、完整存储或密码。
+- profile 账号不匹配在凭据写入前终止，错误经过固定 IPC/通知映射；Chrome 子进程和临时 Profile 在关闭、超时和失败路径清理。
+
+## 2026-08-04 1.7.8 交互窗口退出与网络边界
+
+- 官方窗口和安全验证提示框的关闭按钮/`Esc` 只触发取消，主进程清理临时 session 后拒绝保存；challenge IPv6 解析规则不经过 Renderer/IPC，不返回网络原始响应。
+
+## 2026-08-04 1.7.7 交互输入与敏感边界
+
+- Renderer 仅发起站点输入和 provider 白名单请求；主进程官方窗口在同源页面内异步填充字段，Renderer 不接收密码、Token、Cookie、验证码结果或原始页面响应。
+- 认证窗口取消、超时、加载失败和挑战网络失败均以固定安全错误返回，不留下半成品 IPC/存储状态。
+
+## 2026-08-04 1.7.3 窗口重定向与回滚安全边界
+
+- 交互窗口继续使用临时 session、sandbox、contextIsolation、无 preload，并同时拒绝跨域顶层导航和重定向。
+- access/refresh、验证码结果、Cookie 和原始响应不经过 Renderer；重新验证或删除失败不会留下站点级半成品。
+
+## 2026-08-04 1.7.2 错误分类与回滚边界
+
+- IPC 只返回固定 `verification-required` provider 或站点摘要；2xx 交互错误和服务端原始响应均在主进程归一化。
+- 站点保存失败的清理覆盖 SQLite siteId 行、凭据引用、Key/倍率设置、快照和内存 Map；不得记录失败写入中的密码、Token 或原始响应。
+
+## 2026-08-03 1.7.0 双 provider 与重新验证安全边界
+
+- 新增 `sites:add-with-interactive-verification`、`sites:reverify` 使用严格 provider/siteId schema；禁止 Renderer 传入任意 URL、Token、Cookie、HTTP 方法或站点凭据引用。
+- 官方窗口无 preload、sandbox、contextIsolation、临时 session、同源顶层导航和有限 Token 白名单；成功前不写入凭据，失败后清理临时数据。
+- 账号标签只返回脱敏值；交互 provider 可出现在站点摘要，access/refresh Token、密码、验证码结果和原始响应绝不经过 IPC、SQLite、日志、截图或文档。
+
 ## 2026-07-29 交互认证窗口安全边界（待实施）
 
 - GeeTest 窗口使用系统原生边框的模态 `BrowserWindow`，Windows/macOS 共享业务逻辑；`nodeIntegration:false`、`contextIsolation:true`、`sandbox:true`，不加载项目 preload。

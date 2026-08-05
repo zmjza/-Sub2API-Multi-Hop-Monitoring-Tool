@@ -1397,6 +1397,37 @@
 .rate-channel-popover .rate-popover-header {
   border-radius: 22px 22px 0 0;
 }
+.rate-channel-stale {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 7px 14px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 11px;
+}
+.rate-channel-stale span {
+  min-width: 0;
+  flex: 1;
+}
+.rate-channel-stale button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #fed7aa;
+  border-radius: 6px;
+  background: #fff;
+  color: #9a3412;
+  cursor: pointer;
+}
+.rate-channel-stale button:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+}
 .rate-channel-state {
   min-height: 300px;
   display: grid;

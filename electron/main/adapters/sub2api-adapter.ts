@@ -159,10 +159,12 @@ export class Sub2ApiAdapter {
     }
     for (const [id, value] of Object.entries(rateMap))
       rates.set(id, numberOrUndefined(value) ?? rates.get(id));
+    const account = profileIdentity(profile);
     return {
       profile: {
         balance: numberOrUndefined(profile.balance) ?? 0,
         status: String(profile.status ?? 'unknown'),
+        ...(account ? { account } : {}),
       },
       keys,
       rates,
@@ -513,6 +515,21 @@ export class Sub2ApiAdapter {
     await Promise.all(Array.from({ length: Math.min(4, keys.length) }, worker));
     return Object.fromEntries(entries);
   }
+}
+
+function profileIdentity(profile: Record<string, unknown>): string | undefined {
+  const nestedUser = asRecord(profile.user);
+  for (const value of [
+    profile.email,
+    profile.username,
+    profile.account,
+    nestedUser?.email,
+    nestedUser?.username,
+    nestedUser?.account,
+  ]) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
 }
 
 function normalizeAvailableChannels(value: unknown): NormalizedAvailableChannel[] {

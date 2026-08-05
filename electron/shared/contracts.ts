@@ -7,6 +7,12 @@ export const siteInputSchema = z.object({
   password: z.string().min(1).max(512),
 });
 export type SiteInput = z.infer<typeof siteInputSchema>;
+export const interactiveVerificationProviderSchema = z.enum(['geetest', 'turnstile']);
+export type InteractiveVerificationProvider = z.infer<typeof interactiveVerificationProviderSchema>;
+export const interactiveVerificationRequestSchema = siteInputSchema.extend({
+  provider: interactiveVerificationProviderSchema,
+});
+export type InteractiveVerificationRequest = z.infer<typeof interactiveVerificationRequestSchema>;
 export const batchSiteInputSchema = z.object({
   urls: z.array(z.string().trim().min(1).max(500)).min(1).max(20),
   account: z.string().trim().min(1).max(320),
@@ -147,6 +153,8 @@ export interface SiteSummary {
   id: string;
   name: string;
   baseUrl: string;
+  accountLabel?: string;
+  interactiveVerificationProvider?: InteractiveVerificationProvider;
   balance?: number;
   todayTokens?: number;
   todayActualCost?: number;
@@ -185,6 +193,8 @@ export const siteSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   baseUrl: z.string(),
+  accountLabel: z.string().max(320).optional(),
+  interactiveVerificationProvider: interactiveVerificationProviderSchema.optional(),
   balance: z.number().optional(),
   todayTokens: z.number().optional(),
   todayActualCost: z.number().optional(),
@@ -208,7 +218,12 @@ export const siteSummarySchema = z.object({
 });
 export const siteAddResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('added'), site: siteSummarySchema }).strict(),
-  z.object({ status: z.literal('verification-required') }).strict(),
+  z
+    .object({
+      status: z.literal('verification-required'),
+      provider: interactiveVerificationProviderSchema,
+    })
+    .strict(),
 ]);
 export type SiteAddResult = z.infer<typeof siteAddResultSchema>;
 export const dashboardSnapshotSchema = z.object({

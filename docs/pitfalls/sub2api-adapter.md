@@ -1,5 +1,314 @@
 # sub2api 适配器避坑
 
+## Chrome 登录失败态必须保留直接重试入口
+
+**现象**
+
+Chrome 未安装、窗口关闭、同源跳转被拦截或登录后没有白名单 Token 时，如果 Renderer 只清空 pending verification，用户只能重新填写表单并再次等待公开设置检测，失败原因和重试入口不连续。
+
+**正确做法**
+
+这些失败只结束当前 Chrome 会话，不保存站点；Renderer 保留安全验证弹窗和“开始登录”按钮，统一通知展示安全错误。用户可以直接重试，取消仍清空 pending 状态并恢复“等待开始”。
+
+**验证方式**
+
+覆盖 `CHROME_NOT_INSTALLED`、`CHROME_START_FAILED`、`CHROME_CDP_UNAVAILABLE`、`CHROME_CLOSED`、`CHROME_AUTH_TOKEN_NOT_FOUND`、`CHROME_AUTH_ORIGIN_BLOCKED` 和 `CHROME_AUTH_TIMEOUT`，断言弹窗可重试且站点数量、凭据和旧站点状态不变。
+
+**禁止事项**
+
+不要因为保留弹窗而保存半成品；不要把 Token 缺失降级为登录成功；不要自动读取 Cookie 或代做 Cloudflare CAPTCHA。
+
+## Chrome 交互登录只支持明确的 Bearer Token 会话
+
+**现象**
+
+部分站点登录成功后只写入 HttpOnly Cookie，页面不会向脚本暴露 access token；如果应用复制全部 Cookie 或猜测 Cookie 名称，可能扩大凭据暴露面，也无法证明请求需要的 CSRF 规则正确。
+
+**根因**
+
+当前 Sub2API adapter 的核心接口统一使用 `Authorization: Bearer <accessToken>`。仓库没有任何站点 adapter 明确声明 Cookie 字段、发送方式或 CSRF 规则，因此不能把未知 Cookie 会话当作已支持登录。
+
+**正确做法**
+
+真实 Chrome 认证只在目标同源页面读取 `accessToken`、`access_token`、`auth_token` 及可选 refresh 字段；不调用 `document.cookie`、CDP Cookie API 或完整 Storage API。登录后没有白名单 Bearer Token 时返回 `CHROME_AUTH_TOKEN_NOT_FOUND`，Renderer 明确提示“暂不支持仅 Cookie 会话”，不保存站点。
+
+**验证方式**
+
+运行 `chrome-auth-policy.test.ts`，确认空 Storage 会话返回 `undefined`，检查脚本不包含 `document.cookie` 或 `Network.getAllCookies`；再运行 SiteService 核心校验回归，确认只有 Bearer Token 进入 profile、Key、分组、倍率和统计请求。
+
+**禁止事项**
+
+不要复制用户日常 Chrome Profile 或全部 Cookie；不要把 HttpOnly Cookie、验证码令牌、完整页面存储或原始 CDP 响应传入 Renderer；没有 adapter 明确合同前不要新增 Cookie-only 兼容分支。
+
+**相关文件或命令**
+
+- `electron/main/services/chrome-auth-policy.ts`
+- `electron/main/services/chrome-auth-window.ts`
+- `electron/main/services/chrome-auth-policy.test.ts`
+- `npm test -- --run electron/main/services/chrome-auth-policy.test.ts`
+
+**适用范围**
+
+所有 Cloudflare Turnstile 真实 Chrome 登录和后续使用 Bearer Token 的站点 adapter。
+
+## 官方 SPA 登录表单必须等待异步渲染后再填充凭据
+
+**现象**
+
+真实 Turnstile 官方窗口可以显示 `Verify you are human`，但邮箱和密码为空，用户完成挑战后登录按钮仍保持禁用，容易误判为人机验证失败。
+
+**根因**
+
+部分站点登录页由 Vue/React 异步挂载表单；`did-finish-load` 触发时页面 HTML 已完成加载，但输入框尚未挂载。只执行一次自动填充会静默找不到输入框，后续只轮询挑战 Token 不会再补填凭据。
+
+**正确做法**
+
+官方登录窗口在同源顶层页面内，以固定选择器白名单轮询填充，直到邮箱和密码输入框实际存在且有值；填充通过原生 `value` setter 加 `input`/`change` 事件通知站点框架。字段已有内容时不覆盖用户手动输入，成功填充后停止重试。Turnstile/GeeTest 仍由官方页面回调和用户操作处理。
+
+**验证方式**
+
+运行 `interactive-auth-policy.test.ts` 的异步填充回归；macOS 真机打开 `ai.maok.shop/login` 后检查官方窗口的邮箱/密码已显示脱敏值、Turnstile 控件可见且登录按钮在挑战前保持禁用。不得点击或伪造 CAPTCHA 来替代用户挑战。
+
+**禁止事项**
+
+不要在 `did-finish-load` 只填一次后假设 SPA 已完成挂载；不要覆盖用户已经输入的字段；不要通过复制 Chrome Cookie、Token、验证码结果或完整页面存储解决登录。
+
+**相关文件或命令**
+
+- `electron/main/services/interactive-auth-window.ts`
+- `electron/main/services/interactive-auth-policy.test.ts`
+- `npm test -- --run electron/main/services/interactive-auth-policy.test.ts`
+
+**适用范围**
+
+所有使用异步 SPA 登录页的 GeeTest、Cloudflare Turnstile 或其他官方交互认证站点。
+
+## access-only 交互会话不能被当作无效登录
+
+**现象**
+
+部分站点登录成功后只在同源存储中写入 access token，没有 refresh token。若提取器要求 access/refresh 成对出现，会把官方窗口的成功会话误判为失败，站点无法添加。
+
+**根因**
+
+refresh token 是续期能力，不是首次核心会话的必要条件；登录成功的最低安全凭据是 access token，之后仍需通过 profile、Key、分组、倍率和统计核心校验。
+
+**正确做法**
+
+有限白名单提取器允许 access token 单独存在，refresh token 仅在存在且满足长度边界时返回。交互站点没有 refresh 时，刷新失败直接进入 `auth-required`，不静默密码重登。
+
+**验证方式**
+
+运行 `interactive-auth-policy.test.ts` 的 access-only 夹具和 `site-service.integration.test.ts` 的重新验证回归；确认 Token 不经过 Renderer、SQLite、日志或截图。
+
+**禁止事项**
+
+不要复制 Chrome localStorage、Cookie 或验证码结果；不要为了补 refresh token 伪造响应或绕过官方验证。
+
+## 重新验证必须校验 profile 账号归属
+
+**现象**
+
+已有站点进入 Chrome 或官方交互窗口重新登录后，如果只用 Token 能否访问核心接口判断成功，用户登录了同地址的另一个账号时会覆盖原站点凭据。
+
+**根因**
+
+同一站点地址允许保存多个用户名；access token 本身不能证明它属于当前 `siteId`。交互窗口成功和核心接口成功必须同时满足保存账号与 `/user/profile` 返回账号一致。
+
+**正确做法**
+
+重新验证读取 profile 后，使用与首次添加相同的账号归一化规则比较 email（去空格、大小写不敏感）或非 email 用户名；不一致时抛出 `SITE_ACCOUNT_IDENTITY_MISMATCH`，在写入凭据、快照、Key 缓存和运行态前终止，旧 Token 保持不变。profile 没有可识别账号时保留兼容行为，但不能伪造账号字段。
+
+**验证方式**
+
+运行 `site-service.integration.test.ts` 的异账号重新验证回归，确认返回安全错误、旧凭据和旧快照保持不变；再运行 Renderer 通知测试，确认只显示“登录账号与添加站点用户名不一致”。
+
+**禁止事项**
+
+不要只按 HTTP 200、access token 存在或余额读取成功判断账号归属；不要按 baseUrl 覆盖同地址其他账号；不要在 Renderer、日志、截图或文档中记录 Token、Cookie、密码或完整 profile 响应。
+
+**适用范围**
+
+所有支持同地址多账号、GeeTest、Cloudflare Turnstile 或 Chrome 交互重新验证的站点。
+
+## 官方窗口必须同时拦截顶层重定向
+
+**现象**
+
+只监听 `will-navigate` 时，脚本触发的顶层 HTTP 重定向可能绕过同源导航限制，把交互窗口带到非官方 origin。
+
+**根因**
+
+Electron 将用户导航和服务器重定向分成不同事件；两者都可能改变顶层页面 URL。
+
+**正确做法**
+
+`interactive-auth-window` 同时监听 `will-navigate` 和 `will-redirect`，两者都通过 `isAllowedInteractiveNavigation` 仅允许目标 origin；跨域验证码 iframe 仍作为子资源正常加载。
+
+**验证方式**
+
+运行 `interactive-auth-policy.test.ts` 的导航策略测试并进行源码审计；真实打包窗口只确认挑战子资源，不复制浏览器状态。
+
+**禁止事项**
+
+不要允许任意顶层 URL、不要把验证码 iframe 当作顶层导航放行、不要把重定向拦截改成关闭挑战。
+
+## 删除同地址站点必须清理全部 siteId 状态
+
+**现象**
+
+删除同地址多账号中的一个站点后，快照、通知规则、进行中的刷新或 Key 用量缓存仍可能在内存/SQLite 中残留，随后污染另一个账号或重启后的列表。
+
+**根因**
+
+站点删除只清理了凭据和主表，历史增量新增的 siteId 分区 Map 与 setting key 没有统一清单。
+
+**正确做法**
+
+删除时清理 `siteId` 对应的凭据、快照、备注、渠道关系、Key/倍率设置、通知规则、当前站点引用、刷新单飞、Key 写入/用量缓存和所有运行态 Map；另一个 siteId 的值必须保持不变。
+
+**验证方式**
+
+运行删除隔离集成测试，检查 SQLite setting/snapshot 行、内存缓存和通知站点规则；再运行全量测试与 Electron E2E。
+
+**禁止事项**
+
+不要按 baseUrl 批量删除同地址其他账号；不要保留已删除站点的 Token、Key 缓存、通知或进行中请求引用。
+
+## 2xx 登录错误包不能按成功会话解析
+
+**现象**
+
+部分二开站在 HTTP 2xx 响应中返回 `TURNSTILE_REQUIRED` 或 `GEETEST_REQUIRED` 错误包；若直接执行登录成功 schema，会把错误误判为普通接口异常或产生错误的会话状态。
+
+**根因**
+
+HTTP 状态码不是业务成功语义；登录接口的交互验证要求可能被包在顶层或有限 `data` 对象内。
+
+**正确做法**
+
+登录响应先经过固定 provider/错误码分类，再执行成功 schema。只返回 `INTERACTIVE_VERIFICATION_REQUIRED`、provider 和可选安全 HTTP 状态，不返回原始响应。
+
+**验证方式**
+
+使用 2xx、401、400 的 GeeTest/Turnstile 夹具运行 `electron/main/adapters/http-client.test.ts`，确认均分类为交互验证且不含私有字段。
+
+**禁止事项**
+
+不要仅按 `response.ok` 判定登录成功；不要透传错误 JSON、Token、Cookie 或完整站点响应。
+
+**相关文件或命令**
+
+- `electron/main/adapters/http-client.ts`
+- `electron/main/adapters/http-client.test.ts`
+- `npm test -- --run electron/main/adapters/http-client.test.ts`
+
+**适用范围**
+
+所有兼容 sub2api 的登录和交互验证接口。
+
+## 强制刷新失败不得丢弃渠道成功缓存
+
+**现象**
+
+渠道弹窗打开后，强制刷新遇到网络错误会把当前选择和详情替换成完整错误态；重新打开弹窗后缓存又出现，造成“过几分钟消失”的假象。
+
+**根因**
+
+刷新请求把失败当成空数据提交，且自动加载 effect 依赖不稳定的选中状态，导致失败分支清空展示或重复初始化。
+
+**正确做法**
+
+强刷前保存最近成功列表、选中 ID 和详情；失败时恢复旧内容并设置 stale 标记，成功响应才替换缓存。选中 ID 通过 ref 参与恢复，自动加载 effect 只依赖稳定的 load callback。
+
+**验证方式**
+
+运行 `src/renderer/shells/overview/ChannelStatusPopover.test.ts`、渠道 loader 测试和 Electron E2E；确认强刷失败仍显示选中渠道、详情和重试入口。
+
+**禁止事项**
+
+不要在强刷失败时清空 `channels`、`selected` 或 `details`；不要把 `selected?.id` 作为自动加载 callback 的依赖；不要要求重新打开弹窗恢复缓存。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/ChannelStatusPopover.tsx`
+- `src/renderer/shells/overview/ChannelStatusPopover.test.ts`
+- `src/renderer/shells/overview/rate-channel-status-loader.ts`
+
+**适用范围**
+
+渠道状态弹窗、总览内联渠道摘要和任何 stale-while-revalidate 详情视图。
+
+## Electron 官方窗口的 Turnstile challenge 可能被外部网络关闭
+
+**现象**
+
+真实公开设置接口返回 `turnstile_enabled=true`，适配器能够识别 `turnstile` provider。部分机器把 `brunhild.challenges.cloudflare.com` 解析到 `198.18.0.111` 等 RFC 2544 假 IP，Electron challenge 请求出现 `ERR_CONNECTION_CLOSED`，页面只有 `cf-turnstile-response` 空字段、登录按钮保持禁用；1.7.6 的 IPv4 规则只能让部分入口显示控件，1.7.8 改用 Cloudflare HTTPS DNS 公布的 IPv6 边缘提示后，真实 challenge 请求可在隔离 macOS ARM64 窗口返回正常 `204/2xx`，但尚未完成用户挑战。
+
+**根因**
+
+已确认的直接证据是挑战子资源没有在 Electron 窗口建立连接；目标登录页可返回 HTTP 200，但挑战子域 TLS 无法完成，使用公开 Cloudflare 边缘地址复核返回 HTTP 522。具体是 Cloudflare 网络策略、当前网络或 Electron 客户端识别导致的哪一层阻断，信息不全，待人工补充。不能据此推断密码、站点地址或适配器协议错误。
+
+**正确做法**
+
+GeeTest 官方 Electron 窗口使用原生 Electron 浏览器标识，不再移除 Electron 标记或注入 UA-CH，也不通过 CDP 改写 iframe 目标；Cloudflare Turnstile 改由系统 Google Chrome 独立临时 Profile 承接。主进程仅通过随机回环 CDP 读取目标 origin 的有限 Token 白名单。两条路径都保留临时 session、同源顶层导航、用户本人挑战、核心接口校验和失败不落盘边界；网络失败时按外部阻塞记录，不伪造或绕过 CAPTCHA。
+
+**验证方式**
+
+运行 `interactive-auth-policy.test.ts` 和站点 Renderer/Electron E2E，重新执行 `npm run build`、`npm run pack` 和 macOS ARM64 打包应用真实流程；检查 challenge iframe、挑战域请求、登录按钮、网络失败后的直接重试、关闭图标、`Esc` 和是否进入核心校验。仅在看到成功登录与核心接口校验后标记通过。
+
+**禁止事项**
+
+不要复制 Chrome Cookie、验证码令牌、完整 localStorage 或页面内容；不要伪造 Turnstile 响应、关闭 challenge、修改远程路由或把外部网络失败降级为普通“站点地址无效”。
+
+**相关文件或命令**
+
+- `electron/main/services/interactive-auth-policy.ts`
+- `electron/main/services/interactive-auth-window.ts`
+- `electron/main/services/interactive-auth-policy.test.ts`
+- `electron/main/index.ts`
+- `npm run pack`
+- `npm run dist:mac`
+- `npm run dist:win`
+
+**适用范围**
+
+所有使用 Cloudflare Turnstile 的 sub2api 二开站官方登录窗口；GeeTest 仍遵循同一交互 session 和安全边界。公开边缘地址可能随 Cloudflare 或网络运营商变化，若固定规则失效，应更新解析来源并保持“受阻”，不能伪造挑战成功。
+
+## Electron 官方登录窗口不应继续伪装为 Chrome
+
+**现象**
+
+Turnstile 已经改由系统 Google Chrome 承接后，Electron GeeTest 窗口仍残留 User-Agent、UA-CH 和 CDP iframe 目标注入代码；这会让两条认证路径的浏览器边界不一致，也增加官方页面识别异常和维护复杂度。
+
+**根因**
+
+历史版本为缓解 Electron/Cloudflare 兼容性曾移除 Electron 标记并注入 Google Chrome 品牌信息。Turnstile 现在由真实 Chrome 负责，继续在 GeeTest Electron 窗口保留这类脚本已经没有必要；它也不是合法的验证码结果或网络修复。
+
+**正确做法**
+
+GeeTest 使用原生 Electron `BrowserWindow`、临时 session、sandbox、contextIsolation、无 preload、同源顶层导航和官方页面交互，不调用 `setUserAgent`、`Network.setUserAgentOverride`、`Page.addScriptToEvaluateOnNewDocument`、`Target.attachToTarget`，不改写 `navigator`。Turnstile 只走系统 Google Chrome 独立临时 Profile；主进程仅读取同源有限 Token 白名单。
+
+**验证方式**
+
+运行 `interactive-auth-policy.test.ts` 的负向源码断言、全量 Vitest、TypeScript、lint、构建和 Electron E2E；再执行 macOS Chrome 超时清理烟测，确认临时 Profile/进程清理。真实 CAPTCHA、登录和核心接口保存仍由用户本人完成。
+
+**禁止事项**
+
+不要为了让 Electron 看起来像 Chrome 而覆盖 UA、UA-CH、`navigator.webdriver` 或通过 CDP 重载/改写挑战 iframe；不要把这种伪装写成已通过人机验证。
+
+**相关文件或命令**
+
+- `electron/main/services/interactive-auth-window.ts`
+- `electron/main/services/interactive-auth-policy.test.ts`
+- `electron/main/services/chrome-auth-window.ts`
+- `npm test -- --run`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有 GeeTest/Turnstile 官方登录窗口和任何需要第三方人机验证的桌面认证流程。
+
 ## 二开站核心响应可能存在多层 data 包装
 
 **现象**
@@ -484,3 +793,35 @@ fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次
 **适用范围**
 
 渠道列表、倍率或其他同时具有 stale-while-revalidate、自动调度和人工重试的 Renderer 数据源。
+
+## Turnstile 与 GeeTest 登录拒绝必须保留真实 HTTP 状态
+
+**现象**
+
+部分站点在登录接口返回 `401` 时同时携带 Turnstile 或 GeeTest 错误码。若统一把交互验证错误写成 `httpStatus=400`，日志、诊断和后续重试策略会与真实响应不一致，难以区分账号拒绝、验证未完成和普通参数错误。
+
+**根因**
+
+交互验证分类发生在通用错误归一化之前，错误对象曾使用固定状态码，而不是当前 `Response.status`。站点实现可能用 400、401 或其他明确的非 2xx 状态表达同一验证门禁。
+
+**正确做法**
+
+在有限 provider 错误码/消息识别成功后，保留当前响应的 `response.status`，只输出 provider、能力、可重试性和安全文案；不透传完整 JSON、Token、Cookie 或页面内容。GeeTest/Turnstile 统一走官方窗口和核心接口验证，不能尝试绕过挑战。
+
+**验证方式**
+
+适配器测试分别覆盖 400 与 401 的 `GEETEST_*`、`TURNSTILE_*` 错误，断言 provider 正确、`httpStatus` 等于实际响应码且无私有响应字段；服务集成测试覆盖重新验证成功更新原站点、失败保留旧凭据。
+
+**禁止事项**
+
+不要把所有验证码拒绝固定成 400；不要把 401 当作普通密码重登许可；不要在浏览器自动破解、绕过或代替用户完成 CAPTCHA。
+
+**相关文件或命令**
+
+- `electron/main/adapters/http-client.ts`
+- `electron/main/adapters/http-client.test.ts`
+- `electron/main/services/site-service.integration.test.ts`
+
+**适用范围**
+
+所有需要 GeeTest、Cloudflare Turnstile 或类似交互式登录验证的 sub2api 二开站。

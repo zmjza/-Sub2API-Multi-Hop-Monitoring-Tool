@@ -85,11 +85,21 @@ describe('IPC boundary schemas', () => {
   });
 
   it('keeps site-add outcomes finite and never returns credentials to the renderer', () => {
-    expect(siteAddResultSchema.parse({ status: 'verification-required' })).toEqual({
+    expect(
+      siteAddResultSchema.parse({
+        status: 'verification-required',
+        provider: 'turnstile',
+      }),
+    ).toEqual({
       status: 'verification-required',
+      provider: 'turnstile',
     });
     expect(() =>
-      siteAddResultSchema.parse({ status: 'verification-required', accessToken: 'secret' }),
+      siteAddResultSchema.parse({
+        status: 'verification-required',
+        provider: 'geetest',
+        accessToken: 'secret',
+      }),
     ).toThrow();
   });
 

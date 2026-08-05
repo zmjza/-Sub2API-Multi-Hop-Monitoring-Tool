@@ -483,6 +483,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
   let availableChannelsMode: 'complete' | 'partial' = 'complete';
   let managedKeyGroupId = '101';
+  let interactiveVerificationEnabled = false;
   const availableRateGroups = [
     {
       id: 'rate-openai-a',
@@ -541,6 +542,15 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   const handleRequest = (request: IncomingMessage, response: ServerResponse) => {
     response.setHeader('content-type', 'application/json');
     const url = request.url ?? '';
+    if (url === '/api/v1/settings/public')
+      return response.end(
+        JSON.stringify({
+          data: {
+            turnstile_enabled: interactiveVerificationEnabled,
+            geetest_enabled: false,
+          },
+        }),
+      );
     if (url === '/api/v1/auth/login')
       return response.end(
         JSON.stringify({
@@ -859,6 +869,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     SUB2API_TEST_SECRET_CODEC: 'memory',
     SUB2API_TEST_EXPORT_PATH: exportPath,
   });
+  const packageManifest = JSON.parse(
+    await readFile(path.join(process.cwd(), 'package.json'), 'utf8'),
+  ) as { version?: string };
   await expect.poll(async () => (await application.windows()).length).toBe(2);
   const appWindows = await application.windows();
   let main = appWindows[0]!;
@@ -866,7 +879,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
   expect(await main.evaluate(() => typeof window.sub2apiDesktop)).toBe('object');
   await expect(main.getByText('最后更新：', { exact: false })).toBeVisible();
-  await expect(main.locator('.app-version-badge')).toContainText('v1.6.0');
+  await expect(main.locator('.app-version-badge')).toContainText(`v${packageManifest.version}`);
   await expect(main.locator('.app-version-badge')).toBeEnabled({ timeout: 20_000 });
   await main.locator('.app-version-badge').click();
   await expect(main.locator('.app-notification')).toContainText(
@@ -880,6 +893,80 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByLabel('密码', { exact: true }).fill('runtime-only');
   await main.getByRole('button', { name: '添加并验证' }).click();
   await expect(main.getByText('站点验证成功')).toBeVisible({ timeout: 15_000 });
+  interactiveVerificationEnabled = true;
+  await main.getByPlaceholder('例如: OpenAI 备用节点').fill('Turnstile 关闭测试');
+  await main.getByLabel('用户名', { exact: true }).fill('turnstile-close@example.invalid');
+  await main.getByLabel('密码', { exact: true }).fill('runtime-only');
+  await main.getByRole('button', { name: '添加并验证' }).click();
+  const securityDialog = main.getByRole('dialog', { name: '需要完成安全验证' });
+  await expect(securityDialog).toBeVisible();
+  await expect(securityDialog).toContainText('Cloudflare Turnstile');
+  await expect(securityDialog.getByRole('button', { name: '开始登录' })).toBeVisible();
+  await expect(securityDialog.getByRole('button', { name: '开始验证' })).toHaveCount(0);
+  const securityDialogWideBounds = await application.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.getBounds(),
+  );
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 720, height: 520 });
+  });
+  await main.waitForTimeout(200);
+  expect(
+    await securityDialog.evaluate((dialog) => {
+      const dialogRect = dialog.getBoundingClientRect();
+      const controls = Array.from(dialog.querySelectorAll('button')).map((button) =>
+        button.getBoundingClientRect(),
+      );
+      return {
+        insideViewport:
+          dialogRect.left >= 0 &&
+          dialogRect.top >= 0 &&
+          dialogRect.right <= window.innerWidth &&
+          dialogRect.bottom <= window.innerHeight,
+        controlsInside: controls.every(
+          (rect) =>
+            rect.left >= dialogRect.left &&
+            rect.top >= dialogRect.top &&
+            rect.right <= dialogRect.right &&
+            rect.bottom <= dialogRect.bottom,
+        ),
+        maxHeight: Number.parseFloat(getComputedStyle(dialog).maxHeight),
+        viewportSafeHeight: window.innerHeight - 32,
+      };
+    }),
+  ).toMatchObject({
+    insideViewport: true,
+    controlsInside: true,
+    maxHeight: 488,
+    viewportSafeHeight: 488,
+  });
+  await captureEvidence(main, '20-security-dialog-narrow');
+  await securityDialog.getByLabel('关闭安全验证').click();
+  await expect(securityDialog).toHaveCount(0);
+  await expect
+    .poll(() =>
+      main.evaluate(async () => (await window.sub2apiDesktop?.sites.list())?.sites.length),
+    )
+    .toBe(1);
+  if (securityDialogWideBounds)
+    await application.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows()
+        .find((candidate) => candidate.getBounds().width > 500)
+        ?.setBounds(bounds);
+    }, securityDialogWideBounds);
+  await main.getByRole('button', { name: '添加并验证' }).click();
+  await expect(securityDialog).toBeVisible();
+  await main.keyboard.press('Escape');
+  await expect(securityDialog).toHaveCount(0);
+  await expect
+    .poll(() =>
+      main.evaluate(async () => (await window.sub2apiDesktop?.sites.list())?.sites.length),
+    )
+    .toBe(1);
+  interactiveVerificationEnabled = false;
   expect(await main.locator('.app-sidebar nav .nav-item span').allTextContents()).toEqual([
     '全部站点',
     'API 密钥',
@@ -1508,11 +1595,12 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .getByRole('dialog', { name: 'localhost 渠道状态' })
     .getByRole('button', { name: '刷新渠道状态' })
     .click();
-  await expect(main.getByText('渠道状态读取失败', { exact: true })).toBeVisible();
+  await expect(main.getByText('更新失败，显示上次数据', { exact: true })).toBeVisible();
+  await expect(main.getByRole('dialog', { name: 'localhost 渠道状态' })).toContainText('E2E 分组');
   channelListMode = 'success';
   await main
     .getByRole('dialog', { name: 'localhost 渠道状态' })
-    .getByRole('button', { name: '重试', exact: true })
+    .getByRole('button', { name: '重试渠道状态', exact: true })
     .click();
   await expect(
     main.getByRole('dialog', { name: 'localhost 渠道状态' }).locator('.rate-channel-list-card'),

@@ -1,5 +1,27 @@
 # sub2api API 文档
 
+## 2026-08-04 1.7.2 交互错误响应与保存门禁
+
+- `POST /api/v1/auth/login` 即使 HTTP 为 2xx，只要有限字段 `code` 或 `data.code` 属于 GeeTest/Turnstile 要求，客户端也返回 `INTERACTIVE_VERIFICATION_REQUIRED`，不执行 `loginResponseSchema` 成功保存。
+- 站点保存前后均执行同地址同账号检查；数据库/安全存储异常不会通过 IPC 返回原始对象，服务层回滚该 `siteId` 的所有持久化和运行态数据。
+- 渠道列表强制刷新失败不改变已缓存 `GET /channel-monitors` 结果；弹窗显示 stale 状态并允许用户重试，详情缓存按 `siteId:channelId` 继续隔离。
+
+## 2026-08-03 1.7.1 官方挑战窗口兼容性
+
+`sites:add-with-interactive-verification` 和 `sites:reverify` 仍只通过官方登录窗口取得交互会话。Turnstile 使用系统 Google Chrome 独立临时 Profile；GeeTest 使用临时 sandboxed Electron 窗口且保留原生浏览器标识，不做 UA/UA-CH 或 CDP iframe 伪装。主进程仅读取目标 origin 的有限 Token 白名单，核心接口校验通过后才原子写入凭据。Cloudflare challenge 域仍无法建立连接或服务端验证失败时，客户端保留结构化安全验证失败状态，不把它改写成普通站点地址错误，也不透传完整响应。
+
+## 2026-08-03 1.7.0 交互登录与重新验证 IPC
+
+| 方法/路径                                     | 用途                             | 安全与状态规则                                                                                  |
+| --------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `GET /api/v1/settings/public`                 | 读取公开 GeeTest/Turnstile 开关  | 仅解析 `geetest_enabled`、`turnstile_enabled` 等白名单字段；不透传完整设置                      |
+| `POST /api/v1/auth/login`                     | 普通密码登录                     | 明确交互错误标准化为 `INTERACTIVE_VERIFICATION_REQUIRED`，保留真实 `httpStatus`，不透传私有响应 |
+| `IPC sites:add-and-verify`                    | 首次检测、普通登录或返回验证要求 | 输入/输出使用 Zod；verification-required 只返回 provider                                        |
+| `IPC sites:add-with-interactive-verification` | 官方窗口取 Token 后添加站点      | Token 只能在主进程经核心接口验证后保存                                                          |
+| `IPC sites:reverify`                          | auth-required 站点主动重新验证   | 只更新原 `siteId`；失败不覆盖旧凭据；不创建新站点                                               |
+
+交互窗口不是远程 API 代理：只允许官方同源登录页和必要验证码子资源，Renderer 不得到 Cookie、页面 HTML 或 Token。上游验证码错误码至少覆盖 `GEETEST_*`、`TURNSTILE_*` 和 `CLOUDFLARE_TURNSTILE_REQUIRED`；未知错误继续走通用安全错误。
+
 ## 2026-07-26 渠道关系与状态接口补充
 
 | 方法与路径                                  | 用途                                      | 客户端规则                                                                                   |

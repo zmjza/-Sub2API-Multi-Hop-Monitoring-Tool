@@ -24,6 +24,7 @@ export function parseArgs(argv) {
   let notes = '';
   let testOnly = false;
   let dryRun = false;
+  let reuseArtifacts = false;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--notes') {
@@ -31,10 +32,11 @@ export function parseArgs(argv) {
       index += 1;
     } else if (value === '--test-only') testOnly = true;
     else if (value === '--dry-run') dryRun = true;
+    else if (value === '--reuse-artifacts') reuseArtifacts = true;
     else throw new Error(`未知参数：${value}`);
   }
   if (!notes) throw new Error('必须提供 --notes "本次更新说明"');
-  return { notes, testOnly, dryRun };
+  return { notes, testOnly, dryRun, reuseArtifacts };
 }
 
 export function assetNames(version) {
@@ -235,9 +237,13 @@ async function main() {
 
   await ensureCleanTree();
   const token = await readToken();
-  await run('npm', ['run', 'dist:mac']);
-  await run('npm', ['run', 'dist:win']);
   const names = assetNames(version);
+  if (args.reuseArtifacts) {
+    console.log('复用已审计的 macOS ARM64 + Windows x64 发布产物');
+  } else {
+    await run('npm', ['run', 'dist:mac']);
+    await run('npm', ['run', 'dist:win']);
+  }
   const binaryFiles = names.slice(0, 4).map((name) => path.join(releaseDir, name));
   for (const filePath of binaryFiles) {
     const stat = await fs.stat(filePath).catch(() => undefined);

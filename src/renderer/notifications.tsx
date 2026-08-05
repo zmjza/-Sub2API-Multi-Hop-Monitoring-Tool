@@ -134,7 +134,26 @@ export function safeRendererError(error: unknown, fallback: string): string {
   const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
   if (raw.includes('INTERACTIVE_AUTH_TIMEOUT')) return '安全验证已超时，请重新开始';
   if (raw.includes('INTERACTIVE_AUTH_CANCELLED')) return '已取消安全验证，站点未添加';
+  if (raw.includes('INTERACTIVE_AUTH_CHALLENGE_NETWORK'))
+    return '人机验证服务暂时无法连接，请检查网络或系统代理后重试';
   if (raw.includes('INTERACTIVE_AUTH_LOAD_FAILED')) return '官方登录窗口加载失败，请稍后重试';
+  if (raw.includes('CHROME_NOT_INSTALLED')) return '未找到 Google Chrome，请先安装后重试';
+  if (raw.includes('CHROME_START_FAILED')) return 'Google Chrome 启动失败，请稍后重试';
+  if (raw.includes('CHROME_CDP_UNAVAILABLE')) return '无法连接 Chrome 登录窗口，请重试';
+  if (raw.includes('CHROME_CLOSED')) return 'Google Chrome 登录窗口已关闭，站点未添加';
+  if (raw.includes('CHROME_AUTH_TIMEOUT')) return '登录等待已超时，请重新开始安全验证';
+  if (raw.includes('CHROME_AUTH_TOKEN_NOT_FOUND'))
+    return '登录已完成，但站点未提供受支持的登录令牌，暂不支持仅 Cookie 会话';
+  if (raw.includes('CHROME_AUTH_ORIGIN_BLOCKED')) return '登录窗口跳转到非本站页面，站点未添加';
+  if (raw.includes('CHROME_AUTH_ALREADY_RUNNING')) return '已有 Chrome 登录验证正在进行';
+  if (raw.includes('CHROME_AUTH_FAILED')) return 'Chrome 登录结果读取失败，请重试';
+  if (raw.includes('SITE_DUPLICATE_ACCOUNT')) return '该站点已添加此用户名';
+  if (raw.includes('SITE_ACCOUNT_IDENTITY_UNAVAILABLE'))
+    return '无法确认已有站点的用户名，请先检查凭据';
+  if (raw.includes('SITE_ACCOUNT_IDENTITY_MISMATCH')) return '登录账号与添加站点用户名不一致';
+  if (raw.includes('INTERACTIVE_VERIFICATION_UNAVAILABLE'))
+    return '无法确认安全验证方式，请重新添加站点';
+  if (raw.includes('INTERACTIVE_VERIFICATION_REQUIRED')) return '需要完成安全验证';
   const stripped = raw
     .replace(/^Error:\s*/i, '')
     .replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '')

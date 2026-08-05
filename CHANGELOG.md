@@ -1,5 +1,239 @@
 # 更新说明
 
+## 1.8.0 - 2026-08-05
+
+### 真实 Chrome Turnstile 登录
+
+- Cloudflare Turnstile 站点选择“开始登录”后启动当前系统可用的 Google Chrome，并使用独立临时 Profile 和随机回环 CDP 端口；不读取或复制用户日常 Chrome Profile、Cookie、验证码结果或完整页面存储。
+- 支持 macOS 与 Windows 的 Chrome 路径发现、启动失败、窗口关闭、超时、跨站跳转和临时 Profile 清理；登录成功后仅读取同源、固定白名单中的认证字段，并校验登录账号与站点用户名一致。
+- GeeTest 继续使用官方 Electron 登录窗口，保留临时隔离会话、同源导航、异步填充、Escape/关闭、网络重试和失败不落盘边界。
+
+### 站点添加与状态体验
+
+- 统一“需要完成安全验证”对话框和消息通知，支持右上角关闭、Escape、窄窗口换行、焦点管理、失败重试，以及“暂不添加/开始登录”操作。
+- 同一站点地址允许不同用户名独立添加；同地址同用户名仍拒绝重复添加。站点凭据、Token、Key 缓存、统计、渠道关系、通知和删除行为继续按 `siteId` 隔离。
+- 渠道状态采用 stale-while-revalidate：轮询或刷新失败时保留最近一次成功数据、选中项和详情，显示更新失败提示并支持局部重试，不再因缓存过期短暂清空。
+- 应用退出时等待 Chrome 认证进程和临时 Profile 清理完成，避免残留认证进程或临时数据。
+
+### 验证边界
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（44 个文件/301 项）、`npm run build` 和开发态 Electron E2E（6/6）均通过；macOS ARM64 与 Windows x64 发布产物均已重新生成并审计。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；DMG SHA-256：`39c511e7ba4dd3cd3a2fe19bb0de2a82494aa9e2ba96ebe7b041e39184b4c294`；DMG blockmap SHA-256：`dc87e49677c53351f9d776f5dbf308b37561fe98a362347adafab70232a29d42`。
+- Windows x64 NSIS、PE/asar/版本/入口结构检查通过；EXE SHA-256：`64c9251f8e7b383111b6cef5af2b9cb61e0860379e8356a0fd22ce3d987628da`；EXE blockmap SHA-256：`494f1622b56dd40e52f84f3b89fa13d2c0777fae301e60c3ad97978eb3f48c76`。Windows 不代表真机通过。
+- 由于 macOS DMG 的 `hdiutil` 生成结果包含非确定性元数据，本次先完成产物审计，再由 `npm run release:publish -- --notes "..." --reuse-artifacts` 复用同一组文件上传，确保 Release 与本条目 SHA-256 一致。
+- macOS 真机已由用户确认真实 Cloudflare 人机验证、账号登录、核心接口校验和站点添加成功；应用不绕过、破解或伪造任何人机验证。
+
+## 1.7.12 - 2026-08-05
+
+### 交互认证浏览器边界收口
+
+- 移除 GeeTest Electron 官方窗口中的 User-Agent、UA-CH 和 CDP iframe 目标注入；窗口保留 Electron 原生浏览器标识，不再伪装成 Google Chrome 或改写 `navigator`。
+- Cloudflare Turnstile 继续只通过系统 Google Chrome 独立临时 Profile 完成真实人机验证；主进程仅读取同源、有限 Token 白名单，未复制日常 Chrome 会话或验证码结果。
+- 保留 GeeTest 官方窗口的临时 session、同源导航、异步表单填充、Escape/关闭、网络重试、核心能力校验和失败不落盘边界。
+
+### 验证边界
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（44 个文件/300 项）、`npm run build` 和开发态/打包态 Electron E2E（均 6/6）均通过。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；DMG SHA-256：`d0ceca5777ff258528663d162f539f13d78abeb3bc937488001f95d10732c8d9`；DMG blockmap SHA-256：`c7e710d47d5248db0c1c0ad471db58e2721d0ec0fa86df61b7fe068e6f03edce`。
+- Windows x64 NSIS、PE/asar/版本/入口结构检查通过；EXE SHA-256：`e1647481ad6ef2bf81d1b9b0b9de078703b0ef7cddf0cf124961157da27bc93a`；EXE blockmap：`be3d1dd37415b10332ade094f0a38d45ef8d06ab6d31938e36620d122d75edef`。Windows 不代表真机通过。
+- macOS Chrome 烟测按 4 秒超时返回 `CHROME_AUTH_TIMEOUT`，本次 Chrome 进程和独立临时 Profile 均清理；页面视觉检查覆盖宽/窄窗口、统一通知、安全验证弹窗和渠道状态弹窗。未执行双远端推送或 GitHub Release。
+- 用户随后确认真实 Cloudflare CAPTCHA、账号登录、核心接口校验和站点添加成功；该验收结论不包含任何账号、密码、Token、Cookie 或完整响应。
+- Windows 仅记录 x64 交叉构建，不代表 Windows 真机通过；本版本未执行双远端推送或 GitHub Release。
+
+## 1.7.11 - 2026-08-05
+
+### Chrome 会话退出清理
+
+- 修复应用退出时未等待真实 Chrome 认证会话清理的问题；退出流程现在会先阻止默认退出，等待 Chrome 进程和独立临时 Profile 清理完成后再结束 Electron。
+- 保留 Cloudflare Turnstile 使用系统 Chrome、GeeTest 使用官方 Electron 窗口、失败直接重试、账号归属校验、同地址不同用户名可重复添加、统一安全通知和渠道状态 stale 展示。
+
+### 验证边界
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（44 个文件/302 项）、`npm run build` 和开发态/打包态 Electron E2E（均 6/6）均通过。
+- macOS ARM64 DMG 通过 `hdiutil verify`（`VALID`）；DMG SHA-256：`d9d36685d4d2337c01b57401b2f9362f3c57ba35585ce198e89c88a31bae2d2d`；DMG blockmap SHA-256：`d06486ae1b498ea8cebdfeaf8a5fbf259a2e3d0f73294810aabd6131afec9ad7`。
+- Windows x64 NSIS 交叉构建、PE、asar、版本和入口结构检查通过；EXE SHA-256：`e09c752059d514c010c325ee399a75c32fc5653dcc0cca2600a7fadeaedfb1b3`；EXE blockmap SHA-256：`7be7ca9cdb0ac3acf065256072a6509b9334c61c3c369e67a924369cc6d830db`。Windows 不代表真机通过。
+- macOS 真实 Chrome 烟测按 4 秒超时返回 `CHROME_AUTH_TIMEOUT`，本次 Chrome 进程和独立临时 Profile 均清理；页面视觉检查覆盖宽/窄窗口、统一通知、安全验证弹窗和渠道状态弹窗。未执行双远端推送或 GitHub Release。
+- 真实 Cloudflare CAPTCHA、账号登录、核心接口校验和站点最终保存仍需用户本人完成。
+
+## 1.7.10 - 2026-08-05
+
+### Chrome 登录失败后的直接重试
+
+- Cloudflare Turnstile 的 Google Chrome 登录失败、Chrome 未安装、窗口关闭、来源被拦截或登录结果缺失时，保留安全验证弹窗和“开始登录”入口，用户可以直接重试；所有失败状态仍不会保存站点或覆盖凭据。
+- 新增 Renderer 回归测试覆盖上述 Chrome 错误状态，并保留统一安全通知、账号归属校验、重复站点隔离和渠道 stale 展示。
+
+### 验证边界
+
+- 真实系统 Chrome 只使用独立临时 Profile 和回环 CDP；真实 Cloudflare CAPTCHA、账号登录、核心接口校验和站点保存仍需用户本人完成，不能将超时烟测写成验证成功。
+- 本版本重新执行格式、Lint、类型检查、全量测试（43 个文件/301 项）、构建、开发态/打包态 Electron E2E（均 6/6）、macOS ARM64 DMG 和 Windows x64 NSIS 交叉构建；打包态还完成了真实 Chrome 启动/独立 Profile 清理烟测；未执行双远端推送或 GitHub Release。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；DMG SHA-256：`6e49114b72fed6ce55fa08e41e17e158e75aa013366da6a389db9d10796c246b`；DMG blockmap：`3044782621163ac16f13aeace1edb04b97e687ae8d4d243eba110021cb1d5bd0`。
+- Windows x64 NSIS、PE/asar/版本/入口结构检查通过；EXE SHA-256：`1a52f9e20074c79c6b5ff9cc7b3242844b418517390a487496d42068ffe996e9`；EXE blockmap：`79d787b084387f00a12f86576296c79026bd9fab7ec1ef2c17d6e44994d58619`。Windows 不代表真机通过。
+
+## 1.7.9 - 2026-08-05
+
+### Chrome Turnstile 登录、账号归属校验与窄窗口体验
+
+- Cloudflare Turnstile 站点点击“开始登录”后启动当前系统可用的 Google Chrome 独立临时 Profile；用户在真实 Chrome 中完成人机验证和登录，应用仅通过本机 CDP 读取同源、有限白名单登录令牌，不读取或复制现有 Chrome Profile、Cookie、验证码结果或完整页面存储。支持 macOS 和 Windows 的 Chrome 路径发现、启动失败、窗口关闭、超时、跨站跳转和临时 Profile 清理提示。
+- 重新验证已有站点时新增 profile 账号归属校验；Chrome 登录的用户名与站点保存用户名不一致时拒绝覆盖旧令牌并提示“登录账号与添加站点用户名不一致”。同一地址允许不同用户名重复添加，同地址同用户名仍拒绝。
+- 统一安全验证弹窗与消息通知：固定“需要完成安全验证”文案、右上角关闭图标、`Esc`、焦点循环、暂不添加/开始登录按钮；窄窗口下长文案自动换行、按钮自动布局、弹窗内部滚动且不遮挡主要内容。
+- 渠道状态强制刷新失败时继续保留最近一次成功的渠道、选中项和详情，显示 stale 提示并提供重试，不再出现数分钟后状态消失、必须手动重新查看才恢复的问题。
+
+### 验证边界
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（43 个文件/301 项）、`npm run build` 和开发态/打包态 Electron E2E（均 6/6）已通过。
+- macOS ARM64 DMG 通过 `hdiutil verify`（`VALID`）；DMG SHA-256：`d3faa8a6d35beeb4afccdf07ccd63d06579fdf13194fa7233349fd7fe95b9255`；DMG blockmap SHA-256：`60ce13bda1867ad895398b19d0adc86031ec93c8194079bce492c965652d308e`。
+- Windows x64 NSIS 交叉构建、PE/asar/版本/入口结构检查通过；EXE SHA-256：`c4105b4f16aadebfcc98c3153c80d85a1ab138780bb6722ea139cc6886aed25e`；EXE blockmap SHA-256：`ba59997c10f29f7a65d46986f3fc3192c514f09b8ca142eb1146bdf73c2b77b0`。Windows 不代表真机通过。
+- 真实 Cloudflare CAPTCHA、账号登录和站点核心接口保存仍必须由用户本人完成，不能将控件显示或网络恢复写成验证码成功；未执行双远端推送或 GitHub Release。
+
+## 1.7.8 - 2026-08-04
+
+### Turnstile 挑战网络与官方窗口退出修复
+
+- 修复部分网络将 `brunhild.challenges.cloudflare.com` 解析到 RFC 2544 假地址，导致 Cloudflare Turnstile challenge 请求 `ERR_CONNECTION_CLOSED`、用户始终无法完成验证的问题；启动 Chromium 前使用 Cloudflare 公布的 IPv6 HTTPS 边缘提示解析挑战域，官方 challenge 请求恢复后仍由 Cloudflare 完成真实人机判断。
+- 交互登录窗口同时支持原生关闭按钮、窗口级 `Esc` 和官方页面级 `Esc`；退出、取消、超时或网络失败均只结束临时验证会话，不保存站点或凭据。
+- 保留系统代理到直连的可恢复网络重试、纯 Chrome User-Agent、临时隔离 session、同源顶层导航和有限 Token 白名单；不复制 Chrome 会话、不伪造或绕过 CAPTCHA。
+
+### 验证边界
+
+- 已通过交互认证策略定向测试、Electron TypeScript 编译和真实 macOS ARM64 Electron 窗口 challenge 网络复核；官方窗口已自动填入脱敏测试字段，challenge 请求不再出现 `ERR_CONNECTION_CLOSED`，退出后不保存站点。
+- 真实 Turnstile checkbox 的点击、挑战结果、登录、profile/Key/分组/倍率/统计核心校验和站点保存仍需用户本人完成；Windows 仅执行 x64 交叉构建，不作为真机验收。
+
+## 1.7.7 - 2026-08-04
+
+### Turnstile 官方窗口自动填充修复
+
+- 修复 SPA 登录页异步渲染导致官方登录窗口首次找不到邮箱/密码输入框的问题；窗口会在表单出现前持续重试安全填充，字段已有内容时不覆盖用户输入。
+- 真实 `ai.maok.shop` 复测确认官方窗口显示 Cloudflare Turnstile 且账号、密码已填入，登录按钮继续由站点在用户完成挑战后启用；应用不代做 CAPTCHA、不复制浏览器会话。
+- 取消安全验证后将添加流程阶段恢复为“等待开始”，右上角关闭图标、`Esc` 和“暂不添加”继续复用统一通知并保证不保存半成品。
+
+### 验证边界
+
+- 本轮新增回归覆盖异步凭据填充和取消后阶段复位；完整测试、构建、macOS 打包交互和 Windows 交叉构建结果在本轮验证后补录。
+- macOS 真实 Turnstile 控件已加载，但 CAPTCHA、登录、profile/Key/分组/倍率/统计核心校验和站点保存仍需用户本人在官方窗口完成；Windows 仍不作为真机验收。
+
+## 1.7.6 - 2026-08-04
+
+### Turnstile 挑战网络恢复与验证窗口退出
+
+- 在 Electron 启动阶段仅为 Cloudflare challenge 域设置公开边缘解析规则，规避部分系统代理/DNS 将 `brunhild.challenges.cloudflare.com` 解析到 RFC 2544 假 IP 后导致的 TLS 关闭；官方登录页仍在原站点和临时隔离 session 中加载。
+- 交互窗口首次遇到可恢复的 challenge 传输错误时自动切换直连并重载官方登录页；无法恢复时保留安全验证流程，不伪造 Turnstile 结果、不复制 Chrome 会话。
+- 安全验证弹窗保留右上角关闭图标、`Esc` 和焦点循环；关闭、取消或失败均不保存站点，成功后才继续 profile、Key、分组、倍率和统计核心校验。
+
+### 验证边界
+
+- 当前自动化回归为 42 个 Vitest 文件、286 项测试；已通过 `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm run build` 和开发态 Electron E2E（待本轮最终产物复核后补充打包命令与哈希）。
+- macOS ARM64 隔离打包应用已真实打开 `ai.maok.shop/login` 并显示 Turnstile “Verify you are human” 控件，说明 challenge 域不再立即 TLS 关闭；尚未代用户点击或完成 CAPTCHA，真实登录、核心接口校验和站点保存继续标记为“待用户介入/受阻”。
+- Windows 仅执行 x64 NSIS 交叉构建与结构检查，不表述为 Windows 真机通过；本轮未执行双远端推送、`release:publish` 或正式 GitHub Release。
+
+## 1.7.5 - 2026-08-04
+
+### Turnstile 验证重试与退出体验
+
+- 官方登录窗口遇到 Turnstile 挑战网络失败、加载失败或超时后保留安全验证弹窗，用户修复系统代理或网络后可以直接重试，不需要重新填写站点信息。
+- 安全验证弹窗增加右上角关闭图标；点击关闭图标、点击“暂不添加”或按 `Esc` 都会退出当前验证流程，且不会保存站点或覆盖已有凭据。
+- 交互登录 Token 读取继续限制在固定白名单，并兼容官方页面写入 `localStorage` 或 `sessionStorage` 的站点。
+
+### 验证边界
+
+- 已通过 `npm test -- --run`（42 个文件/283 项）、`npm run format:check`、`npm run lint`、`npm run typecheck`、`npm run build` 和开发态 Electron E2E（6/6）。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；DMG SHA-256：`3c13ae31b54dce57d4919970eacb01d3944e57c93da6200d829d181379fb76b3`；DMG blockmap：`db873b189d6084c68090f1152080d23cf710abb8a994f22d051dbac9f2cc7e9f`。Windows x64 NSIS 交叉构建完成；EXE SHA-256：`17ce8051656184cd0eb40379658881dc473675b579bc173a15e69fddf360e2a6`；EXE blockmap：`4273c3717092451d83cc6fe9aff8e9d0f5f0ce5a4690e64916485993a64d1706`。Windows 不代表真机通过。
+- 当前机器到 `brunhild.challenges.cloudflare.com` 的 DNS 被解析为 `198.18.0.111`，TLS 连接失败；通过公网 Cloudflare IPv6 复核可建立连接，但本地 Electron 真实 Turnstile 仍未完成。该限制需要用户网络或系统代理恢复，应用不会绕过或伪造人机验证。
+- 本轮未执行双远端推送、`release:publish` 或正式 GitHub Release。
+
+## 1.7.4 - 2026-08-04
+
+### 批量站点验证安全门禁修复
+
+- 批量添加每个站点先读取公开 GeeTest/Cloudflare Turnstile 开关；检测到交互验证时按单项报告“需要单独完成安全验证”，继续处理其他 URL，不再尝试密码登录。
+- 新增回归测试覆盖“公开设置要求 Turnstile 但登录接口暂时返回成功”的场景，确保不会绕过官方登录窗口或保存站点。
+
+### 验证边界
+
+- 当前自动化回归：`npm run format:check`、`npm run lint`、`npm run typecheck`、42 个 Vitest 文件/281 项测试、开发态 Electron E2E 6/6、macOS ARM64 打包应用 E2E 6/6、`npm run build` 和 `npm run pack` 均通过。
+- macOS ARM64 DMG 通过 `hdiutil verify`（`VALID`）；DMG SHA-256：`78a7c6e8095153463cf40e530aaab136ef626e091e706628f2fb37c77f57a87c`；DMG blockmap SHA-256：`f78d31a48b5e811df7aff4ed56075f0aa9a27fb0892325f54060d63f2a74b3cb`。主程序为 Mach-O ARM64，Info.plist 版本为 `1.7.4`。
+- Windows x64 NSIS 交叉构建完成；`dist:win`、PE/asar/版本/入口检查通过。EXE SHA-256：`9653364c70a6f13158e3f7bebb524043bc3714215e44b5c2570d00a110502494`；EXE blockmap SHA-256：`0ee79977a7b8652f7e6670c3f4b4348e5e4abf138f196de67ca1c35828b1b912`。Windows 不代表真机通过。
+- 版本测试断言已改为读取当前 `package.json` 并校验 CHANGELOG 首个版本标题，避免 SemVer 递增后残留旧版本硬编码。
+- 真实 Turnstile challenge 仍受外部挑战域网络阻塞，macOS 真实账号登录和核心接口保存继续记录为“受阻”；不复制 Chrome 会话、不绕过或伪造验证码结果。
+- 本版本仅完成源码和本地构建收口，未经授权不执行双远端推送、`release:publish` 或 GitHub Release。
+
+## 1.7.3 - 2026-08-04
+
+### 交互认证、保存回滚与站点隔离收口
+
+- 交互认证 Token 支持只有 access token 的站点；refresh token 缺失时仍按官方窗口验证并完成核心能力校验。
+- 官方交互窗口新增同源顶层 `will-redirect` 拦截，继续保持临时 session、sandbox、contextIsolation、无 preload、新窗口拒绝和有限 Token 白名单。
+- 重新验证失败时原子恢复旧凭据、快照、Key 缓存、Key 偏好、运行态、错误和耗时；保存或删除站点时同步清理快照、通知规则、进行中的刷新和 Key 用量缓存。
+- 同地址不同用户名继续允许独立站点；同地址同用户名仍拒绝，所有站点级凭据、Token、缓存、统计、渠道关系、通知和删除行为按 `siteId` 隔离。
+
+### 验证边界
+
+- 已通过 `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（42 个文件/280 项）、`npm run test:e2e`（6/6）、`npm run build`、`npm run pack`、`npm run dist:mac` 和 `npm run dist:win`。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；本次重建 DMG SHA-256：`5838392816557565d03ad99d124408185f16b3ef87c0a3525445aa8e847543d1`；DMG blockmap SHA-256：`f9886a61a160ca5b1abe08c9b6e979784fec9f5ab40f04d6f00c6ff119b5d780`。
+- Windows x64 NSIS 交叉构建完成；本次重建 EXE SHA-256：`9a99ca3051777826ec253de5a65e79e8b4cdb771c81086b49501e3daf1edc189`；EXE blockmap SHA-256：`77d4b7595eae39cbba43807f4bde53dbd25f095511cd987646906570cd6ca195`；PE、asar、版本和入口检查通过。Windows 不代表真机通过。
+- 最新 macOS ARM64 打包应用 E2E 为 6/6；真实站点添加流程已打开官方登录窗口并显示动态安全验证提示，但 Turnstile 挑战资源仍未建立连接，未保存站点。
+- 本版本的页面样式结果沿用 `real-test-evidence/macos-1.7.2/` 受控验证证据；真实 GeeTest/Cloudflare Turnstile challenge 仍必须由用户本人在官方登录窗口完成。
+- 新增公开只读证据 `real-test-evidence/macos-1.7.3/README.md`：Chrome 页面检测到 Turnstile iframe 和响应字段，但挑战域返回 `net::ERR_CONNECTION_CLOSED`；未提交账号，真实登录仍受阻。
+- macOS ARM64 真实 Turnstile challenge 仍可能受挑战域网络阻断；Windows 仅记录 x64 NSIS 交叉构建，不代表 Windows 真机通过。
+
+## 1.7.2 - 2026-08-04
+
+### 渠道状态缓存回退与交互认证错误分类
+
+- 修复渠道状态弹窗强制刷新失败后进入完整错误态的问题：保留最近一次成功的渠道、当前选中项和已读取详情，显示“更新失败，显示上次数据”并提供局部重试入口。
+- 修复弹窗选中渠道变化导致自动加载 effect 重新执行的问题；选中渠道通过稳定 ref 保存，刷新按钮不会因组件状态更新而重复请求或清空内容。
+- 统一识别登录接口在 2xx、401、400 等 HTTP 状态下返回的 GeeTest/Cloudflare Turnstile 验证要求，Renderer 只收到安全的 provider 和固定错误文案。
+- 站点正式保存增加串行化和失败回滚，安全存储或数据库写入失败时不留下站点、凭据、缓存或运行态半成品。
+
+### 验证边界
+
+- 已通过 `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（42 个文件/278 项）、`npm run test:e2e`（6/6）、`npm run build`、`npm run pack`、`npm run dist:mac` 和 `npm run dist:win`。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；DMG SHA-256：`c3076c0824f20025fe6047a61208521cbc3d1f7addaddd4054f0269b3ed22fe`；DMG blockmap SHA-256：`592275b50e2e77c6e2498fc9179d7aac71e4a291bc211598eab96f09bb24e798`。
+- Windows x64 NSIS 交叉构建完成；EXE SHA-256：`8075bf5dc76394ecdd1bb2800e3266368ec38ed29ac3cdb05bcc34e2eefb5e91`；EXE blockmap SHA-256：`bf90f3f816934d11fea7b6465b5ef8aa26285b74726772758a4ca0d8e95f379f`；同时确认 PE、asar、版本 `1.7.2` 和入口文件存在。Windows 仅代表 x64 交叉构建，不代表 Windows 真机通过。
+- macOS ARM64 打包应用受控页面检查：弹窗宽屏与窄屏均为 `440×198`，动态显示 `Cloudflare Turnstile`，Escape 取消后站点数为 `0`；截图位于 `real-test-evidence/macos-1.7.2/`。
+- 真实 GeeTest/Cloudflare Turnstile challenge 仍必须由用户本人在官方登录窗口完成；若挑战域受网络阻断，保留受阻证据，不绕过或伪造验证结果。
+
+## 1.7.1 - 2026-08-03
+
+### 官方登录窗口的 Turnstile 兼容性修复
+
+- 官方登录窗口加载前移除 Electron User-Agent 标记，保留 Chromium/Chrome 内核信息，避免 Cloudflare Turnstile 将 Electron 页面判定为不兼容并关闭 challenge 请求。
+- 保留临时 session、sandbox、contextIsolation、同源顶层导航和有限 Token 白名单；不复制 Chrome Cookie、验证码令牌或完整页面存储。
+- 新增 User-Agent 策略单测；真实站点只读公开设置确认继续识别为 Turnstile，真实挑战仍必须由用户本人在官方窗口完成。
+- 1.7.1 macOS ARM64 隔离打包复测已确认对话框动态显示 `Cloudflare Turnstile`，官方窗口 UA 已还原为纯 Chrome 形态；challenge iframe 仍为 0，`brunhild.challenges.cloudflare.com` 返回 `ERR_CONNECTION_CLOSED`，记录为外部 Cloudflare/Electron 网络阻塞，不绕过或伪造挑战。
+- 受控本地公开设置场景的 macOS 打包应用页面检查通过：对话框 `440×198`、按钮 `88×36`、默认焦点和 Escape 行为稳定，取消后没有保存站点；该结果不替代真实验证码挑战。
+
+### 验证与产物
+
+- `npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（41 个文件/273 项）、`npm run test:e2e`（6/6）和 `npm run build` 已通过；macOS ARM64 新包的 Turnstile 真实 challenge 仍受外部网络阻塞。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`。DMG SHA-256：`61b51459e1d7451e51ce6b7811809d682d73429bf62884469050f04f7d2cbca4`；DMG blockmap SHA-256：`1086869b2dc5ec512f486d464f78758b3432e6b6c76cc6390ce963526ffad71e`。
+- Windows x64 NSIS 已完成交叉构建、PE/asar 版本与入口检查。EXE SHA-256：`dae9236eebf3e8312d8f8d985f20dac6990f36e4bba72d263717c0f8e74a3c9a`；EXE blockmap SHA-256：`98638d885171c1a32b808506a79e31075cb5d424138440a8e0505da80a4c6dd7`。Windows 不表述为真机通过。
+- 未执行发布授权、双远端推送或 `release:publish`，因此没有生成或验证正式 `update-manifest.json`；当前 release 产物仅作本地构建证据。
+
+## 1.7.0 - 2026-08-03
+
+### GeeTest 与 Cloudflare Turnstile 统一登录验证
+
+- 站点添加先读取公开设置并识别 GeeTest 或 Cloudflare Turnstile；统一弹出“需要完成安全验证”对话框，验证必须在官方登录窗口完成，成功后继续核心接口校验并原子保存。
+- 交互认证使用通用 `interactive` 会话，兼容历史 GeeTest 凭据；Token 失效时进入 `auth-required`，不再静默密码重登，并提供主动重新验证入口。
+- 扩展 IPC 与安全存储字段只传递固定 provider 白名单；不向 Renderer 暴露密码、Token、Cookie、验证码令牌或原始响应。
+
+### 同站多账号与批量添加
+
+- 同一规范化站点地址仅拦截相同账号身份；邮箱比较忽略大小写，其他用户名保留大小写，去除首尾空格。
+- 相同地址的不同账号拥有独立 siteId、凭据、Token、Key 缓存、统计、刷新状态、通知状态和删除行为；站点列表显示安全脱敏账号标签。
+- 批量添加遇到交互验证按单项报告“需要单独完成安全验证”，继续处理其他地址，不连续弹出验证窗口。
+
+### 验证状态通知与渠道稳定性
+
+- 安全验证等待、成功、取消、超时、失败和重新验证全部复用现有消息通知系统；保留当前浅色视觉、焦点回收、Escape、窄窗口换行和跨平台尺寸约束。
+- 保留并回归渠道状态 stale-while-revalidate 行为，手动选择的渠道在轮询和刷新期间持续显示，不因缓存过期误显示为空。
+
+### 验证结果与已知限制
+
+- 自动化验证：`npm run format:check`、`npm run lint`、`npm run typecheck`、`npm test -- --run`（41 个文件/271 项）、`npm run test:e2e`（6/6）和 `npm run build` 已通过；本轮 macOS ARM64 打包应用 E2E 也为 6/6。
+- 本轮 macOS ARM64 DMG 已通过 `hdiutil verify`，页面证据位于 `real-test-evidence/macos-1.7.0/`；Windows 仅执行 x64 NSIS 交叉构建、PE/asar/版本/入口结构检查，不表述为 Windows 真机通过。真实 GeeTest/Turnstile 挑战仍必须由用户在官方登录窗口完成，未以自动化代做。
+- 外部站点的真实人机验证仍必须由用户在官方登录窗口完成；应用不绕过、破解或复制验证码令牌。
+
 ## 1.6.0 - 2026-07-29
 
 ### GeeTest 安全验证与统一状态通知

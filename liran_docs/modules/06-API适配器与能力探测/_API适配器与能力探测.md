@@ -1,5 +1,36 @@
 # API 适配器与能力探测
 
+## 2026-08-05 1.7.9 认证账号归属与渠道状态回退
+
+- 适配器核心 profile 结果参与首次添加和重新验证的账号归属检查；异账号不会覆盖同地址其他站点。
+- 渠道状态服务在强刷失败时保留上次成功值和手动选择，恢复后再替换缓存，不把暂时网络错误变成空列表。
+
+## 2026-08-04 1.7.8 Turnstile challenge 网络适配
+
+- Cloudflare challenge 域使用公开 IPv6 HTTPS 边缘提示，修复系统 DNS 返回 RFC 2544 假 IP 时的 TLS 关闭；不修改 challenge 响应，也不伪造验证码结果。
+- challenge 网络恢复后仍要求官方窗口完成真实 Turnstile，失败或用户退出不进入站点保存。
+
+## 2026-08-04 1.7.7 交互窗口输入与适配边界
+
+- 适配器只负责 provider 探测、固定错误分类和核心接口校验；官方登录窗口处理异步表单输入，成功会话仍必须经过 profile/Key/分组/倍率/统计校验。
+- 不因 Turnstile 控件可见或凭据已填入而生成成功会话；不透传页面内容、Cookie、验证码 Token 或原始响应。
+
+## 2026-08-04 1.7.3 交互 Token 与官方窗口边界
+
+- 有限 Token 白名单支持 access-only 结构；适配器不读取任意 storage，也不透传 Token、Cookie 或页面内容。
+- 官方窗口的顶层重定向与导航均走同源策略，挑战 iframe 仍由官方登录页加载。
+
+## 2026-08-04 1.7.2 登录错误先分类
+
+- `Sub2ApiClient` 对 2xx、401、400 登录响应只读取有限错误码/消息识别 provider；其余字段不离开适配器。
+- 识别到交互验证时统一抛出安全错误，避免 `loginResponseSchema` 把错误包误认为有效会话。
+
+## 2026-08-03 1.7.0 Turnstile 与 GeeTest 统一探测（已实现）
+
+- `/settings/public` 只提取 `geetest_enabled` 或 `turnstile_enabled`；不把私有设置、site key、Cookie 或 HTML 透传到上层。
+- 登录返回 `GEETEST_*`、`TURNSTILE_*` 或 `CLOUDFLARE_TURNSTILE_REQUIRED` 时归类为交互验证，并保留真实 `response.status`；未知错误继续使用通用安全错误。
+- 交互 Token 必须经核心 `readCore()` 和按 Key 今日统计验证后才进入保存流程，批量添加遇到交互验证时只记录单项失败并继续其他 URL。
+
 ## 2026-07-29 GeeTest 能力探测增量（待实施）
 
 - 在有限白名单内读取 `/api/v1/settings/public`，只解析 `geetest_enabled` 等认证模式字段；探测失败不直接判定站点无效，允许尝试现有密码登录。

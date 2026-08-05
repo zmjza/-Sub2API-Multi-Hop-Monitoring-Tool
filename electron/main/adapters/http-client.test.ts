@@ -60,7 +60,28 @@ describe('Sub2ApiClient', () => {
       ),
     );
 
-    await expect(client.authenticationMode()).resolves.toEqual({ geetestEnabled: true });
+    await expect(client.authenticationMode()).resolves.toEqual({
+      interactiveVerification: { required: true, provider: 'geetest' },
+    });
+  });
+
+  it('detects Cloudflare Turnstile from public settings without exposing unrelated settings', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse({
+          data: {
+            turnstile_enabled: true,
+            turnstile_site_key: 'public-site-key',
+            unrelated_private_value: 'must-not-leave-adapter',
+          },
+        }),
+      ),
+    );
+
+    await expect(client.authenticationMode()).resolves.toEqual({
+      interactiveVerification: { required: true, provider: 'turnstile' },
+    });
   });
 
   it('classifies a GeeTest login rejection without leaking the upstream response', async () => {
@@ -78,8 +99,76 @@ describe('Sub2ApiClient', () => {
     );
 
     await expect(client.login('safe@example.invalid', 'runtime-secret')).rejects.toMatchObject({
-      code: 'GEETEST_REQUIRED',
+      code: 'INTERACTIVE_VERIFICATION_REQUIRED',
       message: '需要完成安全验证',
+      provider: 'geetest',
+      retryable: false,
+    });
+  });
+
+  it('classifies a Turnstile login rejection without leaking the upstream response', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            code: 'TURNSTILE_VERIFICATION_FAILED',
+            message: 'private upstream response',
+          },
+          400,
+        ),
+      ),
+    );
+
+    await expect(client.login('safe@example.invalid', 'runtime-secret')).rejects.toMatchObject({
+      code: 'INTERACTIVE_VERIFICATION_REQUIRED',
+      message: '需要完成安全验证',
+      provider: 'turnstile',
+      retryable: false,
+    });
+  });
+
+  it('classifies an interactive login rejection even when the provider responds with 401', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse(
+          {
+            data: {
+              code: 'TURNSTILE_REQUIRED',
+              message: 'complete challenge',
+              private_token: 'must-not-leave-adapter',
+            },
+          },
+          401,
+        ),
+      ),
+    );
+
+    await expect(client.login('safe@example.invalid', 'runtime-secret')).rejects.toMatchObject({
+      code: 'INTERACTIVE_VERIFICATION_REQUIRED',
+      provider: 'turnstile',
+      retryable: false,
+      httpStatus: 401,
+    });
+  });
+
+  it('classifies an interactive login envelope even when the HTTP response is 2xx', async () => {
+    const client = new Sub2ApiClient(
+      'https://example.invalid/api/v1',
+      vi.fn(async () =>
+        jsonResponse({
+          code: 'TURNSTILE_REQUIRED',
+          message: 'complete challenge',
+          data: { private_token: 'must-not-leave-adapter' },
+        }),
+      ),
+    );
+
+    await expect(client.login('safe@example.invalid', 'runtime-secret')).rejects.toMatchObject({
+      code: 'INTERACTIVE_VERIFICATION_REQUIRED',
+      message: '需要完成安全验证',
+      provider: 'turnstile',
       retryable: false,
     });
   });

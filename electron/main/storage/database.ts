@@ -112,6 +112,16 @@ export class AppDatabase {
       .run(siteId, accountLabel, secretRef, Date.now());
   }
 
+  getCredentialReference(siteId: string): { accountLabel: string; secretRef: string } | undefined {
+    const row = this.db
+      .prepare(
+        'SELECT account_label AS accountLabel, secret_ref AS secretRef FROM credential_refs WHERE site_id = ?',
+      )
+      .get(siteId) as { accountLabel?: string; secretRef?: string } | undefined;
+    if (!row?.accountLabel || !row.secretRef) return undefined;
+    return { accountLabel: row.accountLabel, secretRef: row.secretRef };
+  }
+
   saveSnapshot(siteId: string, snapshotJson: string, fetchedAt: number, expiresAt: number): void {
     this.db
       .prepare(
@@ -122,6 +132,10 @@ export class AppDatabase {
     `,
       )
       .run(siteId, snapshotJson, fetchedAt, expiresAt);
+  }
+
+  deleteSnapshot(siteId: string): void {
+    this.db.prepare('DELETE FROM snapshots WHERE site_id = ?').run(siteId);
   }
 
   listSnapshots(): Array<{

@@ -1,4 +1,5 @@
 import { loginResponseSchema, normalizeError, refreshResponseSchema } from './schemas.js';
+import type { InteractiveVerificationProvider } from '../../shared/contracts.js';
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
@@ -19,6 +20,8 @@ export class Sub2ApiClient {
       },
       'authLogin',
     );
+    const provider = getInteractiveVerificationProvider(raw);
+    if (provider) throw interactiveVerificationError(provider);
     const parsed = loginResponseSchema.parse(raw);
     return {
       accessToken: parsed.data.access_token,
@@ -28,7 +31,10 @@ export class Sub2ApiClient {
     };
   }
 
-  async authenticationMode(): Promise<{ geetestEnabled: boolean }> {
+  async authenticationMode(): Promise<{
+    interactiveVerification:
+      { required: true; provider: InteractiveVerificationProvider } | { required: false };
+  }> {
     const raw = await this.request(
       '/settings/public',
       { method: 'GET', headers: { accept: 'application/json' } },
@@ -36,7 +42,15 @@ export class Sub2ApiClient {
     );
     const record = asRecord(raw);
     const data = asRecord(record?.data) ?? record;
-    return { geetestEnabled: data?.geetest_enabled === true };
+    const provider =
+      data?.geetest_enabled === true
+        ? 'geetest'
+        : data?.turnstile_enabled === true
+          ? 'turnstile'
+          : undefined;
+    return provider
+      ? { interactiveVerification: { required: true, provider } }
+      : { interactiveVerification: { required: false } };
   }
 
   async refresh(refreshToken: string) {
@@ -118,17 +132,10 @@ export class Sub2ApiClient {
         signal: controller.signal,
       });
       if (!response.ok) {
-        if (capability === 'authLogin' && response.status === 400) {
+        if (capability === 'authLogin') {
           const body = await safeJson(response);
-          const code = String(asRecord(body)?.code ?? '');
-          if (code === 'GEETEST_VERIFICATION_FAILED' || code === 'GEETEST_REQUIRED')
-            throw {
-              code: 'GEETEST_REQUIRED',
-              message: '需要完成安全验证',
-              capability,
-              httpStatus: 400,
-              retryable: false,
-            };
+          const provider = getInteractiveVerificationProvider(body);
+          if (provider) throw interactiveVerificationError(provider, response.status);
         }
         const normalized = normalizeError(undefined, capability, response.status);
         const retryAfterSeconds = parseRetryAfter(response.headers.get('retry-after'));
@@ -151,6 +158,20 @@ export class Sub2ApiClient {
       clearTimeout(timer);
     }
   }
+}
+
+function interactiveVerificationError(
+  provider: InteractiveVerificationProvider,
+  httpStatus?: number,
+) {
+  return {
+    code: 'INTERACTIVE_VERIFICATION_REQUIRED',
+    message: '需要完成安全验证',
+    provider,
+    capability: 'authLogin',
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+    retryable: false,
+  } as const;
 }
 
 async function safeJson(response: Response): Promise<unknown> {
@@ -176,8 +197,44 @@ function parseRetryAfter(value: string | null): number | undefined {
   return Math.min(86_400, Math.max(0, Math.ceil((date - Date.now()) / 1_000)));
 }
 
-function isSafeError(
-  value: unknown,
-): value is { code: string; message: string; retryable: boolean } {
+function isSafeError(value: unknown): value is {
+  code: string;
+  message: string;
+  retryable: boolean;
+  provider?: InteractiveVerificationProvider;
+} {
   return typeof value === 'object' && value !== null && 'code' in value && 'retryable' in value;
+}
+
+export function getInteractiveVerificationProvider(
+  value: unknown,
+): InteractiveVerificationProvider | undefined {
+  const record = asRecord(value);
+  if (record?.provider === 'geetest' || record?.provider === 'turnstile') return record.provider;
+  for (const candidate of [record, asRecord(record?.data)]) {
+    const code = String(candidate?.code ?? '').toUpperCase();
+    if (['GEETEST_VERIFICATION_FAILED', 'GEETEST_REQUIRED', 'GEETEST_FAILED'].includes(code))
+      return 'geetest';
+    if (
+      [
+        'TURNSTILE_VERIFICATION_FAILED',
+        'TURNSTILE_REQUIRED',
+        'TURNSTILE_FAILED',
+        'CLOUDFLARE_TURNSTILE_REQUIRED',
+      ].includes(code)
+    )
+      return 'turnstile';
+    const message = String(candidate?.message ?? '').toLowerCase();
+    if (
+      message.includes('geetest') &&
+      /(captcha|challenge|verification|required|failed)/.test(message)
+    )
+      return 'geetest';
+    if (
+      message.includes('turnstile') &&
+      /(captcha|challenge|verification|required|failed)/.test(message)
+    )
+      return 'turnstile';
+  }
+  return undefined;
 }

@@ -153,6 +153,12 @@
   padding: 0 16px;
   border-top: 1px solid rgba(199, 196, 216, 0.15);
 }
+.site-account-label {
+  display: block;
+  margin-top: 2px;
+  color: #777587;
+  font-size: 11px;
+}
 .site-table-panel th:last-child,
 .site-table-panel td:last-child {
   text-align: right;
@@ -284,6 +290,14 @@
   font: inherit;
   cursor: pointer;
 }
+.site-reverify-button {
+  margin-left: 8px;
+  border: 0;
+  background: transparent;
+  color: #4f46e5;
+  font: inherit;
+  cursor: pointer;
+}
 .batch-entry {
   margin-top: 12px;
   color: #5f5d70;
@@ -405,11 +419,13 @@
   inset: 0;
   display: grid;
   place-items: center;
+  overflow: auto;
   padding: 20px;
   background: rgba(31, 28, 43, 0.28);
 }
 
 .security-verification-dialog {
+  position: relative;
   width: min(440px, calc(100vw - 32px));
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
@@ -420,6 +436,34 @@
   background: rgba(255, 255, 255, 0.99);
   box-shadow: 0 20px 52px rgba(31, 28, 43, 0.2);
   color: #2b2937;
+  max-height: min(560px, calc(100vh - 32px));
+  overflow: auto;
+}
+
+.security-verification-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: #777587;
+  cursor: pointer;
+}
+
+.security-verification-close:hover {
+  background: #f2f0f7;
+  color: #2b2937;
+}
+
+.security-verification-close:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
 }
 
 .security-verification-icon {
@@ -450,6 +494,7 @@
 .security-verification-actions {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 9px;
   margin-top: 22px;
@@ -467,6 +512,8 @@
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
+  flex: 1 1 120px;
+  min-width: 0;
 }
 
 .security-verification-actions button.primary {
@@ -487,7 +534,25 @@
   .security-verification-dialog {
     padding: 18px;
   }
+  .security-verification-actions {
+    margin-top: 18px;
+  }
   .security-verification-copy p br {
     display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .security-verification-dialog {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .security-verification-icon {
+    width: 36px;
+    height: 36px;
+  }
+  .security-verification-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 }

@@ -24,6 +24,23 @@ export interface ChannelStatusCache {
   details: Record<string, ChannelDetailPayload>;
 }
 
+export function restoreChannelPopoverCache(
+  cache: ChannelStatusCache | undefined,
+  selectedId?: string,
+):
+  { channels: Channel[]; selected?: Channel; detail?: ChannelDetailPayload['detail'] } | undefined {
+  const envelope = cache?.channels;
+  if (!envelope || envelope.state !== 'supported') return undefined;
+  const channels = envelope.channels;
+  const selected = channels.find((item) => item.id === selectedId) ?? channels[0];
+  const detailEnvelope = selected ? cache.details[selected.id] : undefined;
+  return {
+    channels,
+    selected,
+    detail: detailEnvelope?.state === 'supported' ? detailEnvelope.detail : undefined,
+  };
+}
+
 export function ChannelStatusPopover(props: {
   anchor: HTMLElement;
   siteId: string;
@@ -47,6 +64,7 @@ export function ChannelStatusPopover(props: {
   const loadDetailRef = useRef(props.loadDetail);
   const siteIdRef = useRef(props.siteId);
   const cacheRef = useRef(props.cache);
+  const selectedIdRef = useRef<string | undefined>(undefined);
   onLoadedRef.current = props.onLoaded;
   onCacheChangeRef.current = props.onCacheChange;
   onStateChangeRef.current = props.onStateChange;
@@ -63,6 +81,8 @@ export function ChannelStatusPopover(props: {
   const [selected, setSelected] = useState<Channel>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stale, setStale] = useState(false);
   const [associatedChannelIds, setAssociatedChannelIds] = useState<string[]>(
     props.associatedChannelIds ?? [],
   );
@@ -114,25 +134,43 @@ export function ChannelStatusPopover(props: {
 
   const load = useCallback(
     async (force = false) => {
-      setState('loading');
-      setDetail(undefined);
+      const existingCache = cacheRef.current;
+      const previous = force
+        ? restoreChannelPopoverCache(existingCache, selectedIdRef.current)
+        : undefined;
+      if (previous) {
+        setChannels(previous.channels);
+        setSelected(previous.selected);
+        setDetail(previous.detail);
+        setDetailError(false);
+        setState(previous.channels.length ? 'success' : 'no-data');
+        setRefreshing(true);
+        setStale(false);
+      } else {
+        setState('loading');
+        setDetail(undefined);
+        setRefreshing(false);
+        setStale(false);
+      }
       try {
-        setSelected(undefined);
-        const cached = force ? undefined : cacheRef.current;
-        const value =
-          cached?.channels ??
-          (loadChannelsRef.current
+        let value: unknown;
+        if (!force && existingCache?.channels) value = existingCache.channels;
+        else
+          value = loadChannelsRef.current
             ? await loadChannelsRef.current(force)
-            : await window.sub2apiDesktop?.sites.channels(siteIdRef.current));
+            : await window.sub2apiDesktop?.sites.channels(siteIdRef.current);
         if (!value || typeof value !== 'object' || !('state' in value)) {
           onStateChangeRef.current?.('error');
           setState('error');
+          setRefreshing(false);
           return;
         }
         const envelope = value as ChannelViewPayload;
+        setRefreshing(false);
+        setStale(false);
         if (envelope.state !== 'supported') {
           setChannels([]);
-          publishCache({ channels: envelope, details: cached?.details ?? {} });
+          publishCache({ channels: envelope, details: existingCache?.details ?? {} });
           onStateChangeRef.current?.('unsupported');
           setState('unsupported');
           return;
@@ -141,7 +179,7 @@ export function ChannelStatusPopover(props: {
         setChannels(items);
         onLoadedRef.current?.(items);
         onStateChangeRef.current?.('supported');
-        const nextCache = { channels: envelope, details: cached?.details ?? {} };
+        const nextCache = { channels: envelope, details: existingCache?.details ?? {} };
         publishCache(nextCache);
         if (items.length === 0) {
           setState('no-data');
@@ -150,12 +188,26 @@ export function ChannelStatusPopover(props: {
         setState('success');
         await loadDetail(items[0]!, envelope, force);
       } catch {
+        setRefreshing(false);
+        if (previous) {
+          setChannels(previous.channels);
+          setSelected(previous.selected);
+          setDetail(previous.detail);
+          setDetailError(false);
+          setStale(true);
+          onStateChangeRef.current?.('supported');
+          return;
+        }
         onStateChangeRef.current?.('error');
         setState('error');
       }
     },
     [loadDetail, publishCache],
   );
+
+  useEffect(() => {
+    selectedIdRef.current = selected?.id;
+  }, [selected?.id]);
 
   useEffect(() => {
     void load();
@@ -235,16 +287,33 @@ export function ChannelStatusPopover(props: {
             type="button"
             aria-label="刷新渠道状态"
             title="刷新渠道状态"
-            disabled={state === 'loading'}
+            disabled={state === 'loading' || refreshing}
             onClick={() => void load(true)}
           >
-            <RefreshCw size={16} className={state === 'loading' ? 'spin' : undefined} />
+            <RefreshCw
+              size={16}
+              className={state === 'loading' || refreshing ? 'spin' : undefined}
+            />
           </button>
           <button type="button" aria-label="关闭渠道状态弹窗" title="关闭" onClick={props.onClose}>
             <X size={17} />
           </button>
         </div>
       </header>
+      {stale && (
+        <div className="rate-channel-stale" role="status">
+          <AlertTriangle size={14} />
+          <span>更新失败，显示上次数据</span>
+          <button
+            type="button"
+            aria-label="重试渠道状态"
+            title="重试渠道状态"
+            onClick={() => void load(true)}
+          >
+            <RefreshCw size={13} />
+          </button>
+        </div>
+      )}
       {state === 'loading' ? (
         <div className="rate-channel-state" role="status">
           <RefreshCw size={24} className="spin" />

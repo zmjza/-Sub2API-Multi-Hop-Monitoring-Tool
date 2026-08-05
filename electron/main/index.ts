@@ -19,6 +19,7 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   siteInputSchema,
+  interactiveVerificationRequestSchema,
   batchSiteInputSchema,
   refreshRequestSchema,
   siteNoteSchema,
@@ -54,7 +55,7 @@ import {
 import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
 import { FileSecretBackend } from './storage/file-secret-backend.js';
-import { SiteService } from './services/site-service.js';
+import { InteractiveVerificationRequiredError, SiteService } from './services/site-service.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
@@ -62,11 +63,33 @@ import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
 import { floatingWindowPolicy, resolveFloatingBounds } from './domain/window-bounds.js';
 import { compareSemver, UpdateService, updateManifestSchema } from './services/update-service.js';
 import { runInteractiveAuthentication } from './services/interactive-auth-window.js';
+import { closeAllChromeAuthenticationSessions } from './services/chrome-auth-window.js';
+import { createAsyncQuitHandler } from './services/app-shutdown.js';
+import {
+  interactiveChallengeHostResolverRules,
+  interactiveHostResolverRule,
+} from './services/interactive-auth-policy.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
 const preloadPath = path.join(currentDir, '../preload/bridge.cjs');
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+// Some managed DNS/proxy clients return RFC 2544 fake IPs for Cloudflare's challenge hosts.
+// Public DNS answers are used only when this machine's managed resolver returns RFC 2544 fake IPs.
+// These rules repair transport to the official challenge/STUN services and never change responses.
+const challengeHostResolverRules = [
+  interactiveChallengeHostResolverRules('2606:4700::6812:1092'),
+  interactiveHostResolverRule('stun.cloudflare.com', '2606:4700:49::'),
+  interactiveHostResolverRule('stun1.l.google.com', '2001:4860:4864:5:8000::1'),
+  interactiveHostResolverRule('stun.l.google.com', '2001:4860:4864:5:8000::1'),
+]
+  .filter((value): value is string => Boolean(value))
+  .join(', ');
+if (
+  challengeHostResolverRules &&
+  !process.argv.some((argument) => argument.startsWith('--host-resolver-rules'))
+)
+  app.commandLine.appendSwitch('host-resolver-rules', challengeHostResolverRules);
 let mainWindow: BrowserWindow | undefined;
 let floatingWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
@@ -79,6 +102,9 @@ let updateService: UpdateService;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
+const holdQuitForChromeCleanup = createAsyncQuitHandler(closeAllChromeAuthenticationSessions, () =>
+  app.quit(),
+);
 
 function secureWindowOptions(): Electron.BrowserWindowConstructorOptions {
   return {
@@ -153,14 +179,17 @@ function registerIpc() {
   });
   ipcMain.handle('sites:add-and-verify', async (_event, input: unknown) => {
     const parsed = siteInputSchema.parse(input);
-    if (await siteService.requiresInteractiveVerification(parsed))
-      return siteAddResultSchema.parse({ status: 'verification-required' });
+    const provider = await siteService.requiresInteractiveVerification(parsed);
+    if (provider) return siteAddResultSchema.parse({ status: 'verification-required', provider });
     let result;
     try {
       result = await siteService.addAndVerify(parsed);
     } catch (error) {
-      if (error instanceof Error && error.message === 'GEETEST_REQUIRED')
-        return siteAddResultSchema.parse({ status: 'verification-required' });
+      if (error instanceof InteractiveVerificationRequiredError)
+        return siteAddResultSchema.parse({
+          status: 'verification-required',
+          provider: error.provider,
+        });
       throw error;
     }
     scheduler.setSites(siteService.listSites().sites.map((site) => site.id));
@@ -168,15 +197,34 @@ function registerIpc() {
     return siteAddResultSchema.parse({ status: 'added', site: result });
   });
   ipcMain.handle('sites:add-with-interactive-verification', async (event, input: unknown) => {
-    const parsed = siteInputSchema.parse(input);
+    const parsed = interactiveVerificationRequestSchema.parse(input);
     const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
     if (!parent) throw new Error('INTERACTIVE_AUTH_WINDOW_UNAVAILABLE');
-    const result = await runInteractiveAuthentication(parent, parsed, (tokens) =>
-      siteService.addWithInteractiveSession(parsed, tokens),
+    const result = await runInteractiveAuthentication(
+      parent,
+      parsed,
+      (tokens) => siteService.addWithInteractiveSession(parsed, tokens, parsed.provider),
+      undefined,
+      parsed.provider,
     );
     scheduler.setSites(siteService.listSites().sites.map((site) => site.id));
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
     return siteAddResultSchema.parse({ status: 'added', site: result });
+  });
+  ipcMain.handle('sites:reverify', async (event, input: unknown) => {
+    const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    const context = siteService.getInteractiveAuthContext(siteId);
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (!parent) throw new Error('INTERACTIVE_AUTH_WINDOW_UNAVAILABLE');
+    const result = await runInteractiveAuthentication(
+      parent,
+      context.input,
+      (tokens) => siteService.reverifyWithInteractiveSession(siteId, tokens, context.provider),
+      undefined,
+      context.provider,
+    );
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
+    return siteSummarySchema.parse(result);
   });
   ipcMain.handle('sites:add-batch', async (event, input: unknown) => {
     const result = await siteService.addBatch(batchSiteInputSchema.parse(input), (value) =>
@@ -676,12 +724,14 @@ app.whenReady().then(async () => {
   scheduleRefreshLoops();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
   isQuitting = true;
   scheduler?.stop();
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);
   saveBoundsNow('window:main', mainWindow);
+  holdQuitForChromeCleanup(event);
 });
 app.on('window-all-closed', () => {
   /* tray keeps the app resident */

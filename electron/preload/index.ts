@@ -4,6 +4,7 @@ import type {
   BatchSiteInput,
   DashboardSnapshot,
   SiteInput,
+  InteractiveVerificationProvider,
   SiteSummary,
   SiteAddResult,
   SiteKeyContexts,
@@ -27,7 +28,11 @@ export interface DesktopBridge {
     select(siteId: string): Promise<DashboardSnapshot>;
     delete(siteId: string): Promise<DashboardSnapshot>;
     addAndVerify(input: SiteInput): Promise<SiteAddResult>;
-    addWithInteractiveVerification(input: SiteInput): Promise<SiteAddResult>;
+    addWithInteractiveVerification(
+      input: SiteInput,
+      provider: InteractiveVerificationProvider,
+    ): Promise<SiteAddResult>;
+    reverify(siteId: string): Promise<SiteSummary>;
     addBatch(
       input: BatchSiteInput,
     ): Promise<{ successes: SiteSummary[]; failures: Array<{ url: string; error: string }> }>;

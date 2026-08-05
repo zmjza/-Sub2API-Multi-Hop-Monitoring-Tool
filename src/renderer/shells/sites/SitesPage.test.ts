@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { batchProgressPercent, siteTaskSummary } from './SitesPage';
+import {
+  batchProgressPercent,
+  shouldKeepInteractiveVerificationPrompt,
+  siteTaskSummary,
+} from './SitesPage';
 
 describe('SitesPage runtime state', () => {
   it('never reports a static in-progress count for saved runtime sites', () => {
@@ -17,6 +21,29 @@ describe('SitesPage runtime state', () => {
     expect(batchProgressPercent(9, 4)).toBe(100);
     expect(batchProgressPercent(-1, 4)).toBe(0);
     expect(batchProgressPercent(1, 0)).toBe(0);
+  });
+
+  it('keeps the security prompt available after retryable auth-window failures', () => {
+    expect(shouldKeepInteractiveVerificationPrompt(new Error('INTERACTIVE_AUTH_TIMEOUT'))).toBe(
+      true,
+    );
+    expect(
+      shouldKeepInteractiveVerificationPrompt(new Error('INTERACTIVE_AUTH_CHALLENGE_NETWORK')),
+    ).toBe(true);
+    for (const code of [
+      'CHROME_NOT_INSTALLED',
+      'CHROME_CLOSED',
+      'CHROME_AUTH_TOKEN_NOT_FOUND',
+      'CHROME_AUTH_ORIGIN_BLOCKED',
+    ]) {
+      expect(shouldKeepInteractiveVerificationPrompt(new Error(code))).toBe(true);
+    }
+    expect(shouldKeepInteractiveVerificationPrompt(new Error('INTERACTIVE_AUTH_CANCELLED'))).toBe(
+      false,
+    );
+    expect(shouldKeepInteractiveVerificationPrompt(new Error('SITE_DUPLICATE_ACCOUNT'))).toBe(
+      false,
+    );
   });
 
   it('marks credentials as required and removes completed shell TODO markers', () => {
@@ -50,15 +77,41 @@ describe('SitesPage runtime state', () => {
     expect(source).not.toContain('悬浮窗保持普通桌面层级');
   });
 
-  it('uses the approved GeeTest dialog copy and interactive verification bridge', () => {
+  it('uses provider-aware security copy and the interactive verification bridge', () => {
     const source = readFileSync(fileURLToPath(new URL('./SitesPage.tsx', import.meta.url)), 'utf8');
+    const styles = readFileSync(fileURLToPath(new URL('./sites.css', import.meta.url)), 'utf8');
 
     expect(source).toContain('需要完成安全验证');
-    expect(source).toContain('该站点已启用 GeeTest。请在官方登录窗口完成人机验证，');
+    expect(source).toContain('Cloudflare Turnstile');
+    expect(source).toContain('providerDisplayName');
     expect(source).toContain('验证成功后将自动继续添加站点。');
     expect(source).toContain('暂不添加');
-    expect(source).toContain('开始验证');
-    expect(source).toContain('.addWithInteractiveVerification(input)');
+    expect(source).toContain('开始登录');
+    expect(source).not.toContain('开始验证');
+    expect(source).toContain('security-verification-close');
+    expect(source).toContain('关闭安全验证');
+    expect(source).toContain('shouldKeepInteractiveVerificationPrompt');
+    expect(styles).toContain('.security-verification-close');
+    expect(source).toContain('.addWithInteractiveVerification(');
+    expect(source).toContain('pending.input');
     expect(source).not.toContain('site-form-message');
+  });
+
+  it('resets the add flow phase when the security prompt is cancelled', () => {
+    const source = readFileSync(fileURLToPath(new URL('./SitesPage.tsx', import.meta.url)), 'utf8');
+    const cancelStart = source.indexOf('const cancelInteractiveVerification');
+    const cancelEnd = source.indexOf('const startInteractiveVerification');
+    expect(cancelStart).toBeGreaterThan(-1);
+    expect(cancelEnd).toBeGreaterThan(cancelStart);
+    expect(source.slice(cancelStart, cancelEnd)).toContain("setValidationPhase('等待开始')");
+  });
+
+  it('renders a safe account label for duplicate site addresses', () => {
+    const source = readFileSync(fileURLToPath(new URL('./SitesPage.tsx', import.meta.url)), 'utf8');
+
+    expect(source).toContain('accountLabel');
+    expect(source).toContain('site.accountLabel');
+    expect(source).toContain('sites.reverify(pending.siteId)');
+    expect(source).toContain('site.interactiveVerificationProvider');
   });
 });
