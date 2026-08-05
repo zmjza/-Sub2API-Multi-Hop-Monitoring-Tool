@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  WebContentsView,
   ipcMain,
   screen,
   shell,
@@ -69,6 +70,13 @@ import {
   interactiveChallengeHostResolverRules,
   interactiveHostResolverRule,
 } from './services/interactive-auth-policy.js';
+import {
+  isAllowedRadarNavigation,
+  radarUrlForTarget,
+  radarViewBounds,
+  type RadarEmbedState,
+  type RadarTargetId,
+} from '../shared/radar.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -99,6 +107,7 @@ let isQuitting = false;
 let scheduler: RefreshScheduler;
 let notificationService: NotificationService;
 let updateService: UpdateService;
+let radarView: WebContentsView | undefined;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
@@ -131,6 +140,119 @@ function protectNavigation(window: BrowserWindow) {
     return { action: 'deny' };
   });
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+}
+
+const RADAR_LOAD_ERROR_MESSAGE = '雷达网页加载失败，请检查网络后重试。';
+let radarViewTarget: RadarTargetId | undefined;
+let radarViewCleanup: (() => void) | undefined;
+
+function sendRadarState(state: RadarEmbedState) {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+    mainWindow.webContents.send('radar:state', state);
+}
+
+function syncRadarViewBounds() {
+  if (!radarView || !mainWindow || mainWindow.isDestroyed()) return;
+  const [width, height] = mainWindow.getContentSize();
+  radarView.setBounds(radarViewBounds({ width, height }));
+}
+
+function closeRadarView(notify = true) {
+  const view = radarView;
+  const cleanup = radarViewCleanup;
+  radarView = undefined;
+  radarViewTarget = undefined;
+  radarViewCleanup = undefined;
+  cleanup?.();
+  if (view) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
+  }
+  if (notify) sendRadarState({ status: 'idle' });
+}
+
+function failRadarView(view: WebContentsView) {
+  if (radarView !== view || !radarViewTarget) return;
+  const target = radarViewTarget;
+  closeRadarView(false);
+  sendRadarState({ status: 'error', target, message: RADAR_LOAD_ERROR_MESSAGE });
+}
+
+async function openRadarView(target: RadarTargetId) {
+  const url = radarUrlForTarget(target);
+  if (!url || !mainWindow || mainWindow.isDestroyed()) return;
+
+  closeRadarView(false);
+  sendRadarState({ status: 'opening', target });
+
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      partition: 'radar-embed',
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
+  });
+  radarView = view;
+  radarViewTarget = target;
+
+  const rejectExternalNavigation = (
+    event: Electron.Event<{ isMainFrame: boolean; url: string }>,
+  ) => {
+    if (!event.isMainFrame || isAllowedRadarNavigation(event.url)) return;
+    event.preventDefault();
+    failRadarView(view);
+  };
+  const onBeforeInput = (event: Electron.Event, input: Electron.Input) => {
+    if (input.type !== 'keyDown' || input.key !== 'Escape') return;
+    event.preventDefault();
+    closeRadarView();
+  };
+  const onDidFailLoad = (
+    _event: Electron.Event,
+    _errorCode: number,
+    _errorDescription: string,
+    _validatedURL: string,
+    isMainFrame: boolean,
+  ) => {
+    if (isMainFrame) failRadarView(view);
+  };
+  const onWillAttachWebview = (event: Electron.Event) => event.preventDefault();
+  const onDestroyed = () => {
+    if (radarView !== view) return;
+    radarView = undefined;
+    radarViewTarget = undefined;
+    radarViewCleanup = undefined;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    sendRadarState({ status: 'idle' });
+  };
+
+  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  view.webContents.on('will-navigate', rejectExternalNavigation);
+  view.webContents.on('will-redirect', rejectExternalNavigation);
+  view.webContents.on('will-attach-webview', onWillAttachWebview);
+  view.webContents.on('before-input-event', onBeforeInput);
+  view.webContents.on('did-fail-load', onDidFailLoad);
+  view.webContents.on('destroyed', onDestroyed);
+  radarViewCleanup = () => {
+    view.webContents.removeListener('will-navigate', rejectExternalNavigation);
+    view.webContents.removeListener('will-redirect', rejectExternalNavigation);
+    view.webContents.removeListener('will-attach-webview', onWillAttachWebview);
+    view.webContents.removeListener('before-input-event', onBeforeInput);
+    view.webContents.removeListener('did-fail-load', onDidFailLoad);
+    view.webContents.removeListener('destroyed', onDestroyed);
+  };
+
+  mainWindow.contentView.addChildView(view);
+  syncRadarViewBounds();
+  try {
+    await view.webContents.loadURL(url);
+    if (radarView === view) sendRadarState({ status: 'open', target });
+  } catch {
+    failRadarView(view);
+  }
 }
 
 function showMainWindow(): void {
@@ -391,6 +513,15 @@ function registerIpc() {
     siteService.setNotificationSettings(notificationSettingsSchema.parse(input)),
   );
   ipcMain.handle('notifications:permission', () => ({ supported: Notification.isSupported() }));
+  ipcMain.on('radar:open', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    if (!radarUrlForTarget(input)) return;
+    void openRadarView(input as RadarTargetId);
+  });
+  ipcMain.on('radar:close', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    closeRadarView();
+  });
   ipcMain.on('window:open-main', showMainWindow);
   ipcMain.on('window:minimize-main', () => {
     if (appSettingsSchema.parse(appDatabase.getAppSettings()).floatingEnabled) {
@@ -556,6 +687,7 @@ async function createWindows() {
   });
   protectNavigation(mainWindow);
   mainWindow.on('close', (event) => {
+    closeRadarView(false);
     if (!isQuitting) {
       event.preventDefault();
       app.quit();
@@ -564,7 +696,10 @@ async function createWindows() {
   await loadRenderer(mainWindow, 'main');
   mainWindow.show();
   if (mainBounds.x !== undefined && mainBounds.y !== undefined) mainWindow.setBounds(mainBounds);
-  mainWindow.on('resize', () => saveBounds('window:main', mainWindow));
+  mainWindow.on('resize', () => {
+    syncRadarViewBounds();
+    saveBounds('window:main', mainWindow);
+  });
   mainWindow.on('move', () => saveBounds('window:main', mainWindow));
 
   const floatingSettings = floatingSettingsSchema.parse(
@@ -727,6 +862,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', (event) => {
   if (isQuitting) return;
   isQuitting = true;
+  closeRadarView(false);
   scheduler?.stop();
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);

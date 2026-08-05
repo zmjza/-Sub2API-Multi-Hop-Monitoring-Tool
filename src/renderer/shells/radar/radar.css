@@ -1,395 +1,222 @@
 .radar-page {
+  min-height: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
   padding: 28px 32px 48px;
-  max-width: 1320px;
-  margin: auto;
 }
+
 .radar-heading {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  align-items: flex-start;
 }
-.eyebrow {
+
+.radar-eyebrow {
   display: flex;
   align-items: center;
   gap: 7px;
+  margin: 0 0 8px;
   color: #2563eb;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 1px;
-  margin: 0 0 8px;
 }
-.radar-heading h1 {
+
+.radar-heading h1,
+.radar-page-state h1 {
   margin: 0;
+  color: #17213a;
   font-size: 28px;
+  line-height: 1.2;
 }
+
 .radar-subtitle {
-  color: #64748b;
   margin: 8px 0 0;
-}
-.radar-actions {
-  display: flex;
-  gap: 10px;
-}
-.radar-actions button,
-.radar-actions a {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #dbe3ef;
-  background: #fff;
-  border-radius: 7px;
-  padding: 8px 12px;
-  color: #334155;
-  text-decoration: none;
+  color: #64748b;
   font-size: 13px;
 }
-.radar-actions button {
+
+.radar-target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 920px;
+  margin-top: 32px;
+}
+
+.radar-target-card {
+  min-width: 0;
+  min-height: 176px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(54, 73, 120, 0.04);
+  color: #17213a;
+  text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
-.radar-actions button:disabled {
-  opacity: 0.6;
+
+.radar-target-card:hover {
+  border-color: #a8bce9;
+  box-shadow: 0 8px 24px rgba(54, 73, 120, 0.1);
+  transform: translateY(-2px);
 }
-.radar-meta {
-  margin: 24px 0 14px;
-  color: #64748b;
-  font-size: 12px;
+
+.radar-target-card:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 3px;
 }
-.radar-meta a {
+
+.radar-target-card:active {
+  transform: translateY(0);
+}
+
+.radar-target-card:nth-child(2) .radar-target-card-icon {
+  border-color: #b7e4dc;
+  background: #ecfdf8;
+  color: #0f766e;
+}
+
+.radar-target-card-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cddbf8;
+  border-radius: 12px;
+  background: #eff6ff;
   color: #2563eb;
 }
-.radar-highlights {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin-bottom: 18px;
-}
-.radar-highlights article,
-.radar-panel {
-  background: #fff;
-  border: 1px solid #e4eaf2;
-  border-radius: 8px;
-}
-.radar-highlights article {
-  padding: 18px;
-}
-.radar-highlights span {
+
+.radar-target-card-copy {
+  min-width: 0;
   display: flex;
-  gap: 6px;
-  align-items: center;
-  color: #64748b;
-  font-size: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
-.radar-highlights strong {
-  display: block;
+
+.radar-target-card-copy strong {
+  overflow-wrap: anywhere;
+  color: #17213a;
   font-size: 18px;
-  margin: 12px 0 5px;
+  line-height: 1.35;
 }
-.radar-highlights small {
-  color: #64748b;
-}
-.radar-panel-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 20px;
-  border-bottom: 1px solid #edf1f6;
-}
-.radar-panel-title h2 {
-  font-size: 17px;
-  margin: 0;
-}
-.radar-panel-title span {
+
+.radar-target-card-copy small {
+  overflow-wrap: anywhere;
+  color: #8793a8;
   font-size: 12px;
+  line-height: 1.4;
+}
+
+.radar-target-card-arrow {
+  align-self: start;
+  margin-top: 2px;
+  color: #8793a8;
+}
+
+.radar-target-card:hover .radar-target-card-arrow,
+.radar-target-card:focus-visible .radar-target-card-arrow {
+  color: #2563eb;
+}
+
+.radar-page-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 100%;
+  padding: 48px 32px;
+  text-align: center;
+}
+
+.radar-page-state p {
+  max-width: 480px;
+  margin: 12px 0 0;
   color: #64748b;
+  line-height: 1.6;
 }
-.radar-table-wrap {
-  overflow: auto;
-}
-.radar-panel table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.radar-panel th,
-.radar-panel td {
-  text-align: left;
-  padding: 13px 16px;
-  border-bottom: 1px solid #edf1f6;
-  white-space: nowrap;
-}
-.radar-panel th {
-  color: #64748b;
-  font-weight: 600;
+
+.radar-page-state > span {
+  margin-top: 8px;
+  color: #8793a8;
   font-size: 12px;
 }
-.radar-panel td small {
-  display: block;
-  color: #64748b;
-  white-space: normal;
-  max-width: 270px;
-  margin-top: 4px;
+
+.radar-state-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+  border: 1px solid #d7e1f3;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #2563eb;
 }
-.score {
-  display: inline-flex;
-  min-width: 34px;
-  justify-content: center;
-  padding: 4px 7px;
-  border-radius: 5px;
-  background: #dcfce7;
-  color: #166534;
+
+.radar-state-icon-loading svg {
+  animation: radar-pulse 1.2s ease-in-out infinite;
 }
-.score-yellow {
-  background: #fef3c7;
-  color: #92400e;
-}
-.score-red {
-  background: #fee2e2;
-  color: #991b1b;
-}
-.radar-error {
+
+[data-radar-state='error'] .radar-state-icon {
+  border-color: #fecdd3;
   background: #fff1f2;
   color: #be123c;
-  padding: 10px 14px;
-  border-radius: 6px;
-  margin: 12px 0;
 }
-.radar-state {
-  padding: 22px 16px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 8px;
-  color: #64748b;
-  background: #fff;
-}
-.radar-disclaimer {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 18px;
-}
-.spin {
-  animation: radar-spin 1s linear infinite;
-}
-@keyframes radar-spin {
-  to {
-    transform: rotate(360deg);
+
+@keyframes radar-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
-.radar-models {
-  background: transparent;
+
+@media (max-width: 900px) {
+  .radar-target-grid {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+  }
 }
-.radar-models .radar-panel-title {
-  padding: 8px 0 16px;
-  border: 0;
-}
-.radar-models .radar-panel-title h2 {
-  font-size: 18px;
-}
-.radar-models .radar-panel-title span {
-  display: block;
-  margin-top: 5px;
-}
-.radar-model-count {
-  align-self: center !important;
-  margin: 0 !important;
-  padding: 5px 10px;
-  border: 1px solid #dbe3ef;
-  border-radius: 999px;
-  background: #fff;
-  color: #64748b !important;
-}
-.radar-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
-  gap: 16px;
-}
-.model-card {
-  min-height: 300px;
-  padding: 18px;
-  background: #fff;
-  border: 1px solid #e3e9f2;
-  border-radius: 10px;
-  box-shadow: 0 3px 14px rgba(54, 73, 120, 0.04);
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
-}
-.model-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(54, 73, 120, 0.1);
-  border-color: #c7d2fe;
-}
-.model-card-featured {
-  border-color: #c7c3ff;
-  box-shadow: 0 5px 20px rgba(79, 70, 229, 0.1);
-}
-.model-card-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.model-card-kicker {
-  font-size: 10px;
-  letter-spacing: 0.8px;
-  color: #8793a8;
-  text-transform: uppercase;
-}
-.model-card h3 {
-  font-size: 17px;
-  margin: 6px 0 0;
-  color: #17213a;
-}
-.model-status {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  height: max-content;
-}
-.status-green {
-  background: #dcfce7;
-  color: #15803d;
-}
-.status-yellow {
-  background: #fef3c7;
-  color: #a16207;
-}
-.status-red {
-  background: #fee2e2;
-  color: #b91c1c;
-}
-.model-badges {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  margin: 14px 0 16px;
-  color: #66748c;
-  font-size: 11px;
-}
-.model-badges span {
-  padding: 5px 8px;
-  border-radius: 5px;
-  background: #f5f7fb;
-}
-.model-badges .effort-badge {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 66px;
-}
-.effort-badge b {
-  padding: 0;
-  background: transparent;
-  color: #4b5870;
-  font-size: 11px;
-  font-weight: 600;
-}
-.effort-badge small {
-  font-size: 10px;
-  color: #929db0;
-}
-.model-badges b {
-  padding: 5px 8px;
-  border-radius: 5px;
-  background: #eeecff;
-  color: #5146c9;
-  font-weight: 600;
-}
-.model-score-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  padding: 14px 0;
-  border-top: 1px solid #eef1f6;
-  border-bottom: 1px solid #eef1f6;
-}
-.model-score-row > div {
-  min-width: 0;
-}
-.model-score-row strong {
-  display: block;
-  font-size: 20px;
-  line-height: 1.1;
-  color: #17213a;
-}
-.model-score-row small {
-  display: block;
-  margin-top: 5px;
-  color: #8793a8;
-  font-size: 11px;
-}
-.model-score strong {
-  color: #5146c9;
-}
-.model-score em,
-.model-pass em,
-.model-efficiency em {
-  font-style: normal;
-  font-size: 12px;
-  color: #8793a8;
-}
-.model-stats {
-  display: flex;
-  gap: 28px;
-  padding: 14px 0;
-}
-.model-stats span {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.model-stats small,
-.model-fit > span {
-  font-size: 11px;
-  color: #8793a8;
-}
-.model-stats strong {
-  font-size: 13px;
-  color: #33415f;
-}
-.model-fit {
-  padding-top: 12px;
-  border-top: 1px solid #eef1f6;
-}
-.model-fit > strong {
-  display: block;
-  font-size: 13px;
-  color: #33415f;
-  margin: 5px 0;
-}
-.model-fit p {
-  margin: 0;
-  color: #70809a;
-  font-size: 11px;
-  line-height: 1.5;
-}
+
 @media (max-width: 800px) {
   .radar-page {
-    padding: 20px 16px;
+    padding: 20px 16px 32px;
   }
-  .radar-heading {
-    display: block;
+
+  .radar-heading h1,
+  .radar-page-state h1 {
+    font-size: 24px;
   }
-  .radar-actions {
-    margin-top: 16px;
+
+  .radar-target-grid {
+    margin-top: 24px;
   }
-  .radar-highlights {
-    grid-template-columns: 1fr;
+
+  .radar-target-card {
+    min-height: 152px;
+    padding: 20px;
   }
-  .radar-panel-title {
-    display: block;
-  }
-  .radar-panel-title span {
-    display: block;
-    margin-top: 6px;
-  }
-  .radar-models .radar-panel-title {
-    display: flex;
-  }
-  .radar-card-grid {
-    grid-template-columns: 1fr;
-  }
-  .model-card {
-    min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-target-card,
+  .radar-state-icon-loading svg {
+    transition: none;
+    animation: none;
   }
 }

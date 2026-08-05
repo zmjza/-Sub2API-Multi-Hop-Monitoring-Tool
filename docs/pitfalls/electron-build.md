@@ -1056,3 +1056,36 @@ macOS 的 Node `os.tmpdir()` 通常返回 `/var/folders/...` 下的系统临时�
 **适用范围**
 
 macOS/Windows Chrome 真实启动、临时 Profile 隔离、CDP 进程观察和应用退出清理验收。
+
+## WebContentsView 的 bounds 相对 BrowserWindow contentView
+
+**现象**
+
+远程页面已经成功加载，但如果直接使用主窗口外框尺寸设置 `WebContentsView`，网页会覆盖应用 toolbar、左侧导航或在 resize 后留下空白。只检查远程 URL 不能证明应用控制区仍可见。
+
+**根因**
+
+`WebContentsView` 是 `BrowserWindow.contentView` 的子视图，bounds 使用相对 contentView 的坐标；项目当前无框主壳的内容区从 `x=284`、`y=80` 开始，分别对应左侧导航和顶部 toolbar 的占位。
+
+**正确做法**
+
+根据主窗口 `getContentSize()` 计算子视图 bounds，保持 `x=284`、`y=80`，宽高扣除对应偏移；在主窗口 `resize` 时重新设置 bounds。应用自有 toolbar 和关闭按钮保持在远程视图范围之外，并在远程视图关闭、主窗口关闭和应用退出时移除 child view。
+
+**验证方式**
+
+运行真实 Electron Radar 流程，打开两个公网目标，断言远程视图 URL 和 bounds；将内容尺寸调整为 `960x640` 后断言 bounds 为 `x=284,y=80,width=676,height=560`，再通过应用关闭按钮和远程 webContents 的 `Escape` 输入恢复两个卡片。证据见 `real-test-evidence/macos-1.8.1-radar-final/`。
+
+**禁止事项**
+
+不要把 `WebContentsView` 当作 Renderer DOM 子节点定位；不要用 `BrowserWindow` 外框坐标代替 contentView 坐标；不要只截取远程页面或只读取 URL 就声称应用 toolbar 和关闭按钮可见；不要在 resize 后复用旧 bounds。
+
+**相关文件或命令**
+
+- `electron/main/index.ts`
+- `electron/shared/radar.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+- `real-test-evidence/macos-1.8.1-radar-final/`
+
+**适用范围**
+
+所有把 `WebContentsView`、BrowserView 或其他 Electron 原生子视图挂载到无框主窗口 contentView 的功能。

@@ -58,6 +58,11 @@ import type {
   RateContexts,
   ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
+import {
+  RADAR_TARGETS,
+  type RadarEmbedState,
+  type RadarTargetId,
+} from '../../electron/shared/radar';
 import { safeRendererError, useNotifications } from './notifications';
 import type {
   UpdateCheckResult,
@@ -110,6 +115,7 @@ export function App() {
   const [rateContexts, setRateContexts] = useState<RateContexts>({ sites: {}, ratios: {} });
   const [isRefreshingRates, setIsRefreshingRates] = useState(false);
   const [refreshingRateSiteIds, setRefreshingRateSiteIds] = useState<Set<string>>(() => new Set());
+  const [radarEmbedState, setRadarEmbedState] = useState<RadarEmbedState>({ status: 'idle' });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
     position: 'top-right',
     opacity: 84,
@@ -232,6 +238,45 @@ export function App() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [updateModalOpen, updateDownloading]);
+  const closeEmbeddedRadar = () => {
+    const radar = window.sub2apiDesktop?.radar;
+    if (radar) radar.close();
+    else setRadarEmbedState({ status: 'idle' });
+  };
+  const openEmbeddedRadar = (targetId: RadarTargetId) => {
+    if (radarEmbedState.status !== 'idle') return;
+    const radar = window.sub2apiDesktop?.radar;
+    if (!radar) {
+      setRadarEmbedState({
+        status: 'error',
+        target: targetId,
+        message: '当前 Electron 桥不可用，无法打开雷达网页。',
+      });
+      return;
+    }
+    setRadarEmbedState({ status: 'opening', target: targetId });
+    radar.open(targetId);
+  };
+  const changeShell = (nextShell: MainShell) => {
+    if (radarEmbedState.status !== 'idle' && nextShell !== 'radar') closeEmbeddedRadar();
+    setShell(nextShell);
+  };
+  useEffect(() => {
+    const unsubscribe = window.sub2apiDesktop?.radar.onStateChange((nextState) => {
+      setRadarEmbedState(nextState);
+    });
+    return () => unsubscribe?.();
+  }, []);
+  useEffect(() => {
+    if (radarEmbedState.status === 'idle') return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeEmbeddedRadar();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [radarEmbedState.status]);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -306,7 +351,7 @@ export function App() {
   context.sitesSection = sitesSection;
   const openSitesSection = (section: 'notifications' | 'settings') => {
     setSitesSection(section);
-    setShell('sites');
+    changeShell('sites');
   };
   async function loadKeyContext(siteId: string) {
     const desktop = window.sub2apiDesktop?.sites;
@@ -697,7 +742,7 @@ export function App() {
               : value.currentSiteId,
           );
           if (value.sites.length === 0 && initialLocation.surface === 'main' && !hasExplicitShell)
-            setShell('sites');
+            changeShell('sites');
         })
         .catch(() => undefined);
     refresh();
@@ -1066,7 +1111,7 @@ export function App() {
               });
           });
       }}
-      onOpenSiteManagement={() => setShell('sites')}
+      onOpenSiteManagement={() => changeShell('sites')}
     />
   );
   const pages = {
@@ -1082,7 +1127,7 @@ export function App() {
         onCheckForUpdate={checkForUpdate}
       />
     ),
-    radar: <RadarPage />,
+    radar: <RadarPage embedState={radarEmbedState} onOpen={openEmbeddedRadar} />,
   };
   const navigation = [
     ['overview', '全部站点', LayoutDashboard],
@@ -1093,7 +1138,12 @@ export function App() {
     ['radar', '雷达', Radio],
   ] as const;
   return (
-    <main className="app-shell" data-shell={shell} data-state={effectiveState}>
+    <main
+      className="app-shell"
+      data-shell={shell}
+      data-state={effectiveState}
+      data-radar-embedded={radarEmbedState.status !== 'idle'}
+    >
       <aside className="app-sidebar">
         <div className="brand-lockup">
           <div className="brand-mark">
@@ -1109,7 +1159,7 @@ export function App() {
             <button
               key={value}
               className={shell === value ? 'nav-item active' : 'nav-item'}
-              onClick={() => setShell(value)}
+              onClick={() => changeShell(value)}
             >
               <Icon size={18} />
               <span>{label}</span>
@@ -1129,58 +1179,77 @@ export function App() {
       </aside>
       <section className="app-content">
         <header className="app-toolbar">
-          {(shell === 'usage' || shell === 'channels') && (
-            <label className="toolbar-site-switch">
-              <i />
-              <select
-                aria-label="当前选中中转站"
-                value={selectedSite?.id ?? ''}
-                onChange={(event) => selectSite(event.target.value)}
+          {radarEmbedState.status !== 'idle' ? (
+            <>
+              <div className="radar-embed-toolbar-label">
+                <Radio size={16} aria-hidden="true" />
+                <span>{RADAR_TARGETS[radarEmbedState.target].label}</span>
+              </div>
+              <button
+                className="icon-button radar-embed-close"
+                aria-label="关闭雷达网页"
+                title="关闭雷达网页"
+                onClick={closeEmbeddedRadar}
               >
-                {!selectedSite && <option value="">未选择站点</option>}
-                {dashboard?.sites.map((site) => (
-                  <option value={site.id} key={site.id}>
-                    {siteDisplayName(site)}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={18} />
-            </label>
+                <X size={18} />
+              </button>
+            </>
+          ) : (
+            <>
+              {(shell === 'usage' || shell === 'channels') && (
+                <label className="toolbar-site-switch">
+                  <i />
+                  <select
+                    aria-label="当前选中中转站"
+                    value={selectedSite?.id ?? ''}
+                    onChange={(event) => selectSite(event.target.value)}
+                  >
+                    {!selectedSite && <option value="">未选择站点</option>}
+                    {dashboard?.sites.map((site) => (
+                      <option value={site.id} key={site.id}>
+                        {siteDisplayName(site)}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} />
+                </label>
+              )}
+              <span className="last-updated" title="当前站点最后更新时间">
+                <History size={15} aria-hidden="true" />
+                <span>
+                  最后更新：
+                  {selectedSite?.fetchedAt
+                    ? new Date(selectedSite.fetchedAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : '—'}
+                </span>
+              </span>
+              <button
+                className="app-version-badge"
+                ref={updateTriggerRef}
+                aria-label={`版本 ${versionLabel}`}
+                title={updateChecking ? '正在检查更新' : '点击检查更新'}
+                aria-busy={updateChecking}
+                disabled={updateChecking}
+                onClick={checkForUpdate}
+              >
+                <Tag size={14} aria-hidden="true" />
+                <span>{versionLabel}</span>
+              </button>
+              <button
+                className="icon-button"
+                aria-label="刷新"
+                onClick={shell === 'overview' ? refreshAll : refreshSelected}
+                disabled={
+                  !selectedSite || (shell === 'overview' ? isRefreshingAll : state === 'refreshing')
+                }
+              >
+                <TimerReset size={18} />
+              </button>
+            </>
           )}
-          <span className="last-updated" title="当前站点最后更新时间">
-            <History size={15} aria-hidden="true" />
-            <span>
-              最后更新：
-              {selectedSite?.fetchedAt
-                ? new Date(selectedSite.fetchedAt).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })
-                : '—'}
-            </span>
-          </span>
-          <button
-            className="app-version-badge"
-            ref={updateTriggerRef}
-            aria-label={`版本 ${versionLabel}`}
-            title={updateChecking ? '正在检查更新' : '点击检查更新'}
-            aria-busy={updateChecking}
-            disabled={updateChecking}
-            onClick={checkForUpdate}
-          >
-            <Tag size={14} aria-hidden="true" />
-            <span>{versionLabel}</span>
-          </button>
-          <button
-            className="icon-button"
-            aria-label="刷新"
-            onClick={shell === 'overview' ? refreshAll : refreshSelected}
-            disabled={
-              !selectedSite || (shell === 'overview' ? isRefreshingAll : state === 'refreshing')
-            }
-          >
-            <TimerReset size={18} />
-          </button>
           <button
             className="icon-button"
             aria-label="最小化"
@@ -1308,7 +1377,7 @@ export function App() {
         <PreviewControls
           {...context}
           shell={shell}
-          onShellChange={setShell}
+          onShellChange={changeShell}
           onStateChange={setState}
           onReducedTransparencyChange={setReducedTransparency}
           onHighContrastChange={setHighContrast}

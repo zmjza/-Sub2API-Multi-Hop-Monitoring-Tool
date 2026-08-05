@@ -88,4 +88,32 @@ describe('electron-builder manifest', () => {
     expect(bridgeTypes).toContain('rateContexts(): Promise<RateContexts>');
     expect(bridgeTypes).toContain('setRechargeRatio(siteId: string, ratio: number)');
   });
+
+  it('keeps Radar web content isolated from the application window and bridge', () => {
+    const mainSource = readFileSync('electron/main/index.ts', 'utf8');
+    const bridgeSource = readFileSync('electron/preload/bridge.cts', 'utf8');
+    const bridgeTypes = readFileSync('electron/preload/index.ts', 'utf8');
+
+    expect(mainSource).toContain('new WebContentsView');
+    expect(mainSource).not.toContain('new BrowserView');
+    expect(mainSource).toContain("partition: 'radar-embed'");
+    expect(mainSource).toContain('contextIsolation: true');
+    expect(mainSource).toContain('sandbox: true');
+    expect(mainSource).toContain('nodeIntegration: false');
+    expect(mainSource).toContain(
+      "view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))",
+    );
+    expect(mainSource).toContain("view.webContents.on('will-navigate'");
+    expect(mainSource).toContain("view.webContents.on('will-redirect'");
+    expect(mainSource).toContain("view.webContents.on('before-input-event'");
+    expect(mainSource).toContain("view.webContents.on('will-attach-webview'");
+    expect(mainSource).toContain(
+      "view.webContents.removeListener('will-attach-webview', onWillAttachWebview)",
+    );
+    expect(mainSource).toContain('if (!radarUrlForTarget(input)) return;');
+    expect(bridgeSource).toContain("ipcRenderer.send('radar:open', target)");
+    expect(bridgeSource).toContain("ipcRenderer.send('radar:close')");
+    expect(bridgeTypes).toContain('open(target: RadarTargetId): void');
+    expect(bridgeTypes).toContain('onStateChange(listener: (state: RadarEmbedState) => void)');
+  });
 });

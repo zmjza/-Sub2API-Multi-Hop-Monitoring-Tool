@@ -6,6 +6,16 @@ let pendingAppSettings: Promise<unknown> = Promise.resolve();
 const desktopBridge: DesktopBridge = {
   platform: process.platform,
   shellVersion: ipcRenderer.sendSync('app:version') as string,
+  radar: {
+    open: (target) => ipcRenderer.send('radar:open', target),
+    close: () => ipcRenderer.send('radar:close'),
+    onStateChange: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('radar:state', handler);
+      return () => ipcRenderer.removeListener('radar:state', handler);
+    },
+  },
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),

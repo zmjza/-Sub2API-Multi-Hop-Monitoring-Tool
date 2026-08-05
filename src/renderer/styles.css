@@ -121,6 +121,32 @@ input {
   gap: 8px;
   padding: 24px 32px 0;
 }
+.radar-embed-toolbar-label {
+  -webkit-app-region: no-drag;
+  min-width: 0;
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #33415f;
+  font-size: 13px;
+  font-weight: 700;
+}
+.radar-embed-toolbar-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radar-embed-toolbar-label svg {
+  flex: 0 0 auto;
+  color: #2563eb;
+}
+.radar-embed-close {
+  color: #2563eb;
+}
+.app-shell[data-radar-embedded='true'] .app-toolbar::after {
+  width: 132px;
+}
 .toolbar-site-switch {
   -webkit-app-region: no-drag;
   margin-right: auto;

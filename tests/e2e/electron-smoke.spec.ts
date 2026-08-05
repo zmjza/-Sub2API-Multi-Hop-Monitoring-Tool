@@ -1,6 +1,7 @@
 import { _electron as electron, expect, type Page, test } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { mkdir, mkdtemp, readFile, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -11,6 +12,22 @@ const launchApplication = (userData: string, env: NodeJS.ProcessEnv = process.en
     env: { ...env, SUB2API_TEST_USER_DATA: userData },
   });
 };
+
+const macWindowIdScript = `
+import CoreGraphics
+import Foundation
+let pid = Int32(CommandLine.arguments[1])!
+let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+var largest: (id: Int, width: Double) = (0, 0)
+for info in windows {
+  guard let ownerPid = info[kCGWindowOwnerPID as String] as? Int32, ownerPid == pid else { continue }
+  let bounds = info[kCGWindowBounds as String] as? [String: Any] ?? [:]
+  let width = (bounds["Width"] as? NSNumber)?.doubleValue ?? 0
+  let id = (info[kCGWindowNumber as String] as? NSNumber)?.intValue ?? 0
+  if width > largest.width { largest = (id, width) }
+}
+if largest.id > 0 { print(largest.id) }
+`;
 
 const captureEvidence = async (page: Page, name: string) => {
   const evidenceDirectory = process.env.SUB2API_REAL_EVIDENCE_DIR;
@@ -96,51 +113,17 @@ test('opens the controlled renderer preview', async () => {
   }
   await window.screenshot({ path: 'test-results/overview.png' });
   for (const shell of ['api-keys', 'usage', 'channels', 'sites', 'radar']) {
-    let radarMode: 'success' | 'empty' | 'error' = 'success';
-    if (shell === 'radar') {
-      await window.route('https://codexradar.com/current.json*', async (route) => {
-        if (radarMode === 'error') {
-          await route.fulfill({ status: 503, body: 'unavailable' });
-          return;
-        }
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body:
-            radarMode === 'empty'
-              ? JSON.stringify({ model_iq: { comparisons: {} } })
-              : JSON.stringify({
-                  monitored_at: '2026-07-18T00:00:00Z',
-                  model_iq: {
-                    latest: {
-                      model: 'gpt-5',
-                      reasoning_effort: 'high',
-                      score: 123,
-                      passed: 9,
-                      tasks: 10,
-                      cost_usd: 1.2,
-                      wall_seconds: 60,
-                    },
-                    comparisons: {},
-                  },
-                }),
-        });
-      });
-    }
     await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=${shell}`);
     await expect(window.locator('.app-shell')).toBeVisible();
     if (shell === 'radar') {
-      await expect(window.getByRole('heading', { name: '模型选型雷达' })).toBeVisible();
-      await expect(window.getByRole('heading', { name: 'GPT-5 high', exact: true })).toBeVisible();
-      radarMode = 'empty';
-      await window.reload();
-      await expect(window.getByText('暂无可用模型数据。', { exact: true })).toBeVisible();
-      radarMode = 'error';
-      await window.reload();
+      await expect(window.getByRole('heading', { name: '雷达', exact: true })).toBeVisible();
+      await expect(window.locator('.radar-target-card')).toHaveCount(2);
+      await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
       await expect(
-        window.getByText('公开数据读取失败，请检查网络或稍后重试。', { exact: true }),
+        window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }),
       ).toBeVisible();
-      await window.unroute('https://codexradar.com/current.json*');
+      await expect(window.locator('body')).not.toContainText('模型选型雷达');
+      await expect(window.locator('body')).not.toContainText('current.json');
     }
     await window.screenshot({ path: `test-results/${shell}.png` });
   }
@@ -163,6 +146,179 @@ test('opens the controlled renderer preview', async () => {
     await expect(window.locator('.app-shell')).toHaveAttribute('data-state', state);
   }
   await application.close();
+});
+
+test('embeds both real Radar sites in the main Electron window', async () => {
+  test.skip(process.env.SUB2API_RADAR_REAL_E2E !== '1', 'real Radar acceptance is opt-in');
+  const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-radar-e2e-'));
+  const application = await launchApplication(userData);
+  const evidenceDirectory = process.env.SUB2API_REAL_EVIDENCE_DIR;
+  if (evidenceDirectory) await mkdir(evidenceDirectory, { recursive: true });
+
+  const main = async () => {
+    await expect
+      .poll(
+        async () => {
+          for (const candidate of await application.windows())
+            if ((await candidate.locator('.app-shell').count()) > 0) return true;
+          return false;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    for (const candidate of await application.windows())
+      if ((await candidate.locator('.app-shell').count()) > 0) return candidate;
+    throw new Error('Main renderer window unavailable');
+  };
+  const radarSnapshot = async () =>
+    application.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      const children = mainWindow?.contentView.children ?? [];
+      return children.map((child) => {
+        const view = child as Electron.WebContentsView;
+        return {
+          url: view.webContents?.getURL() ?? '',
+          bounds: child.getBounds(),
+        };
+      });
+    });
+  const captureRadar = async (name: string) => {
+    if (!evidenceDirectory) return;
+    const image = await application.evaluate(async ({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      const view = mainWindow?.contentView.children
+        .map((child) => child as Electron.WebContentsView)
+        .find((candidate) => candidate.webContents?.getURL().startsWith('https://'));
+      if (!view) return undefined;
+      return (await view.webContents.capturePage()).toPNG().toString('base64');
+    });
+    if (image) await writeFile(path.join(evidenceDirectory, `${name}.png`), image, 'base64');
+  };
+  const captureDesktop = async (name: string) => {
+    if (!evidenceDirectory || process.platform !== 'darwin') return;
+    const electronPid = await application.evaluate(() => process.pid);
+    const windowId = execFileSync('swift', ['-e', macWindowIdScript, String(electronPid)], {
+      encoding: 'utf8',
+    }).trim();
+    if (!windowId) throw new Error(`Unable to find the Electron window for PID ${electronPid}`);
+    execFileSync(
+      'screencapture',
+      ['-x', '-l', windowId, path.join(evidenceDirectory, `${name}.png`)],
+      {
+        stdio: 'ignore',
+      },
+    );
+  };
+  const focusMainWindow = async () => {
+    await application.evaluate(({ app, BrowserWindow }) => {
+      app.focus({ steal: true });
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      mainWindow?.show();
+      mainWindow?.focus();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  };
+
+  try {
+    const window = await main();
+    await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
+    await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
+    await expect(window.locator('.radar-target-card')).toHaveCount(2);
+    if (evidenceDirectory)
+      await window.screenshot({ path: path.join(evidenceDirectory, 'radar-chooser.png') });
+
+    await window.getByRole('button', { name: 'Codex 雷达', exact: true }).click();
+    await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await radarSnapshot()).some((view) => view.url.startsWith('https://codexradar.com')),
+      )
+      .toBe(true);
+    await focusMainWindow();
+    await captureDesktop('radar-codex-window');
+    await captureRadar('radar-codex');
+    const codexBounds = (await radarSnapshot()).find((view) =>
+      view.url.startsWith('https://codexradar.com'),
+    )?.bounds;
+    expect(codexBounds).toEqual(
+      expect.objectContaining({
+        x: 284,
+        y: 80,
+        width: expect.any(Number),
+        height: expect.any(Number),
+      }),
+    );
+
+    const originalContentSize = await application.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      return mainWindow?.getContentSize();
+    });
+    await application.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      mainWindow?.setContentSize(960, 640);
+    });
+    await expect
+      .poll(
+        async () =>
+          (await radarSnapshot()).find((view) => view.url.startsWith('https://codexradar.com'))
+            ?.bounds,
+      )
+      .toEqual({ x: 284, y: 80, width: 676, height: 560 });
+    await focusMainWindow();
+    await captureDesktop('radar-codex-window-small');
+    if (originalContentSize)
+      await application.evaluate(({ BrowserWindow }, size) => {
+        const mainWindow = BrowserWindow.getAllWindows().find(
+          (candidate) => candidate.getBounds().width > 500,
+        );
+        mainWindow?.setContentSize(size[0], size[1]);
+      }, originalContentSize);
+
+    await window.getByRole('button', { name: '关闭雷达网页', exact: true }).click();
+    await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await radarSnapshot()).some((view) => view.url.startsWith('https://codexradar.com')),
+      )
+      .toBe(false);
+
+    await window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }).click();
+    await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await radarSnapshot()).some((view) => view.url.startsWith('https://deng.codexradar.com')),
+      )
+      .toBe(true);
+    await focusMainWindow();
+    await captureDesktop('radar-distributed-window');
+    await captureRadar('radar-distributed');
+    await application.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows().find(
+        (candidate) => candidate.getBounds().width > 500,
+      );
+      const view = mainWindow?.contentView.children
+        .map((child) => child as Electron.WebContentsView)
+        .find((candidate) => candidate.webContents?.getURL().startsWith('https://'));
+      view?.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+      view?.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+    });
+    await expect(
+      window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }),
+    ).toBeVisible();
+    await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toHaveCount(0);
+  } finally {
+    await application.close();
+  }
 });
 
 test('moves between the frameless main and floating windows and quits from close', async () => {

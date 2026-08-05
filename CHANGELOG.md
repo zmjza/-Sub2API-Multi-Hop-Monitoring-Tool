@@ -1,5 +1,25 @@
 # 更新说明
 
+## 1.8.1 - 2026-08-05
+
+### Radar 嵌入入口
+
+- 将 Radar 自建数据页面改为两个固定入口卡片：`Codex 雷达` 打开 `https://codexradar.com/`，`分布式雷达 Codex 站` 打开 `https://deng.codexradar.com/`。
+- 使用 Electron `WebContentsView` 在当前主窗口内容区内嵌网页，不创建新 `BrowserWindow`，不调用系统默认浏览器；保留应用顶部控制区和独立的“关闭雷达网页”图标。
+- 支持关闭图标和 `Esc` 关闭嵌入网页并恢复两个入口；加载失败时保留返回入口，主窗口、悬浮窗、站点监控、使用记录、渠道状态和数据库链路不受影响。
+
+### 安全边界
+
+- Renderer 只能发送固定 Radar 目标枚举；远程视图使用独立内存 partition、sandbox、contextIsolation 和 nodeIntegration=false，不注入项目 preload 或 IPC。
+- 顶层导航仅允许两个固定 HTTPS origin，跨域跳转和新窗口请求均阻止；远程页面不获得站点凭据、本地文件或数据库能力。
+
+### 验证边界
+
+- Radar 单测、共享目标/白名单测试、全量 Vitest、格式检查、ESLint、TypeScript、生产构建和 Electron E2E 已执行；macOS 真实 Electron 两站点嵌入、关闭、Esc、resize 和截图验收已执行。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`；SHA-256：`483a46931dd9b0c358060e36ccfa0314aaa0043b9ed5bb9215f2c4b1961eb5f6`；DMG blockmap SHA-256：`30a6a8c9661822f95ea1fd41eda33749784f90f82afef8cda3d4e7da8a73257c`。
+- Windows x64 NSIS、PE/asar/版本/入口结构交叉构建通过；EXE SHA-256：`dc636da23268ba3ac63eeb422ddf7174cdafeb1e27ccfcdee45b71caa54dabc7`；EXE blockmap SHA-256：`d86c3e10770ded07561db41085fb2f94fbf2bcbcbf2b3d82604fd9cc00e9ce8f`。Windows 不代表 Windows 真机通过。
+- 本地 `release/update-manifest.json` 已按发布脚本 schema 生成并校验，包含两个平台下载 URL 和安装包 SHA-256；manifest SHA-256：`e123a2b8635ba851f404b62bedd857e6c76c039f95f5404f5bcd464c736c695d`。未执行双远端推送、GitHub Release 或资产上传。
+
 ## 1.8.0 - 2026-08-05
 
 ### 真实 Chrome Turnstile 登录
