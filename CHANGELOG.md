@@ -18,7 +18,8 @@
 - Radar 单测、共享目标/白名单测试、全量 Vitest、格式检查、ESLint、TypeScript、生产构建和 Electron E2E 已执行；macOS 真实 Electron 两站点嵌入、关闭、Esc、resize 和截图验收已执行。
 - macOS ARM64 DMG `hdiutil verify` 为 `VALID`；SHA-256：`483a46931dd9b0c358060e36ccfa0314aaa0043b9ed5bb9215f2c4b1961eb5f6`；DMG blockmap SHA-256：`30a6a8c9661822f95ea1fd41eda33749784f90f82afef8cda3d4e7da8a73257c`。
 - Windows x64 NSIS、PE/asar/版本/入口结构交叉构建通过；EXE SHA-256：`dc636da23268ba3ac63eeb422ddf7174cdafeb1e27ccfcdee45b71caa54dabc7`；EXE blockmap SHA-256：`d86c3e10770ded07561db41085fb2f94fbf2bcbcbf2b3d82604fd9cc00e9ce8f`。Windows 不代表 Windows 真机通过。
-- 本地 `release/update-manifest.json` 已按发布脚本 schema 生成并校验，包含两个平台下载 URL 和安装包 SHA-256；manifest SHA-256：`e123a2b8635ba851f404b62bedd857e6c76c039f95f5404f5bcd464c736c695d`。未执行双远端推送、GitHub Release 或资产上传。
+- 本地 `release/update-manifest.json` 已按发布脚本 schema 生成并校验，包含两个平台下载 URL 和安装包 SHA-256；本地 manifest SHA-256：`e123a2b8635ba851f404b62bedd857e6c76c039f95f5404f5bcd464c736c695d`。
+- 已完成 GitHub 与 Gitee 当前分支推送，GitHub Release `1.8.1` 已验证为 stable、非草稿、非预发布，包含四个安装包/增量资产和 `update-manifest.json`；远端 manifest SHA-256：`3f9bb1d6ae22af3df83ef926f639d8154fc9a2169e3814eaa1c92e442ce715ad`。
 
 ## 1.8.0 - 2026-08-05
 
