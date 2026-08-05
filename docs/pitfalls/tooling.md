@@ -428,3 +428,36 @@ GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，
 **适用范围**
 
 更新源迁移、旧版本过渡和 GitHub/Gitee 发布架构切换。
+
+## 历史真机证据会触发发布工作区门禁
+
+**现象**
+
+源码已提交且发布产物已审计，但 `npm run release:publish -- --reuse-artifacts` 仍可能在上传前停止；主工作区中保留的历史 `real-test-evidence/` 未跟踪目录会使发布脚本判定工作区不干净。
+
+**根因**
+
+`scripts/publish-release.mjs` 的 `ensureCleanTree()` 直接检查 `git status --porcelain`，所有未跟踪文件都会触发门禁。`release/` 临时目录虽然被忽略，但历史证据目录没有被忽略。
+
+**正确做法**
+
+不要删除或全量暂存历史证据。先提交并推送源码，再从该提交创建一次性干净 worktree；将已审计的当前四个安装包/增量文件复制到其忽略的 `release/` 目录，使用 `--reuse-artifacts` 执行统一发布命令，完成后移除临时 worktree 和五个发布临时文件。
+
+**验证方式**
+
+主工作区保留历史证据时，临时 worktree 的 `git status --porcelain` 为空；`npm run release:publish -- --notes "..." --reuse-artifacts` 成功创建标签、上传四个安装包/增量资产与 `update-manifest.json`，并完成远端资产复核。
+
+**禁止事项**
+
+不要用 `git add -A` 把历史证据带入提交；不要为通过门禁删除用户证据、执行强制清理或绕过 `ensureCleanTree()`；不要在未确认四个当前产物哈希时复用旧文件。
+
+**相关文件或命令**
+
+- `scripts/publish-release.mjs`
+- `real-test-evidence/`
+- `git worktree add --detach <temporary-path> <committed-head>`
+- `npm run release:publish -- --reuse-artifacts`
+
+**适用范围**
+
+所有保留跨轮次真机证据、截图或其他未跟踪验收文件的本地发布工作区。
