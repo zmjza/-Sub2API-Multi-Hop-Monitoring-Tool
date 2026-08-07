@@ -14,7 +14,8 @@
 
 - 格式检查、ESLint、TypeScript、全量 Vitest（46 个文件、332 项）、生产构建、开发态和 macOS ARM64 DMG 挂载态 Electron E2E（各 6 项通过、1 项按配置跳过）以及官方 Registry 全依赖审计已通过。
 - macOS ARM64 DMG `hdiutil verify` 为 `VALID`，挂载应用的严格签名结构、arm64、包内 `1.9.1` 版本和入口通过；DMG SHA-256：`295361ce2509ae610ee5ff47f39efbc4111e010a3fc6df8c52e7c5ca7aebde14`；DMG blockmap：`dc5b3ec14309738608ed0d69b6d129d032dc31bf47469027a950bec091c73d8d`。
-- Windows x64 NSIS、PE32+ 主程序和 asar `1.9.1` 版本/入口交叉检查通过；EXE SHA-256：`3a2cb17d9c1762d1532027967f5d7e852a204cc5f0874e731210165e02835c21`；EXE blockmap：`f0b366283c7c32aad5ba2000b19720de119da7b163bab177b65c23fcb6518046`。Windows 不代表 Windows 真机通过；双远端和 GitHub Release 证据将在发布后补录。
+- Windows x64 NSIS、PE32+ 主程序和 asar `1.9.1` 版本/入口交叉检查通过；EXE SHA-256：`3a2cb17d9c1762d1532027967f5d7e852a204cc5f0874e731210165e02835c21`；EXE blockmap：`f0b366283c7c32aad5ba2000b19720de119da7b163bab177b65c23fcb6518046`。Windows 不代表 Windows 真机通过。
+- 版本提交 `af88fd8` 已推送 GitHub 与 Gitee；标签 `1.9.1` 指向同一提交。GitHub stable Release 为非草稿、非预发布，DMG、EXE、两个 blockmap 和 `update-manifest.json` 五项资产均为 uploaded；远端 manifest SHA-256：`8d52e9823debb7e01b5776b792be4de2b8fcc6c85fefc019cab8290befc00ac3`。
 
 ## 1.9.0 - 2026-08-07
 
