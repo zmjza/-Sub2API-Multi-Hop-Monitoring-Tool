@@ -58,23 +58,18 @@ describe('SitesPage runtime state', () => {
     expect(styles).toContain('.toggle.active');
   });
 
-  it('exposes persisted notification and general application settings', () => {
+  it('keeps settings out of site management and renders batch tasks as detailed cards', () => {
     const source = readFileSync(fileURLToPath(new URL('./SitesPage.tsx', import.meta.url)), 'utf8');
 
-    for (const label of [
-      '恢复通知',
-      '通知冷却时间',
-      '系统通知权限',
-      '自动刷新频率',
-      '启用悬浮窗',
-      '数据过期提示',
-    ]) {
-      expect(source).toContain(label);
-    }
-    expect(source).toContain('.appSettings()');
-    expect(source).toContain('.setAppSettings(');
-    expect(source).toContain('常驻桌面且不会遮挡前台应用');
-    expect(source).not.toContain('悬浮窗保持普通桌面层级');
+    expect(source).not.toContain('通用设置');
+    expect(source).not.toContain('通知规则设置');
+    expect(source).not.toContain('.appSettings()');
+    expect(source).toContain('site-task-grid');
+    expect(source).toContain('site-task-card');
+    expect(source).toContain('iconDataUrl');
+    expect(source).toContain('site-detail-dialog');
+    expect(source).toContain('重新验证');
+    expect(source).toContain('删除站点');
   });
 
   it('uses provider-aware security copy and the interactive verification bridge', () => {

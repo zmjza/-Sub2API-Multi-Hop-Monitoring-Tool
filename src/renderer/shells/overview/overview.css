@@ -175,6 +175,33 @@
     box-shadow 0.15s,
     transform 0.15s;
 }
+.site-card.is-dragging {
+  opacity: 0.55;
+}
+.site-card.is-drop-target {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+.site-drag-handle {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8b879d;
+  cursor: grab;
+}
+.site-drag-handle:active {
+  cursor: grabbing;
+}
+.site-drag-handle:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 1px;
+}
 .site-card:hover {
   border-color: #c4b5fd;
   box-shadow: 0 8px 20px rgba(79, 70, 229, 0.08);
@@ -717,9 +744,70 @@
   border-top: 1px solid #f0ecf9;
 }
 .recharge-ratio-control {
+  position: relative;
   width: 100%;
   min-width: 0;
   position: relative;
+}
+.recharge-ratio-trigger {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #d8d4e6;
+  border-radius: 7px;
+  background: #fff;
+  color: #4f46e5;
+}
+.recharge-ratio-popover {
+  position: absolute;
+  z-index: 25;
+  left: 0;
+  bottom: 42px;
+  width: 210px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid #d8d4e6;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(38, 35, 58, 0.16);
+}
+.recharge-ratio-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+}
+.recharge-ratio-heading button,
+.recharge-ratio-custom button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.recharge-ratio-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.recharge-ratio-presets button,
+.recharge-ratio-custom-trigger {
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 1px solid #dedbea;
+  border-radius: 6px;
+  background: #f8f7fc;
+  color: #4b4763;
+  font-size: 11px;
+}
+.recharge-ratio-presets button.selected {
+  border-color: #4f46e5;
+  background: #eeecff;
+  color: #4338ca;
 }
 .recharge-ratio-control > label {
   min-width: 0;

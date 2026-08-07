@@ -1,11 +1,11 @@
 # Key-渠道关联与状态语义
 
-## 2026-07-26 1.5.1 当前有效规则
+## 2026-08-07 1.9.0 当前有效规则
 
 - `group_id` 是唯一主关联键；`/channels/available` 缺少 `groups[].id` 时关系为 `partial`，不能使用渠道名称、模型、monitor ID 或取第一个渠道补齐。
 - 统一 final resolver 返回一对多渠道和 `source`。自动关系完整时覆盖旧手动结果；自动关系部分、为空或请求失败时保留手动结果。
 - 手动映射按 `siteId + groupId` 持久化，渠道页面支持多选、清除和恢复自动匹配；总览、渠道详情、重试和推荐复用同一最终渠道 ID 集合。
-- 渠道健康最近 3 分钟只排除 `failed/error/down/unavailable`；`degraded/unknown/空状态` 在倍率稳定判定中按稳定处理。
+- 渠道健康最近 1 分钟只排除 `failed/error/down/unavailable`；`degraded/unknown/空状态` 在倍率稳定判定中按稳定处理。
 
 ## 2026-07-27 1.5.2 关联入口调整
 

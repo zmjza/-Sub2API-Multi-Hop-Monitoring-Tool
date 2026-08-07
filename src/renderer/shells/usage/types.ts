@@ -1,4 +1,5 @@
 import type { PreviewContext } from '../../preview/types';
+import type { UsageSpeedTier } from './usage-speed';
 export interface UsageRecord {
   time: string;
   model: string;
@@ -13,6 +14,9 @@ export interface UsageRecord {
   firstTokenMs?: string;
   firstTokenValue?: number;
   durationMs?: string;
+  tokensPerSecond?: number;
+  tokensPerSecondLabel?: string;
+  speedTier?: UsageSpeedTier;
 }
 export interface UsageEvents {
   onRefresh(): void;

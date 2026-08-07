@@ -1,5 +1,10 @@
 export type ChannelPollingSeconds = 30 | 60 | 120;
 
+export function randomPollingDelayMs(random: () => number = Math.random): number {
+  const sample = Math.min(1, Math.max(0, random()));
+  return Math.round(30_000 + sample * 30_000);
+}
+
 export function normalizeChannelPollingSeconds(value: number): ChannelPollingSeconds {
   return value === 30 || value === 120 ? value : 60;
 }

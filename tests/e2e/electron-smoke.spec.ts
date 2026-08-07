@@ -112,7 +112,15 @@ test('opens the controlled renderer preview', async () => {
     expect(geometry.bounds?.height ?? 0).toBeLessThanOrEqual(geometry.workArea.height);
   }
   await window.screenshot({ path: 'test-results/overview.png' });
-  for (const shell of ['api-keys', 'usage', 'channels', 'sites', 'radar']) {
+  for (const shell of [
+    'api-keys',
+    'usage',
+    'channels',
+    'sites',
+    'radar',
+    'general-settings',
+    'notification-rules',
+  ]) {
     await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=${shell}`);
     await expect(window.locator('.app-shell')).toBeVisible();
     if (shell === 'radar') {
@@ -483,6 +491,7 @@ test('persists floating placement and general settings across restarts', async (
   for (const candidate of await first.windows())
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
 
+  await main.getByRole('button', { name: '通知', exact: true }).click();
   await main.getByLabel('悬浮窗固定位置').selectOption('bottom-left');
   await expect
     .poll(() =>
@@ -575,6 +584,10 @@ test('persists floating placement and general settings across restarts', async (
         ?.getBounds(),
     ),
   ).toEqual(customBounds);
+  await restartedMain.goto(
+    `file://${process.cwd()}/dist/index.html?surface=main&shell=general-settings`,
+  );
+  await expect(restartedMain.getByRole('heading', { name: '通用设置' })).toBeVisible();
   await restartedMain.getByLabel('悬浮窗固定位置').selectOption('bottom-left');
   await expect
     .poll(() => restartedMain.evaluate(async () => window.sub2apiDesktop?.sites.floatingSettings()))
@@ -1189,6 +1202,25 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     timeout: 15_000,
   });
   await expect(main.locator('.batch-progress-panel')).toContainText('100%');
+  await expect(main.locator('.site-task-card')).toHaveCount(2);
+  await main.locator('.site-task-card').first().click();
+  await expect(main.getByRole('dialog', { name: /localhost/ })).toBeVisible();
+  await expect(main.getByRole('dialog', { name: /localhost/ })).toContainText('核心能力');
+  await captureEvidence(main, '26-batch-card-detail');
+  await main.getByLabel('关闭站点详情').click();
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 1600, height: 900 });
+  });
+  await captureEvidence(main, '21-batch-cards-wide');
+  await application.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((candidate) => candidate.getBounds().width > 500)
+      ?.setBounds({ x: 0, y: 0, width: 720, height: 800 });
+  });
+  await main.locator('.site-task-card').first().scrollIntoViewIfNeeded();
+  await captureEvidence(main, '22-batch-cards-narrow');
   await captureEvidence(main, '07-batch-progress');
   channelDelayMs = 1_200;
   const additionalSites = await main.evaluate(async (ports) => {
@@ -1295,15 +1327,23 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     return dashboard?.currentSiteId;
   });
   const channelsBeforeInlineStatus = channelRequestCount;
-  await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('custom');
+  await firstSiteCard.getByLabel('本地集成站点 设置充值比例').click();
+  await firstSiteCard.getByRole('button', { name: '自定义比例' }).click();
   await firstSiteCard.getByLabel('本地集成站点 自定义充值比例').fill('-1');
   await firstSiteCard.getByRole('button', { name: '保存充值比例' }).click();
   await expect(firstSiteCard.getByText('请输入大于 0 的数字')).toBeVisible();
   await firstSiteCard.getByLabel('本地集成站点 自定义充值比例').fill('2.5');
   await firstSiteCard.getByRole('button', { name: '保存充值比例' }).click();
-  await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('custom');
-  await firstSiteCard.getByLabel('本地集成站点 充值比例').selectOption('10');
-  await expect(firstSiteCard.getByLabel('本地集成站点 充值比例')).toHaveValue('10');
+  await expect(firstSiteCard.getByLabel('本地集成站点 设置充值比例')).toHaveAttribute(
+    'title',
+    '设置充值比例，当前 1:2.5',
+  );
+  await firstSiteCard.getByLabel('本地集成站点 设置充值比例').click();
+  await firstSiteCard.getByRole('button', { name: '1:10' }).click();
+  await expect(firstSiteCard.getByLabel('本地集成站点 设置充值比例')).toHaveAttribute(
+    'title',
+    '设置充值比例，当前 1:10',
+  );
   await expect
     .poll(() => channelRequestCount, { timeout: 15_000 })
     .toBe(channelsBeforeInlineStatus);
@@ -1346,7 +1386,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(openAiRateCard).toContainText('OpenAI 便宜 A');
   await expect(openAiRateCard).not.toContainText('OpenAI 便宜 B');
   await expect(openAiRateCard.locator('.rate-inline-channel')).toHaveCount(0);
-  await expect(openAiRateCard).toContainText('3 分钟稳定');
+  await expect(openAiRateCard).toContainText('近 1 分钟稳定');
   await expect(main.locator('.rate-platform-logo')).toHaveCount(4);
   await expect(main.locator('.rate-platform-content')).toHaveCount(5);
   expect(
@@ -1638,10 +1678,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   ).toBe(true);
   expect(
     await main
-      .locator('.site-card-actions .recharge-ratio-control select')
+      .locator('.site-card-actions .recharge-ratio-trigger')
       .first()
-      .evaluate((select) => select.getBoundingClientRect().width),
-  ).toBeGreaterThanOrEqual(105);
+      .evaluate((button) => button.getBoundingClientRect().width),
+  ).toBe(34);
   await main.locator('.site-card-actions').first().scrollIntoViewIfNeeded();
   await captureEvidence(main, '11-overview-narrow-footer-layout');
   if (originalMainBounds)
@@ -1840,12 +1880,19 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.locator('.usage-table-panel').getByText('高', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel').getByText('首字', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel')).not.toContainText('缓存 Token');
+  await expect(main.locator('.usage-table-panel')).toContainText('耗时 / t/s');
+  await expect(main.locator('.usage-speed-badge').first()).toContainText('125.27 t/s');
   const tokenCell = main.locator('.usage-token-cell').first();
   await expect(tokenCell).toContainText('2,008');
   await expect(tokenCell).toContainText('1,879');
   await expect(tokenCell).toContainText('65.3K');
   await expect(main.locator('.usage-table-panel').getByText('2026/07/19 14:54:38')).toBeVisible();
+  await main.locator('.usage-table-panel').scrollIntoViewIfNeeded();
   await captureEvidence(main, '02-usage');
+  await main.locator('.usage-table-wrap').evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await captureEvidence(main, '25-usage-speed');
   await main.getByRole('button', { name: '导出 CSV' }).click();
   await expect
     .poll(async () => readFile(exportPath, 'utf8').catch(() => ''))
@@ -1912,12 +1959,14 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await associationPopover.getByRole('button', { name: '关闭渠道状态弹窗' }).click();
   availableChannelsMode = 'complete';
   await main.getByRole('button', { name: '通知', exact: true }).click();
-  await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'sites');
-  await expect(main.locator('#notification-settings')).toBeVisible();
-  await main.getByRole('button', { name: '设置', exact: true }).click();
-  await expect(main.locator('#general-settings')).toBeVisible();
+  await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'general-settings');
+  await expect(main.getByRole('heading', { name: '通用设置' })).toBeVisible();
   await main.getByLabel('自动刷新频率').selectOption('10');
   await main.getByLabel('数据过期提示').selectOption('5');
+  await captureEvidence(main, '23-general-settings');
+  await main.getByRole('button', { name: '设置', exact: true }).click();
+  await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'notification-rules');
+  await expect(main.getByRole('heading', { name: '通知规则设置' })).toBeVisible();
   await main.getByLabel('通知冷却时间').selectOption('15');
   await expect
     .poll(() =>
@@ -1930,7 +1979,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       app: { refreshIntervalMinutes: 10, staleAfterMinutes: 5 },
       notifications: { cooldownMs: 900_000, recoveryNotifications: true },
     });
-  await captureEvidence(main, '04-sites-settings');
+  await captureEvidence(main, '24-notification-rules');
   let floating: typeof main | undefined;
   for (const candidate of await application.windows())
     if ((await candidate.locator('.floating-window').count()) > 0) floating = candidate;
@@ -1944,6 +1993,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floating.locator('.floating-header strong')).toContainText('localhost', {
       timeout: 10_000,
     });
+    await expect(floating.locator('.floating-speed')).toContainText(/\d+(?:\.\d)? t\/s/);
+    await expect(floating.locator('.floating-speed')).toContainText('快');
+    await floating.locator('.floating-channels summary').click();
+    await expect(floating.locator('.floating-channel-panel')).toContainText('近 1 分钟渠道状态');
     await expect(floating.locator('.floating-actions button')).toHaveCount(2);
     expect(
       await floating.evaluate(() => {

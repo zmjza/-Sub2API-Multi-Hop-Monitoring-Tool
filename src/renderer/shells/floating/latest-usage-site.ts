@@ -39,11 +39,19 @@ export function latestUsageTimestamp(payload: unknown): number | undefined {
 
 export function selectLatestUsageSite(
   results: UsageSiteResult[],
-): { siteId: string; usedAt: number } | undefined {
+): { siteId: string; usedAt: number; record: Record<string, unknown> } | undefined {
   return results
     .flatMap((result) => {
-      const usedAt = latestUsageTimestamp(result.payload);
-      return usedAt === undefined ? [] : [{ siteId: result.siteId, usedAt }];
+      if (!result.payload || typeof result.payload !== 'object' || !('items' in result.payload))
+        return [];
+      const items = (result.payload as { items?: unknown }).items;
+      if (!Array.isArray(items)) return [];
+      return items.flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const record = item as Record<string, unknown>;
+        const usedAt = Date.parse(String(record.createdAt ?? ''));
+        return Number.isFinite(usedAt) ? [{ siteId: result.siteId, usedAt, record }] : [];
+      });
     })
     .sort(
       (left, right) => right.usedAt - left.usedAt || left.siteId.localeCompare(right.siteId, 'en'),

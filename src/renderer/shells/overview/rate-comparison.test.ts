@@ -37,7 +37,7 @@ const relationship = (groupId: string, channelName: string, platform = 'openai')
 ];
 
 describe('rate comparison rules', () => {
-  it('uses the last three minutes and only excludes explicit failure statuses', () => {
+  it('uses the last minute and only excludes explicit failure statuses', () => {
     const now = Date.parse('2026-07-20T10:00:00Z');
     const stable = {
       id: 'stable',
@@ -45,7 +45,7 @@ describe('rate comparison rules', () => {
       status: 'normal' as const,
       timeline: [
         { status: 'normal' as const, checkedAt: '2026-07-20T09:56:00Z' },
-        { status: 'normal' as const, checkedAt: '2026-07-20T09:59:30Z' },
+        { status: 'normal' as const, checkedAt: '2026-07-20T09:59:00Z' },
       ],
     };
     expect(channelEligibility(stable, now, 'supported')).toMatchObject({
@@ -57,7 +57,7 @@ describe('rate comparison rules', () => {
       channelEligibility(
         {
           ...stable,
-          timeline: [...stable.timeline, { status: 'degraded', checkedAt: '2026-07-20T09:58:00Z' }],
+          timeline: [...stable.timeline, { status: 'degraded', checkedAt: '2026-07-20T09:59:30Z' }],
         },
         now,
         'supported',
@@ -89,7 +89,7 @@ describe('rate comparison rules', () => {
     ).toMatchObject({ eligible: true, score: 10 });
     expect(
       channelEligibility(
-        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:56:59Z' }] },
+        { ...stable, timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:58:59Z' }] },
         now,
         'supported',
       ),

@@ -20,7 +20,9 @@ export function PreviewControls(props: Props) {
           <option value="api-keys">API 密钥</option>
           <option value="usage">使用记录</option>
           <option value="channels">渠道状态</option>
-          <option value="sites">站点与设置</option>
+          <option value="sites">站点管理</option>
+          <option value="general-settings">通用设置</option>
+          <option value="notification-rules">通知规则设置</option>
         </select>
       </label>
       <label>

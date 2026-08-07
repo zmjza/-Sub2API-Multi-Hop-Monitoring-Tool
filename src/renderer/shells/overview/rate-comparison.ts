@@ -249,11 +249,11 @@ export function channelEligibility(
     return { eligible: false, reason: 'invalid-record' };
   if (parsed.some((item) => item.checkedAt > now))
     return { eligible: false, reason: 'future-record' };
-  const windowStart = now - 3 * 60_000;
+  const windowStart = now - 60_000;
   const recent = parsed.filter((item) => item.checkedAt >= windowStart && item.checkedAt <= now);
   if (!recent.length) {
     // An explicitly unknown/empty current status is still an allowed stable value.
-    // Other statuses require a fresh timeline point to prove the three-minute window.
+    // Other statuses require a fresh timeline point to prove the one-minute window.
     if (channel.status === 'unknown') return { eligible: true, score: 10, label: '稳定' };
     return { eligible: false, reason: 'no-recent-record' };
   }

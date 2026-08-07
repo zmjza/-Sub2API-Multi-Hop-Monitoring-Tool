@@ -1,18 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  Circle,
-  LoaderCircle,
-  Plus,
-  ShieldCheck,
-  X,
-} from 'lucide-react';
+import { Check, Circle, Globe2, LoaderCircle, Plus, ShieldCheck, X } from 'lucide-react';
 import type { SitesProps } from './types';
 import type {
   InteractiveVerificationProvider,
   SiteInput,
+  SiteSummary,
 } from '../../../../electron/shared/contracts';
 import { safeRendererError, useNotifications } from '../../notifications';
 import { siteDrafts } from './data';
@@ -26,6 +18,13 @@ export function siteTaskSummary(submitting: boolean, sites: Array<{ status: stri
 export function batchProgressPercent(current: number, total: number): number {
   if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(current)) return 0;
   return Math.min(100, Math.max(0, Math.round((current / total) * 100)));
+}
+
+interface BatchTask {
+  url: string;
+  status: 'success' | 'failed' | 'pending';
+  error?: string;
+  site?: SiteSummary;
 }
 
 export function SitesPage(props: SitesProps) {
@@ -43,9 +42,8 @@ export function SitesPage(props: SitesProps) {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
   const [batchPhase, setBatchPhase] = useState('等待开始');
   const [batchCurrentUrl, setBatchCurrentUrl] = useState('');
-  const [batchResults, setBatchResults] = useState<
-    Array<{ url: string; status: 'success' | 'failed'; error?: string }>
-  >([]);
+  const [batchResults, setBatchResults] = useState<BatchTask[]>([]);
+  const [selectedTask, setSelectedTask] = useState<BatchTask>();
   const [pendingVerification, setPendingVerification] = useState<
     | { mode: 'add'; input: SiteInput; provider: InteractiveVerificationProvider }
     | { mode: 'reauth'; siteId: string; provider: InteractiveVerificationProvider }
@@ -54,64 +52,7 @@ export function SitesPage(props: SitesProps) {
   const closeVerifyButtonRef = useRef<HTMLButtonElement>(null);
   const cancelVerifyButtonRef = useRef<HTMLButtonElement>(null);
   const verifyButtonRef = useRef<HTMLButtonElement>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [notificationThreshold, setNotificationThreshold] = useState(0.5);
-  const [startupEnabled, setStartupEnabled] = useState(false);
-  const [floatingPosition, setFloatingPosition] = useState<
-    'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom'
-  >('top-right');
-  const [floatingOpacity, setFloatingOpacity] = useState(84);
-  const [siteFailures, setSiteFailures] = useState(true);
-  const [channelFailures, setChannelFailures] = useState(true);
-  const [recoveryNotifications, setRecoveryNotifications] = useState(true);
-  const [cooldownMinutes, setCooldownMinutes] = useState(30);
-  const [notificationSupported, setNotificationSupported] = useState<boolean>();
-  const [appSettings, setAppSettings] = useState<{
-    refreshIntervalMinutes: 1 | 5 | 10 | 15;
-    floatingEnabled: boolean;
-    staleAfterMinutes: 2 | 5 | 10 | 30;
-  }>({ refreshIntervalMinutes: 5, floatingEnabled: true, staleAfterMinutes: 2 });
-  const [siteRules, setSiteRules] = useState<
-    Record<string, { enabled?: boolean; threshold?: number }>
-  >({});
-  useEffect(() => {
-    void window.sub2apiDesktop?.sites.notificationSettings().then((value) => {
-      if (value && typeof value === 'object' && 'enabled' in value) {
-        setNotificationsEnabled(Boolean(value.enabled));
-        if ('threshold' in value && typeof value.threshold === 'number')
-          setNotificationThreshold(value.threshold);
-        if ('siteFailures' in value && typeof value.siteFailures === 'boolean')
-          setSiteFailures(value.siteFailures);
-        if ('channelFailures' in value && typeof value.channelFailures === 'boolean')
-          setChannelFailures(value.channelFailures);
-        if ('recoveryNotifications' in value && typeof value.recoveryNotifications === 'boolean')
-          setRecoveryNotifications(value.recoveryNotifications);
-        if ('cooldownMs' in value && typeof value.cooldownMs === 'number')
-          setCooldownMinutes(Math.max(0, Math.round(value.cooldownMs / 60_000)));
-        if ('sites' in value && value.sites && typeof value.sites === 'object')
-          setSiteRules(value.sites as Record<string, { enabled?: boolean; threshold?: number }>);
-      }
-    });
-    void window.sub2apiDesktop?.sites
-      .startupSetting()
-      .then((value) => setStartupEnabled(value.enabled))
-      .catch(() => undefined);
-    void window.sub2apiDesktop?.sites
-      .floatingSettings()
-      .then((value) => {
-        setFloatingPosition(value.position);
-        setFloatingOpacity(value.opacity);
-      })
-      .catch(() => undefined);
-    void window.sub2apiDesktop?.sites
-      .appSettings()
-      .then(setAppSettings)
-      .catch(() => undefined);
-    void window.sub2apiDesktop?.sites
-      .notificationPermission()
-      .then((value) => setNotificationSupported(value.supported))
-      .catch(() => setNotificationSupported(false));
-  }, []);
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const unsubscribePhase = window.sub2apiDesktop?.sites.onRefreshState((value) => {
       if (!submitting || submissionMode !== 'single' || value.state !== 'refreshing') return;
@@ -140,12 +81,6 @@ export function SitesPage(props: SitesProps) {
     };
   }, [submitting, submissionMode]);
   useEffect(() => {
-    if (!props.sitesSection) return;
-    const target =
-      props.sitesSection === 'notifications' ? 'notification-settings' : 'general-settings';
-    document.getElementById(target)?.scrollIntoView({ block: 'start' });
-  }, [props.sitesSection]);
-  useEffect(() => {
     if (!pendingVerification) return;
     verifyButtonRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
@@ -170,6 +105,15 @@ export function SitesPage(props: SitesProps) {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [notify, pendingVerification]);
+  useEffect(() => {
+    if (!selectedTask) return;
+    detailCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedTask(undefined);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedTask]);
 
   const finishSiteAdd = () => {
     setValidationPhase('验证完成');
@@ -339,6 +283,14 @@ export function SitesPage(props: SitesProps) {
                   .then((result) => {
                     setBatchProgress({ current: urls.length, total: urls.length });
                     setBatchPhase('全部完成');
+                    setBatchResults((current) =>
+                      current.map((task) => {
+                        const site = result.successes.find((candidate) =>
+                          sameSiteOrigin(candidate.baseUrl, task.url),
+                        );
+                        return site ? { ...task, status: 'success', site } : task;
+                      }),
+                    );
                     notify({
                       id: 'site-batch',
                       kind: result.failures.length ? 'warning' : 'success',
@@ -461,489 +413,186 @@ export function SitesPage(props: SitesProps) {
           </button>
         </section>
         <div className="sites-lower-grid">
-          <section className="site-table-panel">
+          <section className="site-table-panel site-task-panel">
             <div className="site-panel-heading">
               <h2>批量验证任务</h2>
               <span className="progress-pill">
                 {siteTaskSummary(submitting, props.dashboard?.sites ?? [])}
               </span>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>目标 URL</th>
-                  <th>状态</th>
-                  <th>详情</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batchResults.map((result) => (
-                  <tr key={`batch-${result.url}`}>
-                    <td>{result.url}</td>
-                    <td>
-                      <span className={`verify-tag ${result.status}`}>
-                        {result.status === 'success' ? '成功' : '失败'}
-                      </span>
-                    </td>
-                    <td className={result.status === 'failed' ? 'error-text' : ''}>
-                      {result.error ?? '验证并保存成功'}
-                    </td>
-                  </tr>
-                ))}
-                {!batchResults.length &&
-                  props.dashboard?.sites.map((site) => (
-                    <tr key={site.id}>
-                      <td>
-                        <div>{site.baseUrl}</div>
-                        {site.accountLabel && (
-                          <small className="site-account-label">账号：{site.accountLabel}</small>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          className={`verify-tag ${site.status === 'success' ? 'success' : site.status === 'auth-required' || site.status === 'error' ? 'failed' : 'pending'}`}
-                        >
-                          {site.status === 'success'
-                            ? '成功'
-                            : site.status === 'auth-required'
-                              ? '需重新登录'
-                              : site.status}
-                        </span>
-                      </td>
-                      <td>
-                        {site.errors[0] ?? (site.source === 'cache' ? '缓存数据' : '核心能力可用')}{' '}
-                        {site.status === 'auth-required' &&
-                          site.interactiveVerificationProvider && (
-                            <button
-                              className="site-reverify-button"
-                              type="button"
-                              onClick={() => beginSiteReverification(site)}
-                            >
-                              重新验证
-                            </button>
-                          )}
-                        <button
-                          className="site-delete-button"
-                          onClick={() => {
-                            if (
-                              !window.confirm(
-                                `确认删除站点“${site.name}”？此操作会同时删除本机凭据和缓存。`,
-                              )
-                            )
-                              return;
-                            void window.sub2apiDesktop?.sites
-                              .delete(site.id)
-                              .then(() => {
-                                notify({
-                                  id: `site-delete:${site.id}`,
-                                  kind: 'success',
-                                  message: `站点“${site.name}”已删除`,
-                                });
-                                window.dispatchEvent(new Event('sub2api:refresh'));
-                              })
-                              .catch((error) =>
-                                notify({
-                                  id: `site-delete:${site.id}`,
-                                  kind: 'error',
-                                  message: safeRendererError(error, '站点删除失败'),
-                                }),
-                              );
-                          }}
-                        >
-                          删除
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                {!props.dashboard && !runtime && (
-                  <>
-                    <tr>
-                      <td>api.openai-proxy.com</td>
-                      <td>
-                        <span className="verify-tag pending">验证中</span>
-                      </td>
-                      <td>检查额度...</td>
-                    </tr>
-                    <tr>
-                      <td>claude.api-hub.net</td>
-                      <td>
-                        <span className="verify-tag success">
-                          <CheckCircle2 size={14} />
-                          成功
-                        </span>
-                      </td>
-                      <td>所有能力可用</td>
-                    </tr>
-                    <tr>
-                      <td>dead.endpoint.org</td>
-                      <td>
-                        <span className="verify-tag failed">
-                          <AlertCircle size={14} />
-                          失败
-                        </span>
-                      </td>
-                      <td className="error-text">401 Unauthorized</td>
-                    </tr>
-                  </>
-                )}
-              </tbody>
-            </table>
-          </section>
-          <section className="notification-panel" id="general-settings">
-            <h2>通用设置</h2>
-            <div className="notification-row">
-              <div>
-                <b>在线更新</b>
-                <small>检查 GitHub 稳定版更新</small>
-              </div>
-              <button
-                className="site-batch-button"
-                aria-busy={props.updateChecking}
-                disabled={props.updateChecking}
-                onClick={() => props.onCheckForUpdate?.()}
-              >
-                {props.updateChecking && <LoaderCircle size={16} className="spin" />}
-                {props.updateChecking ? '检查中…' : '检查更新'}
-              </button>
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>开机启动</b>
-                <small>登录系统后自动启动本地监控</small>
-              </div>
-              <button
-                className={`toggle ${startupEnabled ? 'active' : ''}`}
-                aria-label="切换开机启动"
-                onClick={() => {
-                  const enabled = !startupEnabled;
-                  void window.sub2apiDesktop?.sites
-                    .setStartupSetting(enabled)
-                    .then((value) => setStartupEnabled(value.enabled));
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>悬浮窗固定位置</b>
-                <small>默认右上角，常驻桌面且不会遮挡前台应用</small>
-              </div>
-              <select
-                className="settings-select"
-                aria-label="悬浮窗固定位置"
-                value={floatingPosition}
-                onChange={(event) => {
-                  const position = event.target.value as Exclude<typeof floatingPosition, 'custom'>;
-                  setFloatingPosition(position);
-                  void window.sub2apiDesktop?.sites
-                    .setFloatingSettings({ position, opacity: floatingOpacity })
-                    .then((value) => {
-                      setFloatingPosition(value.position);
-                      setFloatingOpacity(value.opacity);
-                    });
-                }}
-              >
-                {floatingPosition === 'custom' && (
-                  <option value="custom" disabled>
-                    自定义位置
-                  </option>
-                )}
-                <option value="top-left">左上角</option>
-                <option value="top-right">右上角</option>
-                <option value="bottom-left">左下角</option>
-                <option value="bottom-right">右下角</option>
-              </select>
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>启用悬浮窗</b>
-                <small>关闭后，最小化会隐藏到系统托盘</small>
-              </div>
-              <button
-                className={`toggle ${appSettings.floatingEnabled ? 'active' : ''}`}
-                aria-label="切换悬浮窗"
-                onClick={() => {
-                  const value = { ...appSettings, floatingEnabled: !appSettings.floatingEnabled };
-                  setAppSettings(value);
-                  void window.sub2apiDesktop?.sites.setAppSettings(value).then(setAppSettings);
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>自动刷新频率</b>
-                <small>应用运行期间定时刷新已保存站点</small>
-              </div>
-              <select
-                className="settings-select"
-                aria-label="自动刷新频率"
-                value={appSettings.refreshIntervalMinutes}
-                onChange={(event) => {
-                  const value = {
-                    ...appSettings,
-                    refreshIntervalMinutes: Number(event.target.value) as 1 | 5 | 10 | 15,
-                  };
-                  setAppSettings(value);
-                  void window.sub2apiDesktop?.sites.setAppSettings(value).then(setAppSettings);
-                }}
-              >
-                <option value={1}>每 1 分钟</option>
-                <option value={5}>每 5 分钟</option>
-                <option value={10}>每 10 分钟</option>
-                <option value={15}>每 15 分钟</option>
-              </select>
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>数据过期提示</b>
-                <small>超过所选时长未刷新时标记为缓存数据</small>
-              </div>
-              <select
-                className="settings-select"
-                aria-label="数据过期提示"
-                value={appSettings.staleAfterMinutes}
-                onChange={(event) => {
-                  const value = {
-                    ...appSettings,
-                    staleAfterMinutes: Number(event.target.value) as 2 | 5 | 10 | 30,
-                  };
-                  setAppSettings(value);
-                  void window.sub2apiDesktop?.sites.setAppSettings(value).then(setAppSettings);
-                }}
-              >
-                <option value={2}>2 分钟</option>
-                <option value={5}>5 分钟</option>
-                <option value={10}>10 分钟</option>
-                <option value={30}>30 分钟</option>
-              </select>
-            </div>
-            <h2 className="settings-section-heading" id="notification-settings">
-              通知规则设置
-            </h2>
-            <div className="notification-row">
-              <div>
-                <b>系统通知权限</b>
-                <small>
-                  {notificationSupported === undefined
-                    ? '正在检查系统支持状态'
-                    : notificationSupported
-                      ? '系统支持，首次发送时由系统处理授权'
-                      : '当前系统不支持 Electron 通知'}
-                </small>
-              </div>
-              <span className={`permission-state ${notificationSupported ? 'supported' : ''}`}>
-                {notificationSupported ? '可用' : '不可用'}
-              </span>
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>低额度警告</b>
-                <small>当站点余额低于阈值时触发</small>
-                <label className="threshold-field">
-                  ${' '}
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={notificationThreshold}
-                    onChange={(event) =>
-                      setNotificationThreshold(Math.max(0, Number(event.target.value)))
-                    }
-                    onBlur={() => {
-                      void window.sub2apiDesktop?.sites.setNotificationSettings({
-                        enabled: notificationsEnabled,
-                        threshold: notificationThreshold,
-                        cooldownMs: cooldownMinutes * 60_000,
-                        siteFailures,
-                        channelFailures,
-                        recoveryNotifications,
-                        sites: siteRules,
-                      });
-                    }}
-                  />
-                </label>
-              </div>
-              <button
-                className={`toggle ${notificationsEnabled ? 'active' : ''}`}
-                aria-label="切换低额度警告"
-                onClick={() => {
-                  const enabled = !notificationsEnabled;
-                  setNotificationsEnabled(enabled);
-                  void window.sub2apiDesktop?.sites.setNotificationSettings({
-                    enabled,
-                    threshold: notificationThreshold,
-                    cooldownMs: cooldownMinutes * 60_000,
-                    siteFailures,
-                    channelFailures,
-                    recoveryNotifications,
-                    sites: siteRules,
-                  });
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>渠道降级/失败</b>
-                <small>特定模型请求失败超过阈值</small>
-              </div>
-              <button
-                className={`toggle ${channelFailures ? 'active' : ''}`}
-                aria-label="切换渠道失败提醒"
-                onClick={() => {
-                  const value = !channelFailures;
-                  setChannelFailures(value);
-                  void window.sub2apiDesktop?.sites.setNotificationSettings({
-                    enabled: notificationsEnabled,
-                    threshold: notificationThreshold,
-                    cooldownMs: cooldownMinutes * 60_000,
-                    siteFailures,
-                    channelFailures: value,
-                    recoveryNotifications,
-                    sites: siteRules,
-                  });
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>站点连续失败</b>
-                <small>连续查询失败时提醒</small>
-              </div>
-              <button
-                className={`toggle ${siteFailures ? 'active' : ''}`}
-                aria-label="切换站点失败提醒"
-                onClick={() => {
-                  const value = !siteFailures;
-                  setSiteFailures(value);
-                  void window.sub2apiDesktop?.sites.setNotificationSettings({
-                    enabled: notificationsEnabled,
-                    threshold: notificationThreshold,
-                    cooldownMs: cooldownMinutes * 60_000,
-                    siteFailures: value,
-                    channelFailures,
-                    recoveryNotifications,
-                    sites: siteRules,
-                  });
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>恢复通知</b>
-                <small>异常站点或渠道恢复正常时提醒</small>
-              </div>
-              <button
-                className={`toggle ${recoveryNotifications ? 'active' : ''}`}
-                aria-label="切换恢复通知"
-                onClick={() => {
-                  const value = !recoveryNotifications;
-                  setRecoveryNotifications(value);
-                  void window.sub2apiDesktop?.sites.setNotificationSettings({
-                    enabled: notificationsEnabled,
-                    threshold: notificationThreshold,
-                    cooldownMs: cooldownMinutes * 60_000,
-                    siteFailures,
-                    channelFailures,
-                    recoveryNotifications: value,
-                    sites: siteRules,
-                  });
-                }}
-              />
-            </div>
-            <div className="notification-row">
-              <div>
-                <b>通知冷却时间</b>
-                <small>相同异常在冷却期内不重复提醒</small>
-              </div>
-              <select
-                className="settings-select"
-                aria-label="通知冷却时间"
-                value={cooldownMinutes}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setCooldownMinutes(value);
-                  void window.sub2apiDesktop?.sites.setNotificationSettings({
-                    enabled: notificationsEnabled,
-                    threshold: notificationThreshold,
-                    cooldownMs: value * 60_000,
-                    siteFailures,
-                    channelFailures,
-                    recoveryNotifications,
-                    sites: siteRules,
-                  });
-                }}
-              >
-                <option value={5}>5 分钟</option>
-                <option value={15}>15 分钟</option>
-                <option value={30}>30 分钟</option>
-                <option value={60}>60 分钟</option>
-              </select>
-            </div>
-            {props.selectedSite && (
-              <div className="notification-row">
-                <div>
-                  <b>{props.selectedSite.name} 独立余额规则</b>
-                  <label className="threshold-field">
-                    ${' '}
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={siteRules[props.selectedSite.id]?.threshold ?? notificationThreshold}
-                      onChange={(event) => {
-                        const threshold = Math.max(0, Number(event.target.value));
-                        const sites = {
-                          ...siteRules,
-                          [props.selectedSite!.id]: {
-                            ...siteRules[props.selectedSite!.id],
-                            threshold,
-                          },
-                        };
-                        setSiteRules(sites);
-                      }}
-                      onBlur={() => {
-                        void window.sub2apiDesktop?.sites.setNotificationSettings({
-                          enabled: notificationsEnabled,
-                          threshold: notificationThreshold,
-                          cooldownMs: cooldownMinutes * 60_000,
-                          siteFailures,
-                          channelFailures,
-                          recoveryNotifications,
-                          sites: siteRules,
-                        });
-                      }}
-                    />
-                  </label>
-                </div>
+            <div className="site-task-grid">
+              {(batchResults.length
+                ? batchResults
+                : (props.dashboard?.sites ?? []).map(siteToBatchTask)
+              ).map((task) => (
                 <button
-                  className={`toggle ${(siteRules[props.selectedSite.id]?.enabled ?? notificationsEnabled) ? 'active' : ''}`}
-                  aria-label="切换当前站点余额提醒"
-                  onClick={() => {
-                    const current =
-                      siteRules[props.selectedSite!.id]?.enabled ?? notificationsEnabled;
-                    const sites = {
-                      ...siteRules,
-                      [props.selectedSite!.id]: {
-                        ...siteRules[props.selectedSite!.id],
-                        enabled: !current,
-                      },
-                    };
-                    setSiteRules(sites);
-                    void window.sub2apiDesktop?.sites.setNotificationSettings({
-                      enabled: notificationsEnabled,
-                      threshold: notificationThreshold,
-                      cooldownMs: cooldownMinutes * 60_000,
-                      siteFailures,
-                      channelFailures,
-                      recoveryNotifications,
-                      sites,
-                    });
-                  }}
-                />
-              </div>
-            )}
+                  type="button"
+                  className="site-task-card"
+                  key={task.site?.id ?? `batch-${task.url}`}
+                  onClick={() => setSelectedTask(task)}
+                  aria-label={`查看 ${task.site?.name ?? safeHostName(task.url)} 验证详情`}
+                >
+                  <span className="site-task-main">
+                    <span className="site-task-icon" aria-hidden="true">
+                      {task.site?.iconDataUrl ? (
+                        <img src={task.site.iconDataUrl} alt="" />
+                      ) : (
+                        <Globe2 size={22} />
+                      )}
+                    </span>
+                    <span className="site-task-copy">
+                      <strong>{task.site?.name ?? safeHostName(task.url)}</strong>
+                      <span className="site-task-url">{task.site?.baseUrl ?? task.url}</span>
+                      <small>
+                        {task.site?.accountLabel
+                          ? `账号：${task.site.accountLabel}`
+                          : '账号：等待验证结果'}
+                      </small>
+                    </span>
+                  </span>
+                  <span className="site-task-footer">
+                    <span className="site-task-capability">
+                      <ShieldCheck size={16} />
+                      {task.error ?? capabilitySummary(task.site)}
+                    </span>
+                    <span className={`verify-tag ${task.status}`}>
+                      <i aria-hidden="true" />
+                      {taskStatusLabel(task)}
+                    </span>
+                  </span>
+                </button>
+              ))}
+              {!batchResults.length && !props.dashboard?.sites.length && (
+                <div className="site-task-empty">暂无批量验证任务</div>
+              )}
+            </div>
           </section>
         </div>
       </div>
+      {selectedTask && (
+        <div
+          className="site-detail-backdrop"
+          role="presentation"
+          onMouseDown={() => setSelectedTask(undefined)}
+        >
+          <section
+            className="site-detail-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="site-detail-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="site-detail-header">
+              <span className="site-task-icon" aria-hidden="true">
+                {selectedTask.site?.iconDataUrl ? (
+                  <img src={selectedTask.site.iconDataUrl} alt="" />
+                ) : (
+                  <Globe2 size={22} />
+                )}
+              </span>
+              <div>
+                <h2 id="site-detail-title">
+                  {selectedTask.site?.name ?? safeHostName(selectedTask.url)}
+                </h2>
+                <span>{selectedTask.site?.baseUrl ?? selectedTask.url}</span>
+              </div>
+              <button
+                ref={detailCloseRef}
+                type="button"
+                className="site-detail-close"
+                aria-label="关闭站点详情"
+                title="关闭"
+                onClick={() => setSelectedTask(undefined)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <dl className="site-detail-list">
+              <div>
+                <dt>验证状态</dt>
+                <dd>{taskStatusLabel(selectedTask)}</dd>
+              </div>
+              <div>
+                <dt>账号</dt>
+                <dd>{selectedTask.site?.accountLabel ?? '未获取'}</dd>
+              </div>
+              <div>
+                <dt>数据来源</dt>
+                <dd>{selectedTask.site?.source ?? '批量任务'}</dd>
+              </div>
+              <div>
+                <dt>核心能力</dt>
+                <dd>{capabilitySummary(selectedTask.site)}</dd>
+              </div>
+              {selectedTask.error && (
+                <div>
+                  <dt>失败原因</dt>
+                  <dd className="error-text">{selectedTask.error}</dd>
+                </div>
+              )}
+            </dl>
+            {selectedTask.site?.capabilities && (
+              <div className="site-detail-capabilities" aria-label="能力验证详情">
+                {Object.entries(selectedTask.site.capabilities).map(([name, status]) => (
+                  <span key={name} className={status === 'error' ? 'failed' : 'success'}>
+                    {name} · {status === 'error' ? '异常' : '可用'}
+                  </span>
+                ))}
+              </div>
+            )}
+            {selectedTask.site && (
+              <footer className="site-detail-actions">
+                {selectedTask.site.status === 'auth-required' &&
+                  selectedTask.site.interactiveVerificationProvider && (
+                    <button
+                      type="button"
+                      className="site-reverify-button"
+                      onClick={() => {
+                        beginSiteReverification(selectedTask.site!);
+                        setSelectedTask(undefined);
+                      }}
+                    >
+                      重新验证
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  className="site-delete-button"
+                  onClick={() => {
+                    const site = selectedTask.site!;
+                    if (
+                      !window.confirm(
+                        `确认删除站点“${site.name}”？此操作会同时删除本机凭据和缓存。`,
+                      )
+                    )
+                      return;
+                    void window.sub2apiDesktop?.sites
+                      .delete(site.id)
+                      .then(() => {
+                        setSelectedTask(undefined);
+                        notify({
+                          id: `site-delete:${site.id}`,
+                          kind: 'success',
+                          message: `站点“${site.name}”已删除`,
+                        });
+                        window.dispatchEvent(new Event('sub2api:refresh'));
+                      })
+                      .catch((error) =>
+                        notify({
+                          id: `site-delete:${site.id}`,
+                          kind: 'error',
+                          message: safeRendererError(error, '站点删除失败'),
+                        }),
+                      );
+                  }}
+                >
+                  删除站点
+                </button>
+              </footer>
+            )}
+          </section>
+        </div>
+      )}
       {pendingVerification && (
         <div className="security-verification-backdrop" role="presentation">
           <section
@@ -1014,6 +663,51 @@ function validationPhaseLabel(phase: string | undefined) {
 
 function providerDisplayName(provider: InteractiveVerificationProvider): string {
   return provider === 'turnstile' ? 'Cloudflare Turnstile' : 'GeeTest';
+}
+
+function safeHostName(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+function sameSiteOrigin(left: string, right: string): boolean {
+  try {
+    return new URL(left).origin === new URL(right).origin;
+  } catch {
+    return left === right;
+  }
+}
+
+function siteToBatchTask(site: SiteSummary): BatchTask {
+  return {
+    url: site.baseUrl,
+    status:
+      site.status === 'success'
+        ? 'success'
+        : site.status === 'auth-required' || site.status === 'error'
+          ? 'failed'
+          : 'pending',
+    error: site.errors[0],
+    site,
+  };
+}
+
+function taskStatusLabel(task: BatchTask): string {
+  if (task.site?.status === 'auth-required') return '需重新登录';
+  if (task.status === 'success') return '成功';
+  if (task.status === 'failed') return '失败';
+  return '验证中';
+}
+
+function capabilitySummary(site: SiteSummary | undefined): string {
+  if (!site) return '等待核心能力验证';
+  const capabilities = Object.values(site.capabilities ?? {});
+  if (!capabilities.length) return site.source === 'cache' ? '缓存数据' : '核心能力可用';
+  const failed = capabilities.filter((status) => status === 'error').length;
+  return failed ? `${failed} 项核心能力异常` : `${capabilities.length} 项核心能力可用`;
 }
 
 export function shouldKeepInteractiveVerificationPrompt(error: unknown): boolean {

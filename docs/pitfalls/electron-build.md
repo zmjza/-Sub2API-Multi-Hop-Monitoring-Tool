@@ -1089,3 +1089,35 @@ macOS/Windows Chrome 真实启动、临时 Profile 隔离、CDP 进程观察和�
 **适用范围**
 
 所有把 `WebContentsView`、BrowserView 或其他 Electron 原生子视图挂载到无框主窗口 contentView 的功能。
+
+## 固定尺寸悬浮窗必须按真实盒模型预留页脚
+
+**现象**
+
+在 380×260 悬浮窗增加速度徽标或渠道入口后，指标区可能与底部状态栏重叠；仅检查父元素写了 `height` 或 `min-height` 无法证明可用高度正确。
+
+**根因**
+
+子元素默认 `content-box`，页脚的 `min-height` 之外还会叠加上下 padding；新增普通流内容也会继续向下挤压绝对定位页脚。
+
+**正确做法**
+
+固定窗口页脚使用明确的 `box-sizing: border-box` 和固定高度，主指标区按页脚上边界定位；辅助详情使用受限高度的覆盖层并允许内部滚动。对 380×260 真实 Electron 窗口同时断言内容与页脚几何不相交。
+
+**验证方式**
+
+运行 Electron E2E，读取 `.floating-metrics` 与 `.floating-window footer` 的 `getBoundingClientRect()`，确认 `metrics.bottom <= footer.top`，并人工检查展开渠道详情后的截图。
+
+**禁止事项**
+
+不要把 `min-height` 当成包含 padding 的最终高度；不要只在大窗口或未加载数据状态下检查悬浮窗；不要让可展开详情改变固定窗口整体高度。
+
+**相关文件或命令**
+
+- `src/renderer/shells/floating/floating.css`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e`
+
+**适用范围**
+
+固定尺寸悬浮窗、托盘窗口和其他使用绝对定位页脚的 Electron 页面。

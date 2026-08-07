@@ -8,6 +8,7 @@ export interface SiteRow {
   baseUrl: string;
   apiPrefix: string;
   capabilities?: Record<string, string>;
+  iconDataUrl?: string;
 }
 
 export class AppDatabase {
@@ -85,13 +86,49 @@ export class AppDatabase {
   listSites(): SiteRow[] {
     const rows = this.db
       .prepare(
-        'SELECT id, name, base_url AS baseUrl, api_prefix AS apiPrefix, capability_json AS capabilityJson FROM sites ORDER BY created_at',
+        'SELECT id, name, base_url AS baseUrl, api_prefix AS apiPrefix, capability_json AS capabilityJson FROM sites ORDER BY created_at, rowid',
       )
       .all() as unknown as Array<Omit<SiteRow, 'capabilities'> & { capabilityJson: string }>;
-    return rows.map(({ capabilityJson, ...row }) => ({
-      ...row,
-      capabilities: parseCapabilities(capabilityJson),
-    }));
+    const sites = rows.map(({ capabilityJson, ...row }) => {
+      const iconDataUrl = this.getSetting<string | undefined>(
+        `site:${row.id}:iconDataUrl`,
+        undefined,
+      );
+      return {
+        ...row,
+        capabilities: parseCapabilities(capabilityJson),
+        ...(iconDataUrl ? { iconDataUrl } : {}),
+      };
+    });
+    const storedOrder = this.getSetting<unknown>('siteOrder', []);
+    const siteOrder = reconcileSiteOrder(
+      storedOrder,
+      sites.map((site) => site.id),
+    );
+    if (JSON.stringify(storedOrder) !== JSON.stringify(siteOrder))
+      this.setSetting('siteOrder', siteOrder);
+    const rank = new Map(siteOrder.map((id, index) => [id, index]));
+    return sites.sort(
+      (left, right) => (rank.get(left.id) ?? Infinity) - (rank.get(right.id) ?? Infinity),
+    );
+  }
+
+  setSiteOrder(siteIds: string[]): void {
+    const existingIds = this.db
+      .prepare('SELECT id FROM sites ORDER BY created_at, rowid')
+      .all()
+      .map((row) => String((row as { id: unknown }).id));
+    const next = reconcileSiteOrder(siteIds, existingIds);
+    if (next.length !== existingIds.length || siteIds.length !== existingIds.length)
+      throw new Error('INVALID_SITE_ORDER');
+    this.setSetting('siteOrder', next);
+  }
+
+  setSiteMetadata(siteId: string, name: string, iconDataUrl?: string): void {
+    const result = this.db.prepare('UPDATE sites SET name = ? WHERE id = ?').run(name, siteId);
+    if (result.changes !== 1) throw new Error('SITE_NOT_FOUND');
+    if (iconDataUrl) this.setSetting(`site:${siteId}:iconDataUrl`, iconDataUrl);
+    else this.deleteSetting(`site:${siteId}:iconDataUrl`);
   }
 
   setCapabilities(siteId: string, capabilities: Record<string, string>): void {
@@ -164,6 +201,14 @@ export class AppDatabase {
 
   deleteSite(siteId: string): void {
     this.db.prepare('DELETE FROM sites WHERE id = ?').run(siteId);
+    const remainingIds = this.db
+      .prepare('SELECT id FROM sites ORDER BY created_at, rowid')
+      .all()
+      .map((row) => String((row as { id: unknown }).id));
+    this.setSetting(
+      'siteOrder',
+      reconcileSiteOrder(this.getSetting<unknown>('siteOrder', []), remainingIds),
+    );
   }
 
   countSiteOwnedRows(siteId: string): number {
@@ -345,6 +390,24 @@ export class AppDatabase {
       )
       .run(siteId, fingerprint, timestamp);
   }
+}
+
+export function reconcileSiteOrder(stored: unknown, existingIds: string[]): string[] {
+  const existing = new Set(existingIds);
+  const seen = new Set<string>();
+  const ordered = Array.isArray(stored)
+    ? stored.filter((id): id is string => {
+        if (typeof id !== 'string' || !existing.has(id) || seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      })
+    : [];
+  for (const id of existingIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ordered.push(id);
+  }
+  return ordered;
 }
 
 function parseCapabilities(value: string): Record<string, string> {

@@ -25,7 +25,11 @@ describe('latest usage site selection', () => {
         { siteId: 'site-b', payload: { items: [{ createdAt: '2026-07-19T10:00:03Z' }] } },
         { siteId: 'site-c', payload: { items: [] } },
       ]),
-    ).toEqual({ siteId: 'site-b', usedAt: Date.parse('2026-07-19T10:00:03Z') });
+    ).toEqual({
+      siteId: 'site-b',
+      usedAt: Date.parse('2026-07-19T10:00:03Z'),
+      record: { createdAt: '2026-07-19T10:00:03Z' },
+    });
   });
 
   it('uses a stable site id tie breaker and ignores invalid payloads', () => {
@@ -35,7 +39,11 @@ describe('latest usage site selection', () => {
         { siteId: 'site-a', payload: { items: [{ createdAt: '2026-07-19T10:00:03Z' }] } },
         { siteId: 'invalid', payload: { items: [{ createdAt: 'not-a-date' }] } },
       ]),
-    ).toEqual({ siteId: 'site-a', usedAt: Date.parse('2026-07-19T10:00:03Z') });
+    ).toEqual({
+      siteId: 'site-a',
+      usedAt: Date.parse('2026-07-19T10:00:03Z'),
+      record: { createdAt: '2026-07-19T10:00:03Z' },
+    });
   });
 
   it('resolves refresh state for the site selected by the floating usage scan', () => {

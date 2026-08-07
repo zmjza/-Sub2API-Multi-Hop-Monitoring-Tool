@@ -8,6 +8,7 @@ import { aggregateSnapshots } from '../domain/snapshot.js';
 import { selectDefaultKey } from '../domain/key-policy.js';
 import { buildCsv } from '../domain/csv.js';
 import { estimateDurationRange } from '../domain/scheduler.js';
+import { fetchSafeSiteMetadata } from './site-metadata.js';
 import type { SiteSnapshot } from '../domain/types.js';
 import type {
   DashboardSnapshot,
@@ -41,6 +42,7 @@ interface StoredSite {
   name: string;
   baseUrl: string;
   apiPrefix: string;
+  iconDataUrl?: string;
   capabilities?: Record<string, string>;
 }
 
@@ -170,6 +172,11 @@ export class SiteService {
   setCurrentSite(siteId: string): DashboardSnapshot {
     if (!this.db.listSites().some((site) => site.id === siteId)) throw new Error('SITE_NOT_FOUND');
     this.db.setSetting('currentSiteId', siteId);
+    return this.listSites();
+  }
+
+  setSiteOrder(siteIds: string[]): DashboardSnapshot {
+    this.db.setSiteOrder(siteIds);
     return this.listSites();
   }
 
@@ -694,7 +701,10 @@ export class SiteService {
         const provider = await this.requiresInteractiveVerification(siteInput);
         if (provider) throw new InteractiveVerificationRequiredError(provider);
         const site = await this.addAndVerify(siteInput);
-        successes.push(site);
+        const metadata = await fetchSafeSiteMetadata(site.baseUrl);
+        this.db.setSiteMetadata(site.id, metadata.name, metadata.iconDataUrl);
+        const savedSite = this.db.listSites().find((candidate) => candidate.id === site.id);
+        successes.push(savedSite ? this.toSummary(savedSite) : site);
         onProgress({ current: index + 1, total: input.urls.length, url, status: 'success' });
       } catch (error) {
         const message =
@@ -1224,6 +1234,7 @@ export class SiteService {
       id: site.id,
       name: site.name,
       baseUrl: site.baseUrl,
+      iconDataUrl: site.iconDataUrl,
       accountLabel: this.db.getCredentialReference(site.id)?.accountLabel,
       interactiveVerificationProvider: isInteractiveAuthenticationMode(
         credential?.authenticationMode,

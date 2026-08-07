@@ -24,6 +24,7 @@ import {
   batchSiteInputSchema,
   refreshRequestSchema,
   siteNoteSchema,
+  siteOrderRequestSchema,
   usageQuerySchema,
   keyPreferenceSchema,
   notificationSettingsSchema,
@@ -290,6 +291,11 @@ function registerIpc() {
     const result = siteService.setCurrentSite(siteId);
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
     return dashboardSnapshotSchema.parse(result);
+  });
+  ipcMain.handle('sites:reorder', (_event, input: unknown) => {
+    const snapshot = siteService.setSiteOrder(siteOrderRequestSchema.parse(input).siteIds);
+    for (const window of BrowserWindow.getAllWindows()) window.webContents.send('sites:changed');
+    return dashboardSnapshotSchema.parse(snapshot);
   });
   ipcMain.handle('sites:delete', (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;

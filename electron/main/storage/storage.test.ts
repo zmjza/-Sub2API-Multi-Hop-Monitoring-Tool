@@ -123,6 +123,24 @@ describe('AppDatabase', () => {
     );
     raw.close();
   });
+
+  it('persists a reconciled site order and appends new sites at the end', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    db.saveSite({ id: 'site-a', name: 'A', baseUrl: 'https://a.invalid', apiPrefix: '/api/v1' });
+    db.saveSite({ id: 'site-b', name: 'B', baseUrl: 'https://b.invalid', apiPrefix: '/api/v1' });
+    db.saveSite({ id: 'site-c', name: 'C', baseUrl: 'https://c.invalid', apiPrefix: '/api/v1' });
+    db.setSetting('siteOrder', ['site-b', 'missing', 'site-b', 'site-a']);
+
+    expect(db.listSites().map((site) => site.id)).toEqual(['site-b', 'site-a', 'site-c']);
+    expect(db.getSetting('siteOrder', [])).toEqual(['site-b', 'site-a', 'site-c']);
+
+    db.deleteSite('site-a');
+    expect(db.listSites().map((site) => site.id)).toEqual(['site-b', 'site-c']);
+    expect(db.getSetting('siteOrder', [])).toEqual(['site-b', 'site-c']);
+    raw.close();
+  });
 });
 
 describe('CredentialVault', () => {

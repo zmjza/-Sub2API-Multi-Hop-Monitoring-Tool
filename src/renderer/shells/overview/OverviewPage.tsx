@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Clock3,
   Edit3,
+  GripVertical,
   RefreshCw,
   Sigma,
   WalletCards,
@@ -51,6 +52,7 @@ import {
   resolveEffectiveKey,
   type CurrentKeyStatsState,
 } from './current-key-stats';
+import { randomPollingDelayMs } from '../../channel-polling';
 import './overview.css';
 
 const ratePlatformLogos: Record<string, string> = {
@@ -118,6 +120,8 @@ export function OverviewPage(props: OverviewProps) {
   const [editingId, setEditingId] = useState<string>();
   const [draftNote, setDraftNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [draggingSiteId, setDraggingSiteId] = useState<string>();
+  const [dropSiteId, setDropSiteId] = useState<string>();
   const [noteError, setNoteError] = useState('');
   const [ratePopover, setRatePopover] = useState<{ siteId: string; anchor: HTMLElement }>();
   const [channelPopover, setChannelPopover] = useState<{
@@ -440,7 +444,15 @@ export function OverviewPage(props: OverviewProps) {
         }),
       );
     };
-    const interval = window.setInterval(() => void run(), 60_000);
+    let timer: number | undefined;
+    const schedule = () => {
+      if (!active) return;
+      timer = window.setTimeout(async () => {
+        await run();
+        schedule();
+      }, randomPollingDelayMs());
+    };
+    schedule();
     const onVisibilityChange = () => {
       if (
         document.visibilityState === 'visible' &&
@@ -451,7 +463,7 @@ export function OverviewPage(props: OverviewProps) {
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       active = false;
-      window.clearInterval(interval);
+      if (timer !== undefined) window.clearTimeout(timer);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [channelSiteIdsKey, currentChannelDetailKeys, loadInlineChannels, loadInlineDetail]);
@@ -657,7 +669,7 @@ export function OverviewPage(props: OverviewProps) {
                           className={`rate-status-label ${recommendation.stabilityLabel === '稳定' ? '稳定' : '待核验'}`}
                         >
                           {recommendation.stabilityLabel === '稳定'
-                            ? '3 分钟稳定'
+                            ? '近 1 分钟稳定'
                             : recommendation.recommendationKind === 'without-status'
                               ? '无渠道状态 · 价格优先'
                               : '待核验'}
@@ -782,8 +794,28 @@ export function OverviewPage(props: OverviewProps) {
                     : (channelContext.match?.status ?? 'unmatched');
                 return (
                   <div
-                    className={`site-card ${('id' in site && site.id === props.selectedSite?.id) || (index === 0 && props.state === 'selected') ? 'selected' : ''}`}
+                    className={`site-card ${('id' in site && site.id === props.selectedSite?.id) || (index === 0 && props.state === 'selected') ? 'selected' : ''} ${draggingSiteId === site.id ? 'is-dragging' : ''} ${dropSiteId === site.id ? 'is-drop-target' : ''}`}
                     key={site.id}
+                    onDragOver={(event) => {
+                      if (!draggingSiteId || draggingSiteId === site.id) return;
+                      event.preventDefault();
+                      setDropSiteId(site.id);
+                    }}
+                    onDragLeave={() =>
+                      setDropSiteId((current) => (current === site.id ? undefined : current))
+                    }
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (!draggingSiteId || draggingSiteId === site.id) return;
+                      const order = moveSiteBefore(
+                        liveSites.map((item) => item.id),
+                        draggingSiteId,
+                        site.id,
+                      );
+                      setDraggingSiteId(undefined);
+                      setDropSiteId(undefined);
+                      void props.onReorderSites?.(order);
+                    }}
                     onClick={() =>
                       'id' in site && typeof site.id === 'string'
                         ? props.onSelectSite?.(site.id)
@@ -797,6 +829,38 @@ export function OverviewPage(props: OverviewProps) {
                     }}
                   >
                     <div className="site-card-header">
+                      <button
+                        type="button"
+                        className="site-drag-handle"
+                        draggable
+                        aria-label={`调整 ${site.name} 顺序`}
+                        title="拖动排序；方向键可移动"
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        onDragStart={(event) => {
+                          event.stopPropagation();
+                          setDraggingSiteId(site.id);
+                          event.dataTransfer.effectAllowed = 'move';
+                          event.dataTransfer.setData('text/plain', site.id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggingSiteId(undefined);
+                          setDropSiteId(undefined);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const order = moveSiteByOffset(
+                            liveSites.map((item) => item.id),
+                            site.id,
+                            event.key === 'ArrowUp' ? -1 : 1,
+                          );
+                          void props.onReorderSites?.(order);
+                        }}
+                      >
+                        <GripVertical size={16} aria-hidden />
+                      </button>
                       <span className="site-name" title={site.name}>
                         <i
                           className={
@@ -1127,6 +1191,25 @@ export function OverviewPage(props: OverviewProps) {
       )}
     </section>
   );
+}
+
+export function moveSiteBefore(ids: string[], movingId: string, targetId: string): string[] {
+  const from = ids.indexOf(movingId);
+  const target = ids.indexOf(targetId);
+  if (from < 0 || target < 0 || from === target) return [...ids];
+  const next = ids.filter((id) => id !== movingId);
+  const insertion = next.indexOf(targetId);
+  next.splice(insertion, 0, movingId);
+  return next;
+}
+
+export function moveSiteByOffset(ids: string[], siteId: string, offset: -1 | 1): string[] {
+  const index = ids.indexOf(siteId);
+  const target = index + offset;
+  if (index < 0 || target < 0 || target >= ids.length) return [...ids];
+  const next = [...ids];
+  [next[index], next[target]] = [next[target]!, next[index]!];
+  return next;
 }
 
 function statusLabel(status: string): string {

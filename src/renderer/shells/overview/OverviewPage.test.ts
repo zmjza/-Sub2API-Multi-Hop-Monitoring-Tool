@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as overviewPage from './OverviewPage';
 import { formatSiteBalance, quotaForSite, reduceInlineChannelRefreshState } from './OverviewPage';
 import type { OverviewProps } from './types';
 
@@ -92,6 +93,20 @@ describe('overview quota display', () => {
 
     expect(quotaForSite(site, multiSiteProps)?.remaining).toBe(12);
     expect(formatSiteBalance(site, multiSiteProps)).toBe('$12.00');
+  });
+});
+
+describe('site card ordering', () => {
+  it('moves one site before another without losing IDs', () => {
+    const moveSite = (
+      overviewPage as unknown as {
+        moveSiteBefore(ids: string[], movingId: string, targetId: string): string[];
+      }
+    ).moveSiteBefore;
+
+    expect(moveSite(['a', 'b', 'c'], 'c', 'a')).toEqual(['c', 'a', 'b']);
+    expect(moveSite(['a', 'b', 'c'], 'a', 'c')).toEqual(['b', 'a', 'c']);
+    expect(moveSite(['a', 'b', 'c'], 'missing', 'b')).toEqual(['a', 'b', 'c']);
   });
 });
 

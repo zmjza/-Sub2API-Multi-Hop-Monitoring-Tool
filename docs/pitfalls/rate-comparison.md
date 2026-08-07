@@ -131,11 +131,11 @@ Antigravity 被渲染成第五个平台，或只在直接平台字段中归入 G
 
 站点卡片当前 Key 渠道摘要、倍率稳定性核验、渠道状态页面和完整渠道状态弹窗。
 
-## 三分钟窗口只排除明确失败状态
+## 一分钟窗口只排除明确失败状态
 
 **现象**
 
-渠道最近三分钟时间线包含 `unknown`、空状态或 `degraded` 时，不能因为状态名称不等于 `normal` 就误判为异常；反之明确失败状态必须排除。
+渠道最近一分钟时间线包含 `unknown`、空状态或 `degraded` 时，不能因为状态名称不等于 `normal` 就误判为异常；反之明确失败状态必须排除。
 
 **根因**
 
@@ -143,11 +143,11 @@ Antigravity 被渲染成第五个平台，或只在直接平台字段中归入 G
 
 **正确做法**
 
-倍率推荐使用 3 分钟窗口：当前状态或窗口记录出现 `failed/error/down/unavailable` 时排除；`unknown`、`degraded`、空状态按稳定处理。没有渠道状态的候选进入独立价格池，不计算稳定分。
+倍率推荐使用 1 分钟窗口：当前状态或窗口记录出现 `failed/error/down/unavailable` 时排除；`unknown`、`degraded`、空状态按稳定处理。没有渠道状态的候选进入独立价格池，不计算稳定分。
 
 **验证方式**
 
-运行 `npm test -- --run src/renderer/shells/overview/rate-comparison.test.ts`，确认 3 分钟边界、四种明确失败状态、unknown/degraded 稳定语义及无状态价格池回归用例；再运行完整 Vitest。
+运行 `npm test -- --run src/renderer/shells/overview/rate-comparison.test.ts`，确认 1 分钟边界、四种明确失败状态、unknown/degraded 稳定语义及无状态价格池回归用例；再运行完整 Vitest。
 
 **禁止事项**
 

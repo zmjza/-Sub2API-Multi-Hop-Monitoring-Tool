@@ -8,6 +8,7 @@ import {
   DollarSign,
   Download,
   FileText,
+  Gauge,
   Package,
   RotateCcw,
 } from 'lucide-react';
@@ -16,6 +17,7 @@ import { usageRecords } from './data';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { UsageQueryController } from './usage-query-controller';
 import { siteDisplayName } from '../../site-label';
+import { calculateTokensPerSecond, formatTokensPerSecond, usageSpeedTier } from './usage-speed';
 import './usage.css';
 export function UsagePage(props: UsageProps) {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'custom'>('today');
@@ -373,6 +375,8 @@ export function UsagePage(props: UsageProps) {
                           >
                             时间 {sort === 'desc' ? '↓' : '↑'}
                           </button>
+                        ) : x === '耗时' ? (
+                          '耗时 / t/s'
                         ) : (
                           x
                         )}
@@ -432,7 +436,20 @@ export function UsagePage(props: UsageProps) {
                         {row.firstTokenMs ?? '—'}
                       </td>
                     )}
-                    {visibleColumns.has('耗时') && <td>{row.durationMs ?? '—'}</td>}
+                    {visibleColumns.has('耗时') && (
+                      <td>
+                        <div className="usage-speed-cell">
+                          <span>{row.durationMs ?? '—'}</span>
+                          <span
+                            className={`usage-speed-badge is-${row.speedTier ?? 'unavailable'}`}
+                            title={`生成速度：${row.tokensPerSecondLabel ?? '—'}`}
+                          >
+                            <Gauge size={13} aria-hidden />
+                            {row.tokensPerSecondLabel ?? '—'}
+                          </span>
+                        </div>
+                      </td>
+                    )}
                     {visibleColumns.has('实际消费') && <td className="cost">{row.actualCost}</td>}
                   </tr>
                 ))}
@@ -586,6 +603,7 @@ export function readUsageRecords(value: unknown): typeof usageRecords {
   return Array.isArray(rows)
     ? rows.map((row) => {
         const item = (row && typeof row === 'object' ? row : {}) as Record<string, unknown>;
+        const tokensPerSecond = calculateTokensPerSecond(item.outputTokens, item.durationMs);
         return {
           time: formatLocalTimestamp(String(item.createdAt ?? '')),
           model: String(item.model ?? '未知模型'),
@@ -601,6 +619,9 @@ export function readUsageRecords(value: unknown): typeof usageRecords {
           firstTokenValue: numericValue(item.firstTokenMs),
           firstTokenMs: formatOptionalDuration(item.firstTokenMs),
           durationMs: formatOptionalDuration(item.durationMs),
+          tokensPerSecond,
+          tokensPerSecondLabel: formatTokensPerSecond(tokensPerSecond),
+          speedTier: usageSpeedTier(tokensPerSecond),
         };
       })
     : [];

@@ -260,6 +260,40 @@
   color: #b45309;
   font-weight: 700;
 }
+.usage-speed-cell {
+  min-width: 104px;
+  display: grid;
+  gap: 5px;
+  align-content: center;
+}
+.usage-speed-cell > span:first-child {
+  color: #475569;
+}
+.usage-speed-badge {
+  width: max-content;
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #64748b;
+}
+.usage-speed-badge.is-slow {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.usage-speed-badge.is-normal {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.usage-speed-badge.is-fast {
+  background: #ecfdf5;
+  color: #047857;
+}
 .first-token-slow {
   color: #b91c1c;
   font-weight: 700;

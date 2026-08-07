@@ -39,8 +39,9 @@ import { UsageLoadCoordinator } from './shells/usage/usage-load-coordinator';
 import { ChannelsPage } from './shells/channels/ChannelsPage';
 import { currentKeyGroup, resolveFinalChannelAssociation } from './shells/channels/channel-ranking';
 import { ChannelLoadCoordinator } from './channel-load-coordinator';
-import { retryAfterSecondsFromError } from './channel-polling';
+import { randomPollingDelayMs, retryAfterSecondsFromError } from './channel-polling';
 import { SitesPage } from './shells/sites/SitesPage';
+import { GeneralSettingsPage, NotificationRulesPage } from './shells/settings/SettingsPages';
 import { FloatingWindow } from './shells/floating/FloatingWindow';
 import {
   selectLatestUsageSite,
@@ -85,6 +86,11 @@ export function App() {
     useState<import('../../electron/shared/contracts').DashboardSnapshot>();
   const [usageData, setUsageData] = useState<unknown>();
   const [usageStats, setUsageStats] = useState<unknown>();
+  const [latestUsageRecord, setLatestUsageRecord] = useState<{
+    createdAt?: unknown;
+    outputTokens?: unknown;
+    durationMs?: unknown;
+  }>();
   const [apiKeysData, setApiKeysData] = useState<ApiKeyManagementPayload>();
   const [apiKeysState, setApiKeysState] = useState<ApiKeysPageState>('loading');
   const [apiKeyFilters, setApiKeyFilters] = useState<{
@@ -123,7 +129,6 @@ export function App() {
   const floatingPosition = floatingSettings.position;
   const floatingOpacity = floatingSettings.opacity;
   const [currentSiteId, setCurrentSiteId] = useState<string>();
-  const [sitesSection, setSitesSection] = useState<'notifications' | 'settings'>();
   const [updateState, setUpdateState] = useState<UpdateCheckResult | undefined>();
   const [updateDownloading, setUpdateDownloading] = useState(false);
   const [updateProgress, setUpdateProgress] = useState(0);
@@ -145,6 +150,7 @@ export function App() {
   const apiKeysRequestRef = useRef(0);
   const channelDetailRequestRef = useRef(0);
   const floatingUsageScanRef = useRef({ running: false, latestAt: 0, siteId: '' });
+  const floatingRefreshRef = useRef({ running: false, lastRunAt: 0 });
   const selectedSite = dashboard?.sites.find(
     (site) => site.id === (currentSiteId ?? dashboard.currentSiteId),
   );
@@ -167,7 +173,6 @@ export function App() {
       setUpdateState(result);
       if (result.status === 'available') {
         setShell('overview');
-        setSitesSection(undefined);
         setUpdateModalOpen(true);
         showUpdateNotice(`发现新版本 ${result.manifest.version}`, 'success');
       } else if (result.status === 'up-to-date') showUpdateNotice('当前已是最新版本', 'success');
@@ -334,6 +339,7 @@ export function App() {
   context.selectedSite = selectedSite;
   context.usageData = usageData;
   context.usageStats = usageStats;
+  context.latestUsageRecord = latestUsageRecord;
   context.channelsData = channelsData;
   context.channelAssociations = channelAssociations;
   context.channelAssociationsBySite = channelAssociationsBySite;
@@ -348,11 +354,6 @@ export function App() {
   context.refreshingRateSiteIds = [...refreshingRateSiteIds];
   context.usageFilterOptions = usageFilterOptions;
   context.keyPreference = keyPreference;
-  context.sitesSection = sitesSection;
-  const openSitesSection = (section: 'notifications' | 'settings') => {
-    setSitesSection(section);
-    changeShell('sites');
-  };
   async function loadKeyContext(siteId: string) {
     const desktop = window.sub2apiDesktop?.sites;
     if (!desktop) return;
@@ -450,27 +451,41 @@ export function App() {
       dashboard.sites[(index + direction + dashboard.sites.length) % dashboard.sites.length];
     if (next) selectSite(next.id);
   };
-  const refreshSelected = () => {
+  const loadLatestUsageForSite = async (siteId: string) => {
+    const payload = await window.sub2apiDesktop?.sites.usage({
+      siteId,
+      period: '30d',
+      page: 1,
+      pageSize: 1,
+      sort: 'desc',
+    });
+    if (!payload || currentSiteRef.current !== siteId) return;
+    const latest = selectLatestUsageSite([{ siteId, payload }]);
+    if (latest) setLatestUsageRecord(latest.record);
+  };
+  const refreshSelected = async () => {
     if (!selectedSite) return;
     const siteId = selectedSite.id;
     setState('refreshing');
-    void window.sub2apiDesktop?.sites
-      .refresh(siteId)
-      .then(() => window.sub2apiDesktop?.sites.list())
-      .then((value) => {
-        if (currentSiteRef.current !== siteId) return;
-        if (value) setDashboard(value);
-        setState('success');
-      })
-      .catch((error) => {
-        if (currentSiteRef.current === siteId) {
-          setState('error');
-          notify({
-            id: `site-refresh:${siteId}`,
-            kind: 'error',
-            message: safeRendererError(error, '站点刷新失败，请稍后重试'),
-          });
-        }
+    const desktop = window.sub2apiDesktop?.sites;
+    if (!desktop) return;
+    const results = await Promise.allSettled([
+      desktop.refresh(siteId).then(() => desktop.list()),
+      loadKeyContext(siteId),
+      loadCurrentKeyStats(true),
+      loadLatestUsageForSite(siteId),
+      loadChannels(siteId, true),
+    ]);
+    if (currentSiteRef.current !== siteId) return;
+    const dashboardResult = results[0];
+    if (dashboardResult.status === 'fulfilled') setDashboard(dashboardResult.value);
+    const failed = results.some((result) => result.status === 'rejected');
+    setState(failed ? 'error' : 'success');
+    if (failed)
+      notify({
+        id: `site-refresh:${siteId}`,
+        kind: 'error',
+        message: '部分数据刷新失败，已保留最近成功结果',
       });
   };
   const refreshAll = () => {
@@ -496,6 +511,10 @@ export function App() {
       });
   };
   context.onSelectSite = selectSite;
+  context.onReorderSites = async (siteIds) => {
+    const next = await window.sub2apiDesktop?.sites.reorder(siteIds);
+    if (next) setDashboard(next);
+  };
   context.onRefreshSite = refreshAll;
   context.onRefreshCurrentKeyStats = () => void loadCurrentKeyStats(true);
   context.onPreviousSite = () => moveSite(-1);
@@ -799,6 +818,7 @@ export function App() {
           settled.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : [])),
         );
         if (!latest) return;
+        setLatestUsageRecord(latest.record);
         const previous = floatingUsageScanRef.current;
         if (
           latest.usedAt > previous.latestAt ||
@@ -845,6 +865,46 @@ export function App() {
     }
     if (shell === 'channels') void loadChannels(selectedSite.id);
   }, [selectedSite?.id, shell]);
+  useEffect(() => {
+    if (initialLocation.surface !== 'floating' || !selectedSite || !window.sub2apiDesktop) return;
+    const siteId = selectedSite.id;
+    void loadKeyContext(siteId);
+    void loadChannels(siteId);
+    let active = true;
+    let timer: number | undefined;
+    const run = async () => {
+      if (!active || document.visibilityState === 'hidden' || floatingRefreshRef.current.running)
+        return;
+      floatingRefreshRef.current.running = true;
+      floatingRefreshRef.current.lastRunAt = Date.now();
+      try {
+        await refreshSelected();
+      } finally {
+        floatingRefreshRef.current.running = false;
+      }
+    };
+    const schedule = () => {
+      if (!active) return;
+      timer = window.setTimeout(async () => {
+        await run();
+        schedule();
+      }, randomPollingDelayMs());
+    };
+    const onVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - floatingRefreshRef.current.lastRunAt >= 30_000
+      )
+        void run();
+    };
+    schedule();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [selectedSite?.id, siteIdsKey]);
   useEffect(() => {
     void window.sub2apiDesktop?.sites
       .keyContexts()
@@ -1119,15 +1179,12 @@ export function App() {
     'api-keys': apiKeysPage,
     usage: <UsagePage {...context} />,
     channels: <ChannelsPage {...context} />,
-    sites: (
-      <SitesPage
-        {...context}
-        updateChecking={updateChecking}
-        updateState={updateState}
-        onCheckForUpdate={checkForUpdate}
-      />
-    ),
+    sites: <SitesPage {...context} />,
     radar: <RadarPage embedState={radarEmbedState} onOpen={openEmbeddedRadar} />,
+    'general-settings': (
+      <GeneralSettingsPage updateChecking={updateChecking} onCheckForUpdate={checkForUpdate} />
+    ),
+    'notification-rules': <NotificationRulesPage selectedSite={selectedSite} />,
   };
   const navigation = [
     ['overview', '全部站点', LayoutDashboard],
@@ -1167,11 +1224,17 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <button className="nav-item" onClick={() => openSitesSection('notifications')}>
+          <button
+            className={shell === 'general-settings' ? 'nav-item active' : 'nav-item'}
+            onClick={() => changeShell('general-settings')}
+          >
             <Bell size={18} />
             <span>通知</span>
           </button>
-          <button className="nav-item" onClick={() => openSitesSection('settings')}>
+          <button
+            className={shell === 'notification-rules' ? 'nav-item active' : 'nav-item'}
+            onClick={() => changeShell('notification-rules')}
+          >
             <Settings size={18} />
             <span>设置</span>
           </button>

@@ -54,17 +54,25 @@ describe('controlled UI shell preview', () => {
     expect(sitesStyles).not.toContain('.site-template-button');
   });
 
-  it('keeps notification and settings sidebar actions connected to the sites screen', () => {
+  it('routes sidebar notification and settings actions to independent pages', () => {
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
+    const settings = readFileSync(
+      fileURLToPath(new URL('../shells/settings/SettingsPages.tsx', import.meta.url)),
+      'utf8',
+    );
 
-    expect(app).toContain("openSitesSection('notifications')");
-    expect(app).toContain("openSitesSection('settings')");
+    expect(app).toContain("changeShell('general-settings')");
+    expect(app).toContain("changeShell('notification-rules')");
+    expect(app).toContain('GeneralSettingsPage');
+    expect(app).toContain('NotificationRulesPage');
+    expect(settings).toContain('通用设置');
+    expect(settings).toContain('通知规则设置');
   });
 
   it('exposes update feedback and confirmation actions in the main shell', () => {
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
-    const sitesPage = readFileSync(
-      fileURLToPath(new URL('../shells/sites/SitesPage.tsx', import.meta.url)),
+    const settingsPage = readFileSync(
+      fileURLToPath(new URL('../shells/settings/SettingsPages.tsx', import.meta.url)),
       'utf8',
     );
     const styles = readFileSync(fileURLToPath(new URL('../styles.css', import.meta.url)), 'utf8');
@@ -84,11 +92,11 @@ describe('controlled UI shell preview', () => {
     expect(app).toContain('updateCheckingRef');
     expect(app).toContain('update-card');
     expect(app).toContain('update-modal-version-row');
-    expect(sitesPage).toContain('onCheckForUpdate');
-    expect(sitesPage).toContain('aria-busy={props.updateChecking}');
-    expect(sitesPage).not.toContain('sites.updateCheck()');
-    expect(sitesPage).toContain('检查 GitHub 稳定版更新');
-    expect(sitesPage).not.toContain('检查 Gitee 稳定版更新');
+    expect(settingsPage).toContain('onCheckForUpdate');
+    expect(settingsPage).toContain('aria-busy={props.updateChecking}');
+    expect(settingsPage).not.toContain('sites.updateCheck()');
+    expect(settingsPage).toContain('检查 GitHub 稳定版更新');
+    expect(settingsPage).not.toContain('检查 Gitee 稳定版更新');
     expect(app).toContain('useNotifications()');
     expect(notificationStyles).toContain('.app-notification-viewport');
     expect(styles).not.toContain('.update-toast');

@@ -32,6 +32,7 @@ export interface DesktopBridge {
   readonly sites: {
     list(): Promise<DashboardSnapshot>;
     select(siteId: string): Promise<DashboardSnapshot>;
+    reorder(siteIds: string[]): Promise<DashboardSnapshot>;
     delete(siteId: string): Promise<DashboardSnapshot>;
     addAndVerify(input: SiteInput): Promise<SiteAddResult>;
     addWithInteractiveVerification(

@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ExternalLink,
+  Gauge,
   LoaderCircle,
   RefreshCw,
   Settings,
@@ -9,6 +10,12 @@ import {
 import { formatTokenCount } from '../../lib/format';
 import type { FloatingProps } from './types';
 import { floatingSnapshot as data } from './data';
+import {
+  calculateTokensPerSecond,
+  formatTokensPerSecond,
+  usageSpeedTier,
+} from '../usage/usage-speed';
+import { currentKeyGroup, resolveFinalChannelAssociation } from '../channels/channel-ranking';
 import './floating.css';
 
 export function FloatingWindow(props: FloatingProps) {
@@ -29,6 +36,45 @@ export function FloatingWindow(props: FloatingProps) {
       ? currentKeyStats.availableCredit.value
       : undefined;
   const displayedBalance = keyAvailableCredit ?? liveBalance;
+  const tokensPerSecond = calculateTokensPerSecond(
+    props.latestUsageRecord?.outputTokens,
+    props.latestUsageRecord?.durationMs,
+  );
+  const speedTier = usageSpeedTier(tokensPerSecond);
+  const channelView = readFloatingChannels(props.channelsData);
+  const keyGroup = currentKeyGroup(
+    props.keyOptions ?? [],
+    props.usageFilterOptions?.groups ?? [],
+    props.keyPreference ?? { mode: 'auto' },
+    props.selectedSite?.defaultKeyLabel,
+  );
+  const manualChannelIds = keyGroup?.groupId
+    ? (props.channelAssociations?.find((item) => item.groupId === keyGroup.groupId)?.channelIds ??
+      [])
+    : [];
+  const associatedChannels = keyGroup
+    ? resolveFinalChannelAssociation(
+        channelView.channels,
+        keyGroup.groupName,
+        channelView.availableChannels,
+        keyGroup.groupId,
+        manualChannelIds,
+        channelView.availableChannelsState,
+      )
+    : undefined;
+  const channelSummary = !props.selectedSite
+    ? '未选择站点'
+    : !keyGroup
+      ? '当前 Key 无分组'
+      : channelView.state === 'loading'
+        ? '渠道加载中'
+        : channelView.state === 'unsupported'
+          ? '站点不支持渠道状态'
+          : channelView.state === 'error'
+            ? '渠道查询失败'
+            : associatedChannels?.status === 'matched'
+              ? `${associatedChannels.channels.length} 个关联渠道`
+              : '当前 Key 无关联渠道';
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];
   const phaseLabel =
     (
@@ -94,6 +140,42 @@ export function FloatingWindow(props: FloatingProps) {
       <small className="floating-key">
         {props.selectedSite?.defaultKeyLabel ?? (runtime ? '尚未选择站点' : data.keyLabel)}
       </small>
+      <div className={`floating-speed is-${speedTier}`} title="最近一条请求生成速度">
+        <Gauge size={13} aria-hidden />
+        <span>{formatTokensPerSecond(tokensPerSecond)}</span>
+        <b>
+          {speedTier === 'slow'
+            ? '慢'
+            : speedTier === 'normal'
+              ? '正常'
+              : speedTier === 'fast'
+                ? '快'
+                : '暂无'}
+        </b>
+      </div>
+      <details className="floating-channels">
+        <summary title="查看当前 Key 最近一分钟渠道状态">{channelSummary}</summary>
+        <div className="floating-channel-panel">
+          <strong>近 1 分钟渠道状态</strong>
+          {associatedChannels?.status === 'matched' ? (
+            associatedChannels.channels.map((channel) => {
+              const recent = (channel.timeline ?? []).filter((point) => {
+                const checkedAt = Date.parse(point.checkedAt ?? '');
+                return Number.isFinite(checkedAt) && checkedAt >= Date.now() - 60_000;
+              });
+              return (
+                <div className="floating-channel-row" key={channel.id}>
+                  <span title={channel.name}>{channel.name}</span>
+                  <b className={`is-${channel.status}`}>{channel.status}</b>
+                  <small>{recent.length ? `${recent.length} 个检查点` : '近 1 分钟无数据'}</small>
+                </div>
+              );
+            })
+          ) : (
+            <span className="floating-channel-empty">{channelSummary}</span>
+          )}
+        </div>
+      </details>
       <div className="floating-metrics">
         <span>
           今日 Token
@@ -189,4 +271,48 @@ export function FloatingWindow(props: FloatingProps) {
       </footer>
     </main>
   );
+}
+
+function readFloatingChannels(value: unknown): {
+  state: 'loading' | 'supported' | 'unsupported' | 'error';
+  channels: Array<{
+    id: string;
+    name: string;
+    status: 'normal' | 'degraded' | 'failed' | 'unknown';
+    timeline?: Array<{
+      status: 'normal' | 'degraded' | 'failed' | 'unknown';
+      checkedAt?: string;
+    }>;
+  }>;
+  availableChannels: Array<{
+    name: string;
+    platforms: Array<{
+      platform: string;
+      groupIds: string[];
+      groupNames: string[];
+      modelNames: string[];
+    }>;
+  }>;
+  availableChannelsState?: 'complete' | 'empty' | 'partial' | 'error';
+} {
+  if (!value || typeof value !== 'object')
+    return { state: 'loading', channels: [], availableChannels: [] };
+  const record = value as Record<string, unknown>;
+  if (record.state === 'unsupported')
+    return { state: 'unsupported', channels: [], availableChannels: [] };
+  if (record.state === 'error') return { state: 'error', channels: [], availableChannels: [] };
+  return {
+    state: 'supported',
+    channels: Array.isArray(record.channels) ? (record.channels as never[]) : [],
+    availableChannels: Array.isArray(record.availableChannels)
+      ? (record.availableChannels as never[])
+      : [],
+    availableChannelsState:
+      record.availableChannelsState === 'complete' ||
+      record.availableChannelsState === 'empty' ||
+      record.availableChannelsState === 'partial' ||
+      record.availableChannelsState === 'error'
+        ? record.availableChannelsState
+        : undefined,
+  };
 }

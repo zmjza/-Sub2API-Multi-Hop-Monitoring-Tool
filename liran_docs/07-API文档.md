@@ -1,5 +1,14 @@
 # sub2api API 文档
 
+## 1.9.0 IPC 与读取约束
+
+- 使用记录沿用 `usage:list` 的 `outputTokens`、`durationMs`，t/s 在 Renderer 纯函数派生，不新增上游接口，也不把输入/缓存 Token 纳入分子。
+- 站点顺序通过受控设置/站点 IPC 读写规范化 ID 数组；负载拒绝未知字段、重复和非字符串 ID，服务端以真实站点集合再次对账。
+- 站点元数据探测只由主进程对已规范化且已验证的站点地址发起：HTML 限制响应大小，title 做文本清理；favicon 仅允许同源重定向、受限大小和图片 MIME，失败回退 hostname/`Globe`。
+- 悬浮窗手动刷新复用现有余额、Key 统计、usage 和渠道读取能力，必须使用请求世代或等价机制阻止旧站响应覆盖新站。
+- 渠道列表与悬浮窗额度均采用每轮结束后随机 30–60 秒调度；Retry-After、认证停止和失败退避优先于普通随机周期。
+- 不增加批量任务历史 IPC/数据库；设置拆页只复用现有 settings/notification IPC。
+
 ## 2026-08-04 1.7.2 交互错误响应与保存门禁
 
 - `POST /api/v1/auth/login` 即使 HTTP 为 2xx，只要有限字段 `code` 或 `data.code` 属于 GeeTest/Turnstile 要求，客户端也返回 `INTERACTIVE_VERIFICATION_REQUIRED`，不执行 `loginResponseSchema` 成功保存。
@@ -31,7 +40,7 @@
 | `GET /channel-monitors/{channel_id}/status` | 返回单渠道模型详情                        | 详情请求必须使用统一最终关联的 `channelId`                                                   |
 | IPC `channels:associations:get/set/clear`   | 读取、保存、清除站点分组手动渠道关联      | 数据键为 `siteId + groupId`，`groupId` 保留上游不透明字符串或数字，`channelIds[]` 支持一对多 |
 
-推荐规则：最近 3 分钟内仅 `failed/error/down/unavailable` 排除；其他状态和空状态按稳定处理。无关联渠道状态的候选进入独立价格池，不与有状态候选混合归一化。
+推荐规则：1.9.0 起最近 1 分钟内仅 `failed/error/down/unavailable` 排除；其他状态和空状态按稳定处理。无关联渠道状态的候选进入独立价格池，不与有状态候选混合归一化。
 
 ## 2026-07-24 普通用户接口核对与验证
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import * as channelPolling from './channel-polling';
 import {
   channelPollingDelay,
   normalizeChannelPollingSeconds,
@@ -26,5 +27,15 @@ describe('channel polling policy', () => {
       600,
     );
     expect(retryAfterSecondsFromError(new Error('private response'))).toBeUndefined();
+  });
+
+  it('draws an inclusive 30 to 60 second delay from an injectable random source', () => {
+    const randomDelay = (
+      channelPolling as unknown as { randomPollingDelayMs(random: () => number): number }
+    ).randomPollingDelayMs;
+
+    expect(randomDelay(() => 0)).toBe(30_000);
+    expect(randomDelay(() => 0.5)).toBe(45_000);
+    expect(randomDelay(() => 1)).toBe(60_000);
   });
 });

@@ -461,3 +461,35 @@ GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，
 **适用范围**
 
 所有保留跨轮次真机证据、截图或其他未跟踪验收文件的本地发布工作区。
+
+## 批量站点元数据抓取不能扩大验证信任边界
+
+**现象**
+
+批量添加需要自动显示网站标题和 icon，但直接跟随重定向或读取完整响应会产生跨域请求、超大响应占用和非图片内容进入 Renderer 的风险；抓取失败还可能误伤已经验证成功的站点。
+
+**根因**
+
+站点认证成功和页面元数据可信是两个不同结论。原生 `fetch` 自动重定向且常见 `arrayBuffer()` 不设上限，不能直接作为桌面应用的元数据采集策略。
+
+**正确做法**
+
+仅在批量站点验证成功后抓取元数据；页面和 favicon 手动处理重定向并始终限制在原 origin，限制重定向次数、HTML/icon 字节数和 MIME，流式读取并在超限时取消。标题清理并截断，icon 转为受控 data URL；任何失败只回退 hostname，不撤销已验证站点。
+
+**验证方式**
+
+单测覆盖同源 title/icon、跨域重定向、声明或实际超限、错误 MIME 和 hostname 回退；集成测试确认批量成功结果与数据库摘要包含抓取名称/icon，单站点添加仍保留用户填写名称。
+
+**禁止事项**
+
+不要允许 favicon 指向任意外域；不要无上限读取 HTML 或图片；不要把页面脚本、HTML 或完整响应透传到 Renderer；不要因非关键元数据失败回滚凭据和站点。
+
+**相关文件或命令**
+
+- `electron/main/services/site-metadata.ts`
+- `electron/main/services/site-metadata.test.ts`
+- `electron/main/services/site-service.integration.test.ts`
+
+**适用范围**
+
+批量站点添加、favicon/title 抓取及其他由主进程读取用户提供 URL 的辅助能力。

@@ -74,4 +74,38 @@ describe('readUsageRecords', () => {
       cacheReadTokens: '65.3K',
     });
   });
+
+  it('derives tokens per second from raw output tokens and duration milliseconds', () => {
+    const [row] = readUsageRecords({
+      items: [
+        {
+          createdAt: '2026-08-07T10:00:00.000Z',
+          outputTokens: 50,
+          durationMs: 2770,
+        },
+      ],
+    });
+
+    expect(row).toMatchObject({
+      tokensPerSecond: 50_000 / 2770,
+      tokensPerSecondLabel: '18.05 t/s',
+      speedTier: 'slow',
+    });
+  });
+
+  it('uses exact 20 and 50 t/s tier boundaries and rejects invalid durations', () => {
+    const rows = readUsageRecords({
+      items: [
+        { createdAt: '2026-08-07T10:00:00Z', outputTokens: 20, durationMs: 1000 },
+        { createdAt: '2026-08-07T10:00:01Z', outputTokens: 50, durationMs: 1000 },
+        { createdAt: '2026-08-07T10:00:02Z', outputTokens: 10, durationMs: 0 },
+      ],
+    });
+
+    expect(rows.map((row) => [row.tokensPerSecondLabel, row.speedTier])).toEqual([
+      ['20.00 t/s', 'normal'],
+      ['50.00 t/s', 'fast'],
+      ['—', 'unavailable'],
+    ]);
+  });
 });

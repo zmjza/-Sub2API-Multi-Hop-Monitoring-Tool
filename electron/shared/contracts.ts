@@ -21,6 +21,14 @@ export const batchSiteInputSchema = z.object({
 export type BatchSiteInput = z.infer<typeof batchSiteInputSchema>;
 
 export const siteIdSchema = z.string().min(1).max(128);
+export const siteOrderRequestSchema = z
+  .object({ siteIds: z.array(siteIdSchema).max(1_000) })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.siteIds).size !== value.siteIds.length)
+      context.addIssue({ code: 'custom', path: ['siteIds'], message: '站点顺序不能包含重复 ID' });
+  });
+export type SiteOrderRequest = z.infer<typeof siteOrderRequestSchema>;
 export const refreshRequestSchema = z.object({ siteId: siteIdSchema });
 export const siteNoteSchema = z.object({ siteId: siteIdSchema, note: z.string().trim().max(500) });
 export const usageQuerySchema = z
@@ -172,6 +180,7 @@ export interface SiteSummary {
   defaultKeyId?: string;
   defaultKeyLabel?: string;
   note?: string;
+  iconDataUrl?: string;
   rate?: number;
   capabilities?: Record<string, string>;
   estimatedDurationMs?: [number, number];
@@ -212,6 +221,11 @@ export const siteSummarySchema = z.object({
   defaultKeyId: z.string().optional(),
   defaultKeyLabel: z.string().optional(),
   note: z.string().max(500).optional(),
+  iconDataUrl: z
+    .string()
+    .max(200_000)
+    .regex(/^data:image\/[a-z0-9.+-]+;base64,/i)
+    .optional(),
   rate: z.number().optional(),
   capabilities: z.record(z.string(), z.string()).optional(),
   estimatedDurationMs: z.tuple([z.number(), z.number()]).optional(),

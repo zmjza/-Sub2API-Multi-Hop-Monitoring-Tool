@@ -1296,8 +1296,18 @@ describe('SiteService authentication recovery', () => {
 
   it('keeps successful batch sites when another URL fails', async () => {
     const server = createServer((request, response) => {
-      response.setHeader('content-type', 'application/json');
       const url = request.url ?? '';
+      if (url === '/') {
+        response.setHeader('content-type', 'text/html; charset=utf-8');
+        return response.end(
+          '<!doctype html><html><head><title>  测试中转站  </title><link rel="icon" href="/brand.png"></head></html>',
+        );
+      }
+      if (url === '/brand.png') {
+        response.setHeader('content-type', 'image/png');
+        return response.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+      }
+      response.setHeader('content-type', 'application/json');
       if (url === '/api/v1/auth/login')
         return response.end(
           JSON.stringify({
@@ -1358,6 +1368,8 @@ describe('SiteService authentication recovery', () => {
       { url: 'http://127.0.0.1:1', error: '站点地址无效、网络不可用或服务异常' },
     ]);
     expect(service.listSites().sites).toHaveLength(1);
+    expect(service.listSites().sites[0]).toMatchObject({ name: '测试中转站' });
+    expect(service.listSites().sites[0]?.iconDataUrl).toMatch(/^data:image\/png;base64,/);
     expect(progress).toEqual([
       { current: 1, total: 2, status: 'success' },
       { current: 2, total: 2, status: 'failed' },

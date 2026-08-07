@@ -13,13 +13,20 @@ export const previewStates = [
 ] as const;
 export type PreviewState = (typeof previewStates)[number];
 export type ThemeMode = 'light';
-export type MainShell = 'overview' | 'api-keys' | 'usage' | 'channels' | 'sites' | 'radar';
+export type MainShell =
+  | 'overview'
+  | 'api-keys'
+  | 'usage'
+  | 'channels'
+  | 'sites'
+  | 'radar'
+  | 'general-settings'
+  | 'notification-rules';
 export interface PreviewContext {
   state: PreviewState;
   theme: ThemeMode;
   reducedTransparency: boolean;
   highContrast: boolean;
-  sitesSection?: 'notifications' | 'settings';
   queryPhase?: string;
   isRefreshingAll?: boolean;
   refreshingSiteIds?: string[];
@@ -30,6 +37,7 @@ export interface PreviewContext {
   selectedSite?: SiteSummary;
   usageData?: unknown;
   usageStats?: unknown;
+  latestUsageRecord?: { createdAt?: unknown; outputTokens?: unknown; durationMs?: unknown };
   channelsData?: unknown;
   channelAssociations?: ChannelAssociation[];
   channelAssociationsBySite?: Record<string, ChannelAssociation[]>;
@@ -55,6 +63,7 @@ export interface PreviewContext {
   };
   keyPreference?: { mode: 'auto' | 'manual'; keyId?: string };
   onSelectSite?: (siteId: string) => void;
+  onReorderSites?: (siteIds: string[]) => Promise<void>;
   onRefreshSite?: () => void;
   onRefreshCurrentKeyStats?: () => void;
   onRefreshFloating?: () => void;
@@ -113,9 +122,16 @@ export function parsePreviewLocation(search: string): PreviewLocation {
   const params = new URLSearchParams(search);
   const surface = params.get('surface') === 'floating' ? 'floating' : 'main';
   const shellValue = params.get('shell');
-  const shell: MainShell = ['overview', 'api-keys', 'usage', 'channels', 'sites', 'radar'].includes(
-    shellValue ?? '',
-  )
+  const shell: MainShell = [
+    'overview',
+    'api-keys',
+    'usage',
+    'channels',
+    'sites',
+    'radar',
+    'general-settings',
+    'notification-rules',
+  ].includes(shellValue ?? '')
     ? (shellValue as MainShell)
     : 'overview';
   const stateValue = params.get('state');
