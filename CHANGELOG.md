@@ -19,7 +19,7 @@
 - 格式检查、ESLint、TypeScript、全量 Vitest（46 个文件、317 项）、生产构建、开发态和 macOS ARM64 打包态 Electron E2E（各 6 项通过、1 项按配置跳过）已执行；页面检查覆盖 1600px 宽屏、720px 窄屏和 380×260 悬浮窗。
 - macOS ARM64 DMG `hdiutil verify` 为 `VALID`，应用包签名结构、ARM64、包内 `1.9.0` 版本和入口通过；DMG SHA-256：`f5abe3e02071e867aea65d24a847056aca998cc2410af1c655b6b0ed422b2c80`；DMG blockmap：`df56259e1ff7ec8b8767e2b44731ce8da2de23810538bcbf085c74eea873a421`。
 - Windows x64 NSIS、PE32+ 主程序和 asar `1.9.0` 版本/入口交叉检查通过；EXE SHA-256：`db2024fb511ebd3d2feae0754f025951881668517d9d5658512f1d71bf4e0580`；EXE blockmap：`926bae1f0045175a87df34f65d2af486ccc61b567725e4e32df972cd59e3f9e1`。Windows 不代表 Windows 真机通过。
-- 统一发布命令将基于上述已审计资产生成并上传 `update-manifest.json`；GitHub Release、Tag 和五项远程资产在发布完成后核验。
+- 统一发布命令已基于上述已审计资产生成并上传 `update-manifest.json`；远端 manifest SHA-256：`7b42a44dd0ac359ba2c0e1bd26fc1fdc8994631c78610a504bf87240f478bb08`。标签 `1.9.0` 指向版本提交 `af67152`，GitHub stable Release 为非草稿、非预发布，五项远程资产均已验证。
 
 ## 1.8.1 - 2026-08-05
 
