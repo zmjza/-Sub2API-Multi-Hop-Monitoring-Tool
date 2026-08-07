@@ -127,7 +127,7 @@ describe('floating window transparency', () => {
     expect(css).toContain('-webkit-app-region: no-drag');
   });
 
-  it('renders the current channel as a permanent compact card and moves speed into the footer', () => {
+  it('renders only the latest-twelve summary in the clickable compact channel card', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingWindow, {
         state: 'success',
@@ -153,7 +153,11 @@ describe('floating window transparency', () => {
               id: 'channel-1',
               name: 'Plus【特惠通道009】很长很长的渠道名称',
               status: 'normal',
-              timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+              timeline: [
+                { status: 'unknown', checkedAt: '2026-08-07T12:00:02.000Z' },
+                { status: 'normal', checkedAt: '2026-08-07T12:00:00.000Z' },
+                { status: 'failed', checkedAt: '2026-08-07T12:00:01.000Z' },
+              ],
             },
           ],
           availableChannels: [
@@ -175,13 +179,74 @@ describe('floating window transparency', () => {
     );
 
     expect(html).toContain('class="floating-channel-card');
-    expect(html).toContain('自动关联');
-    expect(html).toContain('近 1 分钟可用');
-    expect(html).toContain('aria-label="查看全部关联渠道"');
-    expect(html.match(/<i class=/g)).toHaveLength(12);
+    expect(html).toContain('近 12 次可用');
+    expect(html).not.toContain('自动关联');
+    expect(html).not.toContain('手动指定');
+    expect(html).not.toContain('Plus【特惠通道009】很长很长的渠道名称</strong>');
+    expect(html).not.toContain('floating-channel-heading');
+    expect(html).toContain('aria-label="Plus【特惠通道009】很长很长的渠道名称，查看全部关联渠道"');
+    expect(html.match(/<i [^>]*class=/g)).toHaveLength(12);
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(9);
+    expect(html.indexOf('class="empty"')).toBeLessThan(html.indexOf('class="normal"'));
+    expect(html.indexOf('class="normal"')).toBeLessThan(html.indexOf('class="failed"'));
+    expect(html.indexOf('class="failed"')).toBeLessThan(html.indexOf('class="unknown"'));
+    expect(html).toContain('title="暂无更早记录"');
+    expect(html).toContain('aria-label="暂无更早记录"');
+    const latestLabel = `${new Date('2026-08-07T12:00:02.000Z').toLocaleString('zh-CN', {
+      hour12: false,
+    })} 未知`;
+    expect(html).toContain(`title="${latestLabel}"`);
+    expect(html).toContain(`aria-label="${latestLabel}"`);
+    expect(html).toContain('aria-label="最近 12 次渠道状态时间线"');
+    expect(html).not.toContain('近 1 分钟');
     expect(html).not.toContain('floating-channels');
     expect(html).not.toContain('floating-channel-panel');
     expect(html.indexOf('floating-speed')).toBeGreaterThan(html.indexOf('<footer'));
+  });
+
+  it('shows a semantic empty state instead of a fabricated zero percentage', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
+        keyPreference: { mode: 'manual', keyId: 'key-1' },
+        usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelsData: {
+          state: 'supported',
+          channels: [{ id: 'channel-1', name: 'Plus 渠道', status: 'normal', timeline: [] }],
+          availableChannels: [
+            {
+              name: 'Plus 渠道',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groupIds: ['group-1'],
+                  groupNames: ['Plus 分组'],
+                  modelNames: [],
+                },
+              ],
+            },
+          ],
+          availableChannelsState: 'complete',
+        },
+      }),
+    );
+
+    expect(html).toContain('暂无渠道记录');
+    expect(html).not.toContain('0.00%');
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(12);
   });
 
   it('keeps an unavailable channel state in the same compact slot without an empty dialog trigger', () => {

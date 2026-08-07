@@ -116,14 +116,13 @@ body:has(.floating-window) {
   position: absolute;
   z-index: 10;
   right: 20px;
-  top: 76px;
+  top: 116px;
   width: 172px;
-  height: 82px;
-  padding: 9px 10px;
+  height: 42px;
+  padding: 7px 10px;
   overflow: hidden;
   display: grid;
-  align-content: space-between;
-  gap: 5px;
+  align-content: center;
   border: 1px solid #dbe7df;
   border-radius: 8px;
   background: #fff;
@@ -134,10 +133,8 @@ body:has(.floating-window) {
   -webkit-app-region: no-drag;
 }
 .floating-window:has(.query-status) .floating-channel-card {
-  top: 92px;
-  height: 68px;
-  padding-top: 7px;
-  padding-bottom: 7px;
+  top: 118px;
+  height: 42px;
 }
 .floating-channel-card:hover {
   border-color: #94a3b8;
@@ -147,26 +144,6 @@ body:has(.floating-window) {
   outline: 2px solid #4f46e5;
   outline-offset: 2px;
 }
-.floating-channel-heading {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.floating-channel-heading small {
-  color: #047857;
-  font-size: 9px;
-  white-space: nowrap;
-}
-.floating-channel-heading strong {
-  overflow: hidden;
-  color: #1e293b;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.floating-channel-heading em,
 .floating-channel-dialog-row-heading em {
   padding: 2px 5px;
   border-radius: 999px;
@@ -176,14 +153,11 @@ body:has(.floating-window) {
   font-style: normal;
   white-space: nowrap;
 }
-.floating-channel-card.is-degraded .floating-channel-heading em,
-.floating-channel-card.is-unknown .floating-channel-heading em,
 .floating-channel-dialog-row.is-degraded em,
 .floating-channel-dialog-row.is-unknown em {
   background: #fffbeb;
   color: #b45309;
 }
-.floating-channel-card.is-failed .floating-channel-heading em,
 .floating-channel-dialog-row.is-failed em {
   background: #fef2f2;
   color: #b91c1c;

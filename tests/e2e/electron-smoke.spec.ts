@@ -636,7 +636,7 @@ test('restores a visible main-window position from local settings', async () => 
 });
 
 test('connects site entry, overview, usage, channels, and floating shell to a local sub2api server', async () => {
-  test.setTimeout(60_000);
+  test.setTimeout(75_000);
   let keysRequestCount = 0;
   let availableRatesRequestCount = 0;
   let channelRequestCount = 0;
@@ -649,6 +649,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   let modelsRequestCount = 0;
   let floatingLatestHost: string | undefined;
   let floatingLatestSequence = 0;
+  let channelTimelineRevision = 0;
+  let channelTimelineLimit: number | undefined;
   let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
   let availableChannelsMode: 'complete' | 'partial' = 'complete';
   let includeSecondaryG1Association = false;
@@ -959,7 +961,27 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
         response.statusCode = 503;
         return response.end(JSON.stringify({ message: 'temporarily unavailable' }));
       }
-      const checkedAt = new Date().toISOString();
+      const timelineStatuses = ['normal', 'degraded', 'unknown', 'failed'] as const;
+      const timelineLength = channelTimelineLimit ?? 12 + channelTimelineRevision;
+      const timelineNow = Date.now();
+      const timeline = Array.from({ length: timelineLength }, (_, index) => {
+        const recentIndex = index - 8;
+        return {
+          status:
+            index < 8
+              ? timelineStatuses[index % timelineStatuses.length]
+              : index === 12
+                ? 'degraded'
+                : 'normal',
+          checked_at: new Date(
+            index < 8
+              ? timelineNow - (120 - index * 5) * 1_000
+              : timelineNow - (timelineLength - 1 - index) * 10_000,
+          ).toISOString(),
+          latency_ms: 120 + index,
+          ping_latency_ms: 40 + recentIndex,
+        };
+      }).reverse();
       const body = JSON.stringify({
         data: channelFixtures.map((fixture, index) => ({
           id: `channel-e2e-${index + 1}`,
@@ -969,13 +991,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           primary_model: fixture.model,
           primary_status: fixture.status,
           availability_7d: fixture.status === 'degraded' ? 90.76 : 99.9,
-          timeline: [
-            {
-              status: fixture.status,
-              checked_at: checkedAt,
-              latency_ms: fixture.status === 'degraded' ? 480 : 120,
-            },
-          ],
+          timeline,
         })),
       });
       if (channelDelayMs) {
@@ -2028,10 +2044,28 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     });
     await expect(floating.locator('footer .floating-speed')).toContainText(/\d+(?:\.\d)? t\/s/);
     await expect(floating.locator('.floating-speed')).toContainText('快');
+    await expect(floating.locator('.floating-channels')).toHaveCount(0);
+    await expect(floating.locator('.floating-channel-panel')).toHaveCount(0);
+    const compactChannel = floating.getByRole('button', {
+      name: 'E2E 分组精准通道，查看全部关联渠道',
+    });
+    await expect(compactChannel).toBeVisible();
+    await expect(compactChannel).toContainText('近 12 次可用');
+    await expect(compactChannel).not.toContainText('自动关联');
+    await expect(compactChannel).not.toContainText('E2E 分组精准通道');
+    const timelineCells = compactChannel.locator('.floating-channel-timeline i');
+    await expect(timelineCells).toHaveCount(12);
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(0);
+    await expect(timelineCells.first()).toHaveClass('normal');
+    await expect(timelineCells.last()).toHaveClass('normal');
+    await expect(timelineCells.last()).toHaveAttribute('title', /正常$/);
+
     const refreshCooldownRemaining = 5_100 - (Date.now() - usageSiteRefreshStartedAt);
     if (refreshCooldownRemaining > 0)
       await new Promise((resolve) => setTimeout(resolve, refreshCooldownRemaining));
     const keysBeforeFloatingRefresh = keysRequestCount;
+    const channelsBeforeFloatingRefresh = channelRequestCount;
+    channelTimelineRevision = 1;
     await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
       timeout: 15_000,
     });
@@ -2040,21 +2074,24 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect
       .poll(() => keysRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(keysBeforeFloatingRefresh);
+    await expect
+      .poll(() => channelRequestCount, { timeout: 15_000 })
+      .toBeGreaterThan(channelsBeforeFloatingRefresh);
     await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
       timeout: 15_000,
     });
-    await expect(floating.locator('.floating-channels')).toHaveCount(0);
-    await expect(floating.locator('.floating-channel-panel')).toHaveCount(0);
-    const compactChannel = floating.getByRole('button', { name: '查看全部关联渠道' });
-    await expect(compactChannel).toBeVisible();
-    await expect(compactChannel).toContainText('自动关联');
-    await expect(compactChannel).toContainText('E2E 分组精准通道');
-    await expect(compactChannel).toContainText('近 1 分钟可用');
-    await expect(compactChannel.locator('.floating-channel-timeline i')).toHaveCount(12);
+    await expect(timelineCells.first()).toHaveClass('degraded');
+    await expect(timelineCells.last()).toHaveClass('degraded');
+    await expect(timelineCells.last()).toHaveAttribute('title', /降级$/);
     await compactChannel.click();
     const floatingChannelDialog = floating.getByRole('dialog', { name: '关联渠道' });
     await expect(floatingChannelDialog).toBeVisible();
     await expect(floatingChannelDialog.locator('.floating-channel-dialog-row')).toHaveCount(2);
+    await expect(floatingChannelDialog).toContainText('最近 12 次');
+    await expect(floatingChannelDialog).not.toContainText('最近 1 分钟');
+    await expect(
+      floatingChannelDialog.locator('.floating-channel-dialog-row').first().locator('i'),
+    ).toHaveCount(12);
     await expect(floatingChannelDialog).toContainText('E2E 分组精准通道');
     await expect(floatingChannelDialog).toContainText('OpenAI 便宜 A');
     await expect(floatingChannelDialog.getByText('当前展示')).toHaveCount(1);
@@ -2128,6 +2165,20 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floatingChannelDialog).toHaveCount(0);
     await expect(compactChannel).toBeFocused();
     await captureEvidence(floating, '05-floating');
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
+    channelTimelineLimit = 3;
+    const channelsBeforeShortHistoryRefresh = channelRequestCount;
+    await floating.getByRole('button', { name: '刷新悬浮窗' }).click();
+    await expect
+      .poll(() => channelRequestCount, { timeout: 15_000 })
+      .toBeGreaterThan(channelsBeforeShortHistoryRefresh);
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(9);
+    await expect(timelineCells.nth(8)).toHaveClass('empty');
+    await expect(timelineCells.nth(9)).toHaveClass('normal');
+    await expect(timelineCells.last()).toHaveClass('unknown');
+    await expect(timelineCells.nth(8)).toHaveAttribute('title', '暂无更早记录');
+    await expect(timelineCells.last()).toHaveAttribute('title', /未知$/);
+    await captureEvidence(floating, '28-floating-short-history');
   }
   await application.close();
   await new Promise<void>((resolve) => server.close(() => resolve()));

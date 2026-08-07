@@ -18,8 +18,68 @@ import {
   selectDisplayedChannel,
   usageModelsForGroup,
   toggleChannelAssociation,
+  summarizeLatestChannelChecks,
   summarizeRecentChannelHealth,
 } from './channel-ranking';
+
+describe('summarizeLatestChannelChecks', () => {
+  it('sorts real checks and keeps only the latest twelve using their actual denominator', () => {
+    const timeline = Array.from({ length: 14 }, (_, index) => ({
+      status: index === 0 || index === 13 ? 'failed' : 'normal',
+      checkedAt: new Date(Date.parse('2026-08-07T12:00:00.000Z') + index * 1_000).toISOString(),
+    })).reverse();
+
+    const summary = summarizeLatestChannelChecks(timeline);
+
+    expect(summary.points).toHaveLength(12);
+    expect(summary.points[0]?.checkedAt).toBe(Date.parse('2026-08-07T12:00:02.000Z'));
+    expect(summary.points.at(-1)).toEqual({
+      status: 'failed',
+      checkedAt: Date.parse('2026-08-07T12:00:13.000Z'),
+    });
+    expect(summary.availabilityPercent).toBeCloseTo((11 / 12) * 100);
+  });
+
+  it('ignores invalid timestamps without fabricating checks', () => {
+    expect(
+      summarizeLatestChannelChecks([
+        { status: 'failed', checkedAt: 'invalid' },
+        { status: 'normal' },
+        { status: 'degraded', checkedAt: '2026-08-07T12:00:00.000Z' },
+      ]),
+    ).toEqual({
+      availabilityPercent: 100,
+      points: [{ status: 'degraded', checkedAt: Date.parse('2026-08-07T12:00:00.000Z') }],
+    });
+  });
+
+  it.each(['failed', 'error', 'down', 'unavailable'])(
+    'normalizes %s as an explicit failure while preserving the other status colors',
+    (status) => {
+      const summary = summarizeLatestChannelChecks([
+        { status, checkedAt: '2026-08-07T12:00:00.000Z' },
+        { status: 'normal', checkedAt: '2026-08-07T12:00:01.000Z' },
+        { status: 'degraded', checkedAt: '2026-08-07T12:00:02.000Z' },
+        { status: 'unknown', checkedAt: '2026-08-07T12:00:03.000Z' },
+      ]);
+
+      expect(summary.points.map((point) => point.status)).toEqual([
+        'failed',
+        'normal',
+        'degraded',
+        'unknown',
+      ]);
+      expect(summary.availabilityPercent).toBe(75);
+    },
+  );
+
+  it('returns an undefined percentage for zero real records', () => {
+    expect(summarizeLatestChannelChecks([])).toEqual({
+      availabilityPercent: undefined,
+      points: [],
+    });
+  });
+});
 
 describe('summarizeRecentChannelHealth', () => {
   const now = Date.parse('2026-08-07T12:00:00.000Z');

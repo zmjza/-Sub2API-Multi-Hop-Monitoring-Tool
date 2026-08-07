@@ -1,5 +1,38 @@
 # Electron 构建避坑
 
+## Electron E2E 不会自动重建 Renderer
+
+**现象**
+
+修改 Renderer 后直接运行 `npm run test:e2e`，Playwright 启动成功但错误快照仍显示上一版本的文案和 DOM；新选择器找不到，容易被误判为实现未生效。
+
+**根因**
+
+当前 `test:e2e` 脚本只执行 `playwright test`，Electron 默认从现有 `dist/` 加载生产 Renderer，不会隐式执行 Vite 构建。
+
+**正确做法**
+
+Renderer 行为变更后先运行 `npm run build`，确认 `dist/` 已更新，再运行开发态或打包态 Electron E2E。排障时先检查错误快照中的版本文案和 DOM 是否与源码一致。
+
+**验证方式**
+
+本轮先直接 E2E 得到旧“自动关联 / 近 1 分钟”快照；执行 `npm run build` 后重跑同一核心集成用例，新“近 12 次”断言、刷新右移和弹框语义均通过。
+
+**禁止事项**
+
+不要通过放宽选择器或延长超时掩盖旧 `dist/`；不要在构建和 E2E 并行时读取正在变化的生产资源。
+
+**相关文件或命令**
+
+- `package.json`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run build`
+- `npm run test:e2e`
+
+**适用范围**
+
+所有从仓库根目录启动、读取生产 `dist/` 的 Electron Playwright 测试。
+
 ## SemVer 递增后测试不能硬编码上一版本
 
 **现象**

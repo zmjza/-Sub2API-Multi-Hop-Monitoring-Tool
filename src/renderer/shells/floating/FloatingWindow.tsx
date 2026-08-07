@@ -21,7 +21,7 @@ import {
 import {
   currentKeyGroup,
   resolveChannelPresentation,
-  summarizeRecentChannelHealth,
+  summarizeLatestChannelChecks,
 } from '../channels/channel-ranking';
 import './floating.css';
 
@@ -91,7 +91,7 @@ export function FloatingWindow(props: FloatingProps) {
               ? `${associatedChannels.channels.length} 个关联渠道`
               : '当前 Key 无关联渠道';
   const canOpenChannelDialog = associatedChannels?.status === 'matched' && Boolean(primaryChannel);
-  const primaryChannelHealth = summarizeRecentChannelHealth(primaryChannel?.timeline ?? []);
+  const primaryChannelHealth = summarizeLatestChannelChecks(primaryChannel?.timeline ?? []);
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];
   const phaseLabel =
     (
@@ -189,21 +189,17 @@ export function FloatingWindow(props: FloatingProps) {
           type="button"
           ref={channelTriggerRef}
           className={`floating-channel-card is-${primaryChannel.status}`}
-          aria-label="查看全部关联渠道"
+          aria-label={`${primaryChannel.name}，查看全部关联渠道`}
           aria-haspopup="dialog"
           aria-expanded={channelDialogOpen}
           onClick={() => setChannelDialogOpen(true)}
         >
-          <ChannelHealthContent
-            channel={primaryChannel}
-            health={primaryChannelHealth}
-            source={associatedChannels.source}
-          />
+          <ChannelTimeline health={primaryChannelHealth} />
         </button>
       ) : (
         <div className="floating-channel-card is-message" aria-label="当前渠道状态">
           <span>{channelSummary}</span>
-          <small>近 1 分钟渠道状态</small>
+          <small>最近 12 次渠道状态</small>
         </div>
       )}
       <div className="floating-metrics">
@@ -321,7 +317,7 @@ export function FloatingWindow(props: FloatingProps) {
             <header>
               <div>
                 <strong id="floating-channel-dialog-title">关联渠道</strong>
-                <small>最近 1 分钟</small>
+                <small>最近 12 次</small>
               </div>
               <button
                 type="button"
@@ -335,7 +331,7 @@ export function FloatingWindow(props: FloatingProps) {
             </header>
             <div className="floating-channel-dialog-list">
               {associatedChannels.channels.map((channel) => {
-                const health = summarizeRecentChannelHealth(channel.timeline ?? []);
+                const health = summarizeLatestChannelChecks(channel.timeline ?? []);
                 const selected = channel.id === primaryChannel?.id;
                 return (
                   <article
@@ -390,50 +386,42 @@ export function trapDialogTabFocus(event: KeyboardEvent, dialog: HTMLElement): b
 }
 
 type FloatingChannel = ReturnType<typeof readFloatingChannels>['channels'][number];
-type RecentHealth = ReturnType<typeof summarizeRecentChannelHealth>;
-
-function ChannelHealthContent(props: {
-  channel: FloatingChannel;
-  health: RecentHealth;
-  source: 'auto' | 'manual';
-}) {
-  return (
-    <>
-      <span className="floating-channel-heading">
-        <small>{props.source === 'manual' ? '手动指定' : '自动关联'}</small>
-        <strong title={props.channel.name}>{props.channel.name}</strong>
-        <em>{channelStatusLabel(props.channel.status)}</em>
-      </span>
-      <ChannelTimeline health={props.health} />
-    </>
-  );
-}
+type RecentHealth = ReturnType<typeof summarizeLatestChannelChecks>;
 
 function ChannelTimeline({ health }: { health: RecentHealth }) {
   return (
     <span className="floating-channel-health">
       <small>
         {health.availabilityPercent === undefined ? (
-          '近 1 分钟无数据'
+          '暂无渠道记录'
         ) : (
           <>
-            近 1 分钟可用 <b>{health.availabilityPercent.toFixed(2)}%</b>
+            近 12 次可用 <b>{health.availabilityPercent.toFixed(2)}%</b>
           </>
         )}
       </small>
-      <span className="floating-channel-timeline" aria-label="最近 1 分钟渠道状态时间线">
+      <span className="floating-channel-timeline" aria-label="最近 12 次渠道状态时间线">
         {Array.from({ length: 12 }, (_, index) => {
-          const point = health.points[index];
+          const point = health.points[index - (12 - health.points.length)];
+          const label = point ? channelPointLabel(point) : '暂无更早记录';
           return (
             <i
+              role="img"
               className={point?.status ?? 'empty'}
               key={point ? `${point.checkedAt}-${index}` : `empty-${index}`}
+              title={label}
+              aria-label={label}
             />
           );
         })}
       </span>
     </span>
   );
+}
+
+function channelPointLabel(point: RecentHealth['points'][number]): string {
+  const checkedAt = new Date(point.checkedAt).toLocaleString('zh-CN', { hour12: false });
+  return `${checkedAt} ${channelStatusLabel(point.status)}`;
 }
 
 function channelStatusLabel(status: FloatingChannel['status']): string {

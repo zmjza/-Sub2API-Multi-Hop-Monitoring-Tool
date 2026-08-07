@@ -68,6 +68,22 @@ export type RecentChannelHealth = {
   points: RecentChannelPoint[];
 };
 
+const explicitChannelFailures = new Set(['failed', 'error', 'down', 'unavailable']);
+
+function normalizeChannelPointStatus(status: unknown): RecentChannelPoint['status'] {
+  const normalizedStatus = String(status ?? '')
+    .trim()
+    .toLocaleLowerCase();
+  if (explicitChannelFailures.has(normalizedStatus)) return 'failed';
+  if (
+    normalizedStatus === 'normal' ||
+    normalizedStatus === 'degraded' ||
+    normalizedStatus === 'unknown'
+  )
+    return normalizedStatus;
+  return 'unknown';
+}
+
 type RelatedSection = {
   relationshipName: string;
   section: AvailableChannelRelationship['platforms'][number];
@@ -250,27 +266,36 @@ export function resolveChannelPresentation<T extends RankableChannel & { id: str
   };
 }
 
-/** Builds the fixed one-minute health view used by the compact floating channel cards. */
+/** Summarizes the latest real server checks without creating a second local history. */
+export function summarizeLatestChannelChecks(
+  timeline: Array<{ status?: unknown; checkedAt?: unknown }>,
+): RecentChannelHealth {
+  const points = timeline
+    .flatMap((point) => {
+      const checkedAt = Date.parse(String(point.checkedAt ?? ''));
+      return Number.isFinite(checkedAt)
+        ? [{ status: normalizeChannelPointStatus(point.status), checkedAt }]
+        : [];
+    })
+    .sort((left, right) => left.checkedAt - right.checkedAt)
+    .slice(-12);
+  if (!points.length) return { availabilityPercent: undefined, points: [] };
+  const available = points.filter((point) => point.status !== 'failed').length;
+  return { availabilityPercent: (available / points.length) * 100, points };
+}
+
+/** Builds the fixed one-minute health view used by channel stability logic. */
 export function summarizeRecentChannelHealth(
   timeline: Array<{ status?: unknown; checkedAt?: unknown }>,
   now = Date.now(),
   maxSegments = 12,
 ): RecentChannelHealth {
   const cutoff = now - 60_000;
-  const explicitFailures = new Set(['failed', 'error', 'down', 'unavailable']);
   const valid = timeline
     .flatMap((point) => {
       const checkedAt = Date.parse(String(point.checkedAt ?? ''));
       if (!Number.isFinite(checkedAt) || checkedAt < cutoff || checkedAt > now) return [];
-      const rawStatus = String(point.status ?? '')
-        .trim()
-        .toLocaleLowerCase();
-      const status: RecentChannelPoint['status'] = explicitFailures.has(rawStatus)
-        ? 'failed'
-        : rawStatus === 'normal' || rawStatus === 'degraded' || rawStatus === 'unknown'
-          ? rawStatus
-          : 'unknown';
-      return [{ status, checkedAt }];
+      return [{ status: normalizeChannelPointStatus(point.status), checkedAt }];
     })
     .sort((left, right) => left.checkedAt - right.checkedAt);
   if (!valid.length) return { availabilityPercent: undefined, points: [] };
