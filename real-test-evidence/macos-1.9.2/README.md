@@ -26,3 +26,11 @@
 ## 已知边界
 
 首次从挂载应用执行完整 E2E 成功。随后为补充短历史截图重复启动同一挂载路径时，Playwright 停在 `electron.launch` 握手；直接运行挂载二进制正常，同源打包目录应用的预览与短历史流程通过。因此顶层完整流程和满历史截图标记为 DMG 挂载态，短历史子目录明确标记为同源打包目录应用，不混写证据来源。
+
+## 发布验证
+
+- 版本提交：`13dfdf34580b606d7ffbfd5150a4d13f2f774f16`
+- GitHub/Gitee 当前发布分支均指向该提交；标签 `1.9.2` 指向同一提交。
+- GitHub Release：`https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/tag/1.9.2`
+- Release 为 stable、非草稿、非预发布；DMG、EXE、两个 blockmap 和 `update-manifest.json` 五项资产均为 uploaded。
+- 远端 manifest SHA-256：`f0c38b5c44ea301ca8a56c9132892433de945d58c4458af9e671d43a82eba5a2`；内容为 `stable`、`testOnly:false`，DMG/EXE 哈希与本页产物校验一致。

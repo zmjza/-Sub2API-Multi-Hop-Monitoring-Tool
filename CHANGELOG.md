@@ -15,6 +15,7 @@
 - macOS ARM64 DMG 完整 Electron E2E 为 6 项通过、1 项按配置跳过；12 条满状态、刷新右移、弹框和 `380×260` 视觉证据来自只读挂载应用。少于 12 条的左侧空槽由同源打包目录应用补充验证通过；证据位于 `real-test-evidence/macos-1.9.2/`。
 - DMG `hdiutil verify` 为 `VALID`，严格签名结构、arm64、bundle/asar `1.9.2` 和入口通过；DMG SHA-256：`b8e52c97c42f5fc4d229aeec84690cca4057c05755d03c7af092ca513fe167c7`；DMG blockmap：`fc579687906bb5348677506bd4bb5e66421e117646bb995c74ba53ad8b50c0d9`。
 - Windows x64 NSIS、PE32+ 主程序和 asar `1.9.2` 版本/入口交叉检查通过；EXE SHA-256：`e327240541533466f28cbda8d1642ee4672af74660a9bb653fdfa661502fa8ec`；EXE blockmap：`8fe877311aae25a18bd5cfba1ad29066c8106075e1d75282cef54fc215501fa5`。Windows 不代表 Windows 真机通过。
+- 版本提交 `13dfdf3` 已推送 GitHub 与 Gitee，标签 `1.9.2` 指向该提交。GitHub stable Release 为非草稿、非预发布，五项资产全部 uploaded；远端 manifest SHA-256：`f0c38b5c44ea301ca8a56c9132892433de945d58c4458af9e671d43a82eba5a2`。
 
 ## 1.9.1 - 2026-08-07
 
