@@ -651,6 +651,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   let floatingLatestSequence = 0;
   let availableRatesMode: 'success' | 'delayed' | 'error' | 'empty' = 'success';
   let availableChannelsMode: 'complete' | 'partial' = 'complete';
+  let includeSecondaryG1Association = false;
   let managedKeyGroupId = '101';
   let interactiveVerificationEnabled = false;
   const availableRateGroups = [
@@ -871,7 +872,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
               platforms: [
                 {
                   platform: 'openai',
-                  groups: [{ id: 'rate-openai-a', name: 'OpenAI 便宜 A' }],
+                  groups: [
+                    { id: 'rate-openai-a', name: 'OpenAI 便宜 A' },
+                    ...(includeSecondaryG1Association ? [{ id: 'g1', name: 'E2E 分组' }] : []),
+                  ],
                   supported_models: [{ name: 'gpt-e2e' }],
                 },
               ],
@@ -1900,9 +1904,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   expect((await stat(exportPath)).mode & 0o077).toBe(0);
   await main.evaluate(async () => {
     const desktop = window.sub2apiDesktop?.sites;
-    const siteId = (await desktop?.list())?.currentSiteId;
-    if (!desktop || !siteId) throw new Error('Current site unavailable');
-    await desktop.setKeyPreference(siteId, { mode: 'auto' });
+    const sites = (await desktop?.list())?.sites ?? [];
+    if (!desktop || !sites.length) throw new Error('Sites unavailable');
+    for (const site of sites) await desktop.setKeyPreference(site.id, { mode: 'auto' });
   });
   await main.getByRole('button', { name: '渠道状态', exact: true }).click();
   await expect(main.locator('.channel-card')).toHaveCount(7);
@@ -1956,7 +1960,36 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .toEqual([]);
   await associationPopover.getByRole('button', { name: /查看 OpenAI 便宜 A 渠道详情/ }).click();
   await expect(associationPopover).toBeVisible();
+  await associationPopover.getByRole('button', { name: /关联 E2E 分组精准通道/ }).click();
+  await associationPopover.getByRole('button', { name: /关联 OpenAI 便宜 A/ }).click();
+  await expect
+    .poll(async () =>
+      main.evaluate(async () =>
+        window.sub2apiDesktop?.sites.channelAssociations(
+          (await window.sub2apiDesktop?.sites.list())?.currentSiteId ?? '',
+        ),
+      ),
+    )
+    .toEqual([
+      expect.objectContaining({
+        groupId: 'g1',
+        channelIds: ['channel-e2e-1', 'channel-e2e-2'],
+        source: 'manual',
+      }),
+    ]);
   await associationPopover.getByRole('button', { name: '关闭渠道状态弹窗' }).click();
+  await main.evaluate(async () => {
+    const desktop = window.sub2apiDesktop?.sites;
+    const sites = (await desktop?.list())?.sites ?? [];
+    if (!desktop || sites.length < 2) throw new Error('Expected two isolated local sites');
+    for (const site of sites)
+      await desktop.setChannelAssociation({
+        siteId: site.id,
+        groupId: 'g1',
+        channelIds: ['channel-e2e-1', 'channel-e2e-2'],
+      });
+  });
+  includeSecondaryG1Association = true;
   availableChannelsMode = 'complete';
   await main.getByRole('button', { name: '通知', exact: true }).click();
   await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'general-settings');
@@ -1993,29 +2026,8 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floating.locator('.floating-header strong')).toContainText('localhost', {
       timeout: 10_000,
     });
-    await expect(floating.locator('.floating-speed')).toContainText(/\d+(?:\.\d)? t\/s/);
+    await expect(floating.locator('footer .floating-speed')).toContainText(/\d+(?:\.\d)? t\/s/);
     await expect(floating.locator('.floating-speed')).toContainText('快');
-    await floating.locator('.floating-channels summary').click();
-    await expect(floating.locator('.floating-channel-panel')).toContainText('近 1 分钟渠道状态');
-    await expect(floating.locator('.floating-actions button')).toHaveCount(2);
-    expect(
-      await floating.evaluate(() => {
-        const metrics = document.querySelector('.floating-metrics')?.getBoundingClientRect();
-        const footer = document.querySelector('.floating-window footer')?.getBoundingClientRect();
-        const actions = Array.from(
-          document.querySelectorAll<HTMLButtonElement>('.floating-actions button'),
-        ).map((button) => button.getBoundingClientRect());
-        return {
-          noOverlap: Boolean(metrics && footer && metrics.bottom <= footer.top),
-          adjacent:
-            actions.length === 2 &&
-            actions[1]!.left - actions[0]!.right >= 0 &&
-            actions[1]!.left - actions[0]!.right <= 6,
-          rightAligned:
-            actions.length === 2 && footer ? footer.right - actions[1]!.right <= 24 : false,
-        };
-      }),
-    ).toEqual({ noOverlap: true, adjacent: true, rightAligned: true });
     const refreshCooldownRemaining = 5_100 - (Date.now() - usageSiteRefreshStartedAt);
     if (refreshCooldownRemaining > 0)
       await new Promise((resolve) => setTimeout(resolve, refreshCooldownRemaining));
@@ -2031,6 +2043,90 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
       timeout: 15_000,
     });
+    await expect(floating.locator('.floating-channels')).toHaveCount(0);
+    await expect(floating.locator('.floating-channel-panel')).toHaveCount(0);
+    const compactChannel = floating.getByRole('button', { name: '查看全部关联渠道' });
+    await expect(compactChannel).toBeVisible();
+    await expect(compactChannel).toContainText('自动关联');
+    await expect(compactChannel).toContainText('E2E 分组精准通道');
+    await expect(compactChannel).toContainText('近 1 分钟可用');
+    await expect(compactChannel.locator('.floating-channel-timeline i')).toHaveCount(12);
+    await compactChannel.click();
+    const floatingChannelDialog = floating.getByRole('dialog', { name: '关联渠道' });
+    await expect(floatingChannelDialog).toBeVisible();
+    await expect(floatingChannelDialog.locator('.floating-channel-dialog-row')).toHaveCount(2);
+    await expect(floatingChannelDialog).toContainText('E2E 分组精准通道');
+    await expect(floatingChannelDialog).toContainText('OpenAI 便宜 A');
+    await expect(floatingChannelDialog.getByText('当前展示')).toHaveCount(1);
+    const closeChannelDialog = floating.getByRole('button', { name: '关闭关联渠道弹框' });
+    await expect(closeChannelDialog).toBeFocused();
+    await expect(floating.locator('.floating-actions button')).toHaveCount(2);
+    expect(
+      await floating.evaluate(() => {
+        const windowBounds = document.querySelector('.floating-window')?.getBoundingClientRect();
+        const balance = document.querySelector('.floating-balance')?.getBoundingClientRect();
+        const channel = document.querySelector('.floating-channel-card')?.getBoundingClientRect();
+        const metrics = document.querySelector('.floating-metrics')?.getBoundingClientRect();
+        const footer = document.querySelector('.floating-window footer')?.getBoundingClientRect();
+        const speed = document.querySelector('.floating-speed')?.getBoundingClientRect();
+        const dialog = document.querySelector('.floating-channel-dialog')?.getBoundingClientRect();
+        const actions = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('.floating-actions button'),
+        ).map((button) => button.getBoundingClientRect());
+        return {
+          bodyNoOverlap: Boolean(
+            balance &&
+            channel &&
+            metrics &&
+            footer &&
+            balance.right <= channel.left &&
+            channel.bottom <= metrics.top &&
+            metrics.bottom <= footer.top,
+          ),
+          speedInFooter: Boolean(
+            speed &&
+            footer &&
+            speed.top >= footer.top &&
+            speed.right <= footer.right &&
+            speed.bottom <= footer.bottom,
+          ),
+          dialogContained: Boolean(
+            dialog &&
+            windowBounds &&
+            dialog.left >= windowBounds.left &&
+            dialog.top >= windowBounds.top &&
+            dialog.right <= windowBounds.right &&
+            dialog.bottom <= windowBounds.bottom,
+          ),
+          adjacent:
+            actions.length === 2 &&
+            actions[1]!.left - actions[0]!.right >= 0 &&
+            actions[1]!.left - actions[0]!.right <= 6,
+          rightAligned:
+            actions.length === 2 && footer ? footer.right - actions[1]!.right <= 24 : false,
+        };
+      }),
+    ).toEqual({
+      bodyNoOverlap: true,
+      speedInFooter: true,
+      dialogContained: true,
+      adjacent: true,
+      rightAligned: true,
+    });
+    await captureEvidence(floating, '27-floating-channel-dialog');
+    await closeChannelDialog.click();
+    await expect(floatingChannelDialog).toHaveCount(0);
+    await expect(compactChannel).toBeFocused();
+    await compactChannel.click();
+    await floating.keyboard.press('Escape');
+    await expect(floatingChannelDialog).toHaveCount(0);
+    await expect(compactChannel).toBeFocused();
+    await compactChannel.click();
+    await floating
+      .locator('.floating-channel-dialog-backdrop')
+      .click({ position: { x: 10, y: 130 } });
+    await expect(floatingChannelDialog).toHaveCount(0);
+    await expect(compactChannel).toBeFocused();
     await captureEvidence(floating, '05-floating');
   }
   await application.close();

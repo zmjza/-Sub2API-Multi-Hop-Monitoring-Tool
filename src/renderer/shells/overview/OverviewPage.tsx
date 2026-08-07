@@ -26,8 +26,7 @@ import { RatePopover } from './RatePopover';
 import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
 import {
-  resolveFinalChannelAssociation,
-  resolveOverviewChannelMatch,
+  resolveChannelPresentation,
   type AvailableChannelRelationship,
 } from '../channels/channel-ranking';
 import {
@@ -231,8 +230,8 @@ export function OverviewPage(props: OverviewProps) {
             (item) => item.groupId === currentKey.groupId && item.source === 'manual',
           )
         : undefined;
-      const allMatches = groupName
-        ? resolveFinalChannelAssociation(
+      const channelPresentation = groupName
+        ? resolveChannelPresentation(
             rateChannelsBySite[site.id] ?? [],
             groupName,
             rateChannelRelationshipsBySite[site.id] ?? [],
@@ -240,24 +239,16 @@ export function OverviewPage(props: OverviewProps) {
             manual?.channelIds ?? [],
             channelStatusCacheBySite[site.id]?.channels?.availableChannelsState,
           )
-        : { status: 'unmatched' as const, basis: 'none' as const, source: 'unmatched' as const };
-      const strictMatch =
-        allMatches.status === 'matched'
-          ? {
-              status: 'matched' as const,
-              channel: allMatches.channels[0]!,
-              basis: allMatches.basis,
-            }
-          : allMatches;
-      const match = groupName
-        ? resolveOverviewChannelMatch(
-            strictMatch,
-            groupName,
-            rateChannelRelationshipsBySite[site.id] ?? [],
-            currentKey?.groupId,
-          )
         : undefined;
-      return [site.id, { currentKey, groupName, match, allMatches }] as const;
+      return [
+        site.id,
+        {
+          currentKey,
+          groupName,
+          match: channelPresentation?.match,
+          allMatches: channelPresentation?.association,
+        },
+      ] as const;
     }),
   );
   const channelSiteIdsKey = JSON.stringify(

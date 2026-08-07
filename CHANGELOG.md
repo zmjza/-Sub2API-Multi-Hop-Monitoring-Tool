@@ -1,5 +1,21 @@
 # 更新说明
 
+## 1.9.1 - 2026-08-07
+
+### 悬浮窗渠道状态
+
+- 将最近请求 t/s 徽标移动到悬浮窗底栏，在运行状态与扩大/刷新操作之间显示，保留 Gauge 图标、两位小数和慢/正常/快/暂无分级。
+- 删除“X 个关联渠道”摘要和覆盖今日统计的旧 `<details>` 面板，主体右侧直接显示当前渠道短卡；短卡包含手动/自动来源、中文状态、最近 1 分钟可用率和 12 段稳定时间线，无有效检查点时明确显示无数据。
+- 全部站点与悬浮窗复用同一最终关联和主展示渠道选择函数；多渠道按稳定 ID 选取，不受 API 返回顺序影响。最近一分钟只统计当前时间以内的有效时间点，`failed/error/down/unavailable` 视为明确失败，`degraded/unknown/空状态` 不误写为失败。
+- 点击短卡可在固定 `380×260` 窗口内查看当前 Key 的全部关联渠道；弹框内容区独立滚动，标记当前展示渠道，并支持关闭图标、Escape、遮罩关闭、焦点循环与关闭后归还。刷新导致关联失效时会主动关闭，不会在数据恢复后自行重开。
+- 将 `brace-expansion`、`fast-uri`、`js-yaml` 和 `undici` 更新到已修复的兼容补丁版本，官方 npm Registry 审计为 0 漏洞。
+
+### 验证边界
+
+- 格式检查、ESLint、TypeScript、全量 Vitest（46 个文件、332 项）、生产构建、开发态和 macOS ARM64 DMG 挂载态 Electron E2E（各 6 项通过、1 项按配置跳过）以及官方 Registry 全依赖审计已通过。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`，挂载应用的严格签名结构、arm64、包内 `1.9.1` 版本和入口通过；DMG SHA-256：`295361ce2509ae610ee5ff47f39efbc4111e010a3fc6df8c52e7c5ca7aebde14`；DMG blockmap：`dc5b3ec14309738608ed0d69b6d129d032dc31bf47469027a950bec091c73d8d`。
+- Windows x64 NSIS、PE32+ 主程序和 asar `1.9.1` 版本/入口交叉检查通过；EXE SHA-256：`3a2cb17d9c1762d1532027967f5d7e852a204cc5f0874e731210165e02835c21`；EXE blockmap：`f0b366283c7c32aad5ba2000b19720de119da7b163bab177b65c23fcb6518046`。Windows 不代表 Windows 真机通过；双远端和 GitHub Release 证据将在发布后补录。
+
 ## 1.9.0 - 2026-08-07
 
 ### 请求速度与渠道刷新

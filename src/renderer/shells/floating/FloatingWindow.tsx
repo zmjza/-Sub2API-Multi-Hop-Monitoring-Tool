@@ -6,7 +6,10 @@ import {
   LoaderCircle,
   RefreshCw,
   Settings,
+  Check,
+  X,
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { formatTokenCount } from '../../lib/format';
 import type { FloatingProps } from './types';
 import { floatingSnapshot as data } from './data';
@@ -15,10 +18,20 @@ import {
   formatTokensPerSecond,
   usageSpeedTier,
 } from '../usage/usage-speed';
-import { currentKeyGroup, resolveFinalChannelAssociation } from '../channels/channel-ranking';
+import {
+  currentKeyGroup,
+  resolveChannelPresentation,
+  summarizeRecentChannelHealth,
+} from '../channels/channel-ranking';
 import './floating.css';
 
 export function FloatingWindow(props: FloatingProps) {
+  const [channelDialogOpen, setChannelDialogOpen] = useState(false);
+  const windowRef = useRef<HTMLElement>(null);
+  const channelTriggerRef = useRef<HTMLButtonElement>(null);
+  const channelCloseRef = useRef<HTMLButtonElement>(null);
+  const channelDialogRef = useRef<HTMLElement>(null);
+  const channelDialogWasOpenRef = useRef(false);
   const runtime = Boolean(window.sub2apiDesktop);
   const busy = props.state === 'loading' || props.state === 'refreshing';
   const failed =
@@ -52,8 +65,8 @@ export function FloatingWindow(props: FloatingProps) {
     ? (props.channelAssociations?.find((item) => item.groupId === keyGroup.groupId)?.channelIds ??
       [])
     : [];
-  const associatedChannels = keyGroup
-    ? resolveFinalChannelAssociation(
+  const channelPresentation = keyGroup
+    ? resolveChannelPresentation(
         channelView.channels,
         keyGroup.groupName,
         channelView.availableChannels,
@@ -62,6 +75,8 @@ export function FloatingWindow(props: FloatingProps) {
         channelView.availableChannelsState,
       )
     : undefined;
+  const associatedChannels = channelPresentation?.association;
+  const primaryChannel = channelPresentation?.primary;
   const channelSummary = !props.selectedSite
     ? '未选择站点'
     : !keyGroup
@@ -75,6 +90,8 @@ export function FloatingWindow(props: FloatingProps) {
             : associatedChannels?.status === 'matched'
               ? `${associatedChannels.channels.length} 个关联渠道`
               : '当前 Key 无关联渠道';
+  const canOpenChannelDialog = associatedChannels?.status === 'matched' && Boolean(primaryChannel);
+  const primaryChannelHealth = summarizeRecentChannelHealth(primaryChannel?.timeline ?? []);
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];
   const phaseLabel =
     (
@@ -94,8 +111,35 @@ export function FloatingWindow(props: FloatingProps) {
         ? '这么有钱，就使劲蹬 Codex，别浪费！💸'
         : '快没钱了，赶紧充钱，别让天才程序员陨落！🥲';
   const siteTitle = props.selectedSite?.note?.trim() || props.selectedSite?.name || data.siteName;
+
+  useEffect(() => {
+    if (!channelDialogOpen) {
+      if (channelDialogWasOpenRef.current)
+        (channelTriggerRef.current ?? windowRef.current)?.focus();
+      channelDialogWasOpenRef.current = false;
+      return;
+    }
+    channelDialogWasOpenRef.current = true;
+    channelCloseRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setChannelDialogOpen(false);
+        return;
+      }
+      if (channelDialogRef.current) trapDialogTabFocus(event, channelDialogRef.current);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [channelDialogOpen]);
+
+  useEffect(() => setChannelDialogOpen(false), [props.selectedSite?.id, keyGroup?.groupId]);
+
+  useEffect(() => {
+    if (!canOpenChannelDialog) setChannelDialogOpen(false);
+  }, [canOpenChannelDialog]);
+
   return (
-    <main className={`floating-window state-${props.state}`}>
+    <main ref={windowRef} tabIndex={-1} className={`floating-window state-${props.state}`}>
       <header className="floating-header">
         <button aria-label="上一个站点" onClick={props.onPreviousSite}>
           <ArrowLeft size={16} />
@@ -140,42 +184,28 @@ export function FloatingWindow(props: FloatingProps) {
       <small className="floating-key">
         {props.selectedSite?.defaultKeyLabel ?? (runtime ? '尚未选择站点' : data.keyLabel)}
       </small>
-      <div className={`floating-speed is-${speedTier}`} title="最近一条请求生成速度">
-        <Gauge size={13} aria-hidden />
-        <span>{formatTokensPerSecond(tokensPerSecond)}</span>
-        <b>
-          {speedTier === 'slow'
-            ? '慢'
-            : speedTier === 'normal'
-              ? '正常'
-              : speedTier === 'fast'
-                ? '快'
-                : '暂无'}
-        </b>
-      </div>
-      <details className="floating-channels">
-        <summary title="查看当前 Key 最近一分钟渠道状态">{channelSummary}</summary>
-        <div className="floating-channel-panel">
-          <strong>近 1 分钟渠道状态</strong>
-          {associatedChannels?.status === 'matched' ? (
-            associatedChannels.channels.map((channel) => {
-              const recent = (channel.timeline ?? []).filter((point) => {
-                const checkedAt = Date.parse(point.checkedAt ?? '');
-                return Number.isFinite(checkedAt) && checkedAt >= Date.now() - 60_000;
-              });
-              return (
-                <div className="floating-channel-row" key={channel.id}>
-                  <span title={channel.name}>{channel.name}</span>
-                  <b className={`is-${channel.status}`}>{channel.status}</b>
-                  <small>{recent.length ? `${recent.length} 个检查点` : '近 1 分钟无数据'}</small>
-                </div>
-              );
-            })
-          ) : (
-            <span className="floating-channel-empty">{channelSummary}</span>
-          )}
+      {primaryChannel && canOpenChannelDialog ? (
+        <button
+          type="button"
+          ref={channelTriggerRef}
+          className={`floating-channel-card is-${primaryChannel.status}`}
+          aria-label="查看全部关联渠道"
+          aria-haspopup="dialog"
+          aria-expanded={channelDialogOpen}
+          onClick={() => setChannelDialogOpen(true)}
+        >
+          <ChannelHealthContent
+            channel={primaryChannel}
+            health={primaryChannelHealth}
+            source={associatedChannels.source}
+          />
+        </button>
+      ) : (
+        <div className="floating-channel-card is-message" aria-label="当前渠道状态">
+          <span>{channelSummary}</span>
+          <small>近 1 分钟渠道状态</small>
         </div>
-      </details>
+      )}
       <div className="floating-metrics">
         <span>
           今日 Token
@@ -255,6 +285,11 @@ export function FloatingWindow(props: FloatingProps) {
             ? ` · ${new Date(props.selectedSite.fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             : ''}
         </span>
+        <div className={`floating-speed is-${speedTier}`} title="最近一条请求生成速度">
+          <Gauge size={13} aria-hidden />
+          <span>{formatTokensPerSecond(tokensPerSecond)}</span>
+          <b>{speedTierLabel(speedTier)}</b>
+        </div>
         <div className="floating-actions">
           <button aria-label="打开主页面" title="返回主页面" onClick={props.onOpenSite}>
             <ExternalLink size={15} />
@@ -269,8 +304,150 @@ export function FloatingWindow(props: FloatingProps) {
           </button>
         </div>
       </footer>
+      {channelDialogOpen && associatedChannels?.status === 'matched' && (
+        <div
+          className="floating-channel-dialog-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setChannelDialogOpen(false);
+          }}
+        >
+          <section
+            ref={channelDialogRef}
+            className="floating-channel-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floating-channel-dialog-title"
+          >
+            <header>
+              <div>
+                <strong id="floating-channel-dialog-title">关联渠道</strong>
+                <small>最近 1 分钟</small>
+              </div>
+              <button
+                type="button"
+                ref={channelCloseRef}
+                aria-label="关闭关联渠道弹框"
+                title="关闭"
+                onClick={() => setChannelDialogOpen(false)}
+              >
+                <X size={15} />
+              </button>
+            </header>
+            <div className="floating-channel-dialog-list">
+              {associatedChannels.channels.map((channel) => {
+                const health = summarizeRecentChannelHealth(channel.timeline ?? []);
+                const selected = channel.id === primaryChannel?.id;
+                return (
+                  <article
+                    className={`floating-channel-dialog-row is-${channel.status}${selected ? ' is-selected' : ''}`}
+                    key={channel.id}
+                  >
+                    <div className="floating-channel-dialog-row-heading">
+                      <strong title={channel.name}>{channel.name}</strong>
+                      {selected && (
+                        <span className="floating-channel-selected">
+                          <Check size={10} /> 当前展示
+                        </span>
+                      )}
+                      <em>{channelStatusLabel(channel.status)}</em>
+                    </div>
+                    <ChannelTimeline health={health} />
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
+}
+
+export function trapDialogTabFocus(event: KeyboardEvent, dialog: HTMLElement): boolean {
+  if (event.key !== 'Tab') return false;
+  const focusable = Array.from(
+    dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  if (!focusable.length) {
+    event.preventDefault();
+    return true;
+  }
+  const first = focusable[0]!;
+  const last = focusable.at(-1)!;
+  if (event.shiftKey && event.target === first) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!event.shiftKey && event.target === last) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
+type FloatingChannel = ReturnType<typeof readFloatingChannels>['channels'][number];
+type RecentHealth = ReturnType<typeof summarizeRecentChannelHealth>;
+
+function ChannelHealthContent(props: {
+  channel: FloatingChannel;
+  health: RecentHealth;
+  source: 'auto' | 'manual';
+}) {
+  return (
+    <>
+      <span className="floating-channel-heading">
+        <small>{props.source === 'manual' ? '手动指定' : '自动关联'}</small>
+        <strong title={props.channel.name}>{props.channel.name}</strong>
+        <em>{channelStatusLabel(props.channel.status)}</em>
+      </span>
+      <ChannelTimeline health={props.health} />
+    </>
+  );
+}
+
+function ChannelTimeline({ health }: { health: RecentHealth }) {
+  return (
+    <span className="floating-channel-health">
+      <small>
+        {health.availabilityPercent === undefined ? (
+          '近 1 分钟无数据'
+        ) : (
+          <>
+            近 1 分钟可用 <b>{health.availabilityPercent.toFixed(2)}%</b>
+          </>
+        )}
+      </small>
+      <span className="floating-channel-timeline" aria-label="最近 1 分钟渠道状态时间线">
+        {Array.from({ length: 12 }, (_, index) => {
+          const point = health.points[index];
+          return (
+            <i
+              className={point?.status ?? 'empty'}
+              key={point ? `${point.checkedAt}-${index}` : `empty-${index}`}
+            />
+          );
+        })}
+      </span>
+    </span>
+  );
+}
+
+function channelStatusLabel(status: FloatingChannel['status']): string {
+  if (status === 'normal') return '正常';
+  if (status === 'degraded') return '降级';
+  if (status === 'failed') return '异常';
+  return '未知';
+}
+
+function speedTierLabel(tier: ReturnType<typeof usageSpeedTier>): string {
+  if (tier === 'slow') return '慢';
+  if (tier === 'normal') return '正常';
+  if (tier === 'fast') return '快';
+  return '暂无';
 }
 
 function readFloatingChannels(value: unknown): {

@@ -1,13 +1,42 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { FloatingWindow } from './FloatingWindow';
+import { FloatingWindow, trapDialogTabFocus } from './FloatingWindow';
 
 beforeAll(() => vi.stubGlobal('window', {}));
 afterAll(() => vi.unstubAllGlobals());
 
 describe('floating window transparency', () => {
+  it('cycles keyboard focus inside the associated-channel dialog', () => {
+    const first = { focus: vi.fn() };
+    const last = { focus: vi.fn() };
+    const dialog = {
+      querySelectorAll: () => [first, last],
+    } as unknown as HTMLElement;
+    const preventDefault = vi.fn();
+
+    expect(
+      trapDialogTabFocus(
+        { key: 'Tab', shiftKey: false, target: last, preventDefault } as unknown as KeyboardEvent,
+        dialog,
+      ),
+    ).toBe(true);
+    expect(first.focus).toHaveBeenCalledOnce();
+    expect(preventDefault).toHaveBeenCalledOnce();
+
+    preventDefault.mockClear();
+    expect(
+      trapDialogTabFocus(
+        { key: 'Tab', shiftKey: true, target: first, preventDefault } as unknown as KeyboardEvent,
+        dialog,
+      ),
+    ).toBe(true);
+    expect(last.focus).toHaveBeenCalledOnce();
+    expect(preventDefault).toHaveBeenCalledOnce();
+  });
+
   it('keeps a stable surface while the native window controls opacity', () => {
     const css = readFileSync(fileURLToPath(new URL('./floating.css', import.meta.url)), 'utf8');
     expect(css).toContain('background: rgba(255, 255, 255, 0.96)');
@@ -30,7 +59,7 @@ describe('floating window transparency', () => {
 
   it('prefers the current site note in the top title', () => {
     const html = renderToStaticMarkup(
-      FloatingWindow({
+      createElement(FloatingWindow, {
         state: 'success',
         theme: 'light',
         reducedTransparency: false,
@@ -55,7 +84,7 @@ describe('floating window transparency', () => {
 
   it('shows the effective key credit when the current key has a quota', () => {
     const html = renderToStaticMarkup(
-      FloatingWindow({
+      createElement(FloatingWindow, {
         state: 'success',
         theme: 'light',
         reducedTransparency: false,
@@ -96,5 +125,90 @@ describe('floating window transparency', () => {
     expect(source).toContain('className="floating-actions"');
     expect(css).toContain('-webkit-app-region: drag');
     expect(css).toContain('-webkit-app-region: no-drag');
+  });
+
+  it('renders the current channel as a permanent compact card and moves speed into the footer', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
+        keyPreference: { mode: 'manual', keyId: 'key-1' },
+        usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelsData: {
+          state: 'supported',
+          channels: [
+            {
+              id: 'channel-1',
+              name: 'Plus【特惠通道009】很长很长的渠道名称',
+              status: 'normal',
+              timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+            },
+          ],
+          availableChannels: [
+            {
+              name: 'Plus【特惠通道009】很长很长的渠道名称',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groupIds: ['group-1'],
+                  groupNames: ['Plus 分组'],
+                  modelNames: [],
+                },
+              ],
+            },
+          ],
+          availableChannelsState: 'complete',
+        },
+      }),
+    );
+
+    expect(html).toContain('class="floating-channel-card');
+    expect(html).toContain('自动关联');
+    expect(html).toContain('近 1 分钟可用');
+    expect(html).toContain('aria-label="查看全部关联渠道"');
+    expect(html.match(/<i class=/g)).toHaveLength(12);
+    expect(html).not.toContain('floating-channels');
+    expect(html).not.toContain('floating-channel-panel');
+    expect(html.indexOf('floating-speed')).toBeGreaterThan(html.indexOf('<footer'));
+  });
+
+  it('keeps an unavailable channel state in the same compact slot without an empty dialog trigger', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
+        keyPreference: { mode: 'manual', keyId: 'key-1' },
+        usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelsData: { state: 'error' },
+      }),
+    );
+
+    expect(html).toContain('class="floating-channel-card is-message"');
+    expect(html).toContain('渠道查询失败');
+    expect(html).not.toContain('aria-label="查看全部关联渠道"');
   });
 });

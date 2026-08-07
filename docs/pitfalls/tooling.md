@@ -493,3 +493,35 @@ GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，
 **适用范围**
 
 批量站点添加、favicon/title 抓取及其他由主进程读取用户提供 URL 的辅助能力。
+
+## Electron 圆角透明区不能作为遮罩点击与焦点归还测试坐标
+
+**现象**
+
+固定圆角透明 Electron 窗口中的对话框遮罩使用 Playwright 点击 `(2,2)` 时，动作会等待可点击性直到用例超时；改到可见遮罩后能关闭弹框，但若组件在 `mousedown` 阶段卸载遮罩，关闭后的触发按钮焦点又会被同一鼠标序列覆盖。
+
+**根因**
+
+窗口圆角外缘属于透明裁切区，不是稳定的命中测试区域；`mousedown` 早于浏览器默认焦点处理，在该阶段卸载并归还焦点会与后续鼠标事件竞争。
+
+**正确做法**
+
+遮罩关闭使用 `click` 阶段，并只在 `event.target === event.currentTarget` 时执行。E2E 选择圆角以内、弹框以外的可见遮罩坐标，同时分别断言弹框关闭和触发按钮恢复焦点。
+
+**验证方式**
+
+开发态和 macOS DMG 挂载态 Electron E2E 分别覆盖关闭图标、Escape 和遮罩三条路径；遮罩使用 `(10,130)`，三条路径关闭后触发按钮均重新获得焦点。
+
+**禁止事项**
+
+不要把圆角透明像素当成稳定遮罩区域；不要只提高 Playwright 超时；不要只断言弹框消失而遗漏焦点归还。
+
+**相关文件或命令**
+
+- `src/renderer/shells/floating/FloatingWindow.tsx`
+- `tests/e2e/electron-smoke.spec.ts`
+- `npm run test:e2e -- --grep "connects site entry"`
+
+**适用范围**
+
+Electron 透明/圆角窗口内的模态遮罩、点击外部关闭与无障碍焦点回收测试。

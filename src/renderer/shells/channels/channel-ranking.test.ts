@@ -11,13 +11,173 @@ import {
   matchGroupToChannels,
   normalizeChannelIdentity,
   resolveOverviewChannelMatch,
+  resolveChannelPresentation,
   resolveFinalChannelAssociation,
   resolveKeyGroupChannel,
   rankChannels,
   selectDisplayedChannel,
   usageModelsForGroup,
   toggleChannelAssociation,
+  summarizeRecentChannelHealth,
 } from './channel-ranking';
+
+describe('summarizeRecentChannelHealth', () => {
+  const now = Date.parse('2026-08-07T12:00:00.000Z');
+
+  it('includes the exact one-minute boundary and ignores invalid or older timestamps', () => {
+    expect(
+      summarizeRecentChannelHealth(
+        [
+          { status: 'normal', checkedAt: '2026-08-07T11:59:00.000Z' },
+          { status: 'failed', checkedAt: '2026-08-07T11:58:59.999Z' },
+          { status: 'failed', checkedAt: 'not-a-date' },
+        ],
+        now,
+      ),
+    ).toEqual({
+      availabilityPercent: 100,
+      points: [{ status: 'normal', checkedAt: now - 60_000 }],
+    });
+  });
+
+  it('ignores future timestamps outside the current one-minute window', () => {
+    expect(
+      summarizeRecentChannelHealth(
+        [
+          { status: 'failed', checkedAt: '2026-08-07T12:00:00.001Z' },
+          { status: 'normal', checkedAt: '2026-08-07T11:59:30.000Z' },
+        ],
+        now,
+      ),
+    ).toEqual({
+      availabilityPercent: 100,
+      points: [{ status: 'normal', checkedAt: now - 30_000 }],
+    });
+  });
+
+  it.each(['failed', 'error', 'down', 'unavailable'])(
+    'treats %s as an explicit failure',
+    (status) => {
+      const summary = summarizeRecentChannelHealth(
+        [
+          { status, checkedAt: '2026-08-07T11:59:30.000Z' },
+          { status: 'degraded', checkedAt: '2026-08-07T11:59:40.000Z' },
+          { status: 'unknown', checkedAt: '2026-08-07T11:59:50.000Z' },
+          { status: '', checkedAt: '2026-08-07T12:00:00.000Z' },
+        ],
+        now,
+      );
+
+      expect(summary.availabilityPercent).toBeCloseTo(75);
+      expect(summary.points.map((point) => point.status)).toEqual([
+        'failed',
+        'degraded',
+        'unknown',
+        'unknown',
+      ]);
+    },
+  );
+
+  it('returns no percentage or fabricated segments when there are no valid points', () => {
+    expect(summarizeRecentChannelHealth([], now)).toEqual({
+      availabilityPercent: undefined,
+      points: [],
+    });
+  });
+
+  it('sorts valid points and keeps only the latest twelve compact segments', () => {
+    const timeline = Array.from({ length: 16 }, (_, index) => ({
+      status: index === 15 ? 'failed' : 'normal',
+      checkedAt: new Date(now - index * 1_000).toISOString(),
+    })).reverse();
+
+    const summary = summarizeRecentChannelHealth(timeline, now, 12);
+
+    expect(summary.points).toHaveLength(12);
+    expect(summary.points[0]?.checkedAt).toBe(now - 11_000);
+    expect(summary.points.at(-1)).toEqual({ status: 'normal', checkedAt: now });
+    expect(summary.availabilityPercent).toBeCloseTo(93.75);
+  });
+});
+
+describe('resolveChannelPresentation', () => {
+  const relationships = [
+    {
+      name: '自动渠道 A',
+      platforms: [{ platform: 'openai', groupIds: ['group-1'], groupNames: [], modelNames: [] }],
+    },
+    {
+      name: '自动渠道 B',
+      platforms: [{ platform: 'openai', groupIds: ['group-1'], groupNames: [], modelNames: [] }],
+    },
+  ];
+  const channels = [
+    { id: 'a', name: '自动渠道 A', status: 'degraded' as const },
+    { id: 'b', name: '自动渠道 B', status: 'normal' as const },
+    { id: 'manual', name: '手动渠道', status: 'failed' as const },
+  ];
+
+  it('returns the same primary result for complete automatic associations', () => {
+    const presentation = resolveChannelPresentation(
+      channels,
+      '当前分组',
+      relationships,
+      'group-1',
+      [],
+      'complete',
+    );
+    expect(presentation.association).toMatchObject({ status: 'matched', source: 'auto' });
+    expect(presentation.primary?.id).toBe('a');
+  });
+
+  it('keeps the same primary channel when the API reverses a manual multi-select list', () => {
+    expect(
+      resolveChannelPresentation(channels, '当前分组', [], 'group-1', ['manual', 'b'], 'partial')
+        .primary?.id,
+    ).toBe('b');
+    expect(
+      resolveChannelPresentation(
+        [...channels].reverse(),
+        '当前分组',
+        [],
+        'group-1',
+        ['manual', 'b'],
+        'partial',
+      ).primary?.id,
+    ).toBe('b');
+  });
+
+  it('keeps the same primary channel when the API reverses an automatic association list', () => {
+    expect(
+      resolveChannelPresentation(channels, '当前分组', relationships, 'group-1', [], 'complete')
+        .primary?.id,
+    ).toBe('a');
+    expect(
+      resolveChannelPresentation(
+        [...channels].reverse(),
+        '当前分组',
+        [...relationships].reverse(),
+        'group-1',
+        [],
+        'complete',
+      ).primary?.id,
+    ).toBe('a');
+  });
+
+  it('handles one channel and no association without inventing a primary', () => {
+    expect(
+      resolveChannelPresentation(
+        [channels[0]!],
+        '当前分组',
+        [relationships[0]!],
+        'group-1',
+        [],
+        'complete',
+      ).primary?.id,
+    ).toBe('a');
+    expect(resolveChannelPresentation(channels, '当前分组', [], 'group-1').primary).toBeUndefined();
+  });
+});
 
 describe('toggleChannelAssociation', () => {
   it('toggles one channel while preserving other manual associations', () => {

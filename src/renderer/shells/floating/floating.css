@@ -56,6 +56,8 @@ body:has(.floating-window) {
   align-items: center;
   gap: 9px;
   margin: 5px 20px 0;
+  max-width: 165px;
+  overflow: hidden;
 }
 .floating-balance span {
   font-size: 32px;
@@ -76,28 +78,26 @@ body:has(.floating-window) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  width: 150px;
   margin: 0 20px;
 }
 .floating-speed {
-  position: absolute;
-  z-index: 19;
-  top: 82px;
-  right: 20px;
   width: max-content;
-  max-width: calc(100% - 40px);
-  min-height: 22px;
+  max-width: 90px;
+  min-height: 20px;
   margin: 0;
-  padding: 2px 7px;
+  padding: 2px 6px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   border-radius: 6px;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 10px;
+  font-size: 9px;
+  white-space: nowrap;
 }
 .floating-speed b {
-  font-size: 10px;
+  font-size: 9px;
 }
 .floating-speed.is-slow {
   background: #fff7ed;
@@ -111,73 +111,138 @@ body:has(.floating-window) {
   background: #ecfdf5;
   color: #047857;
 }
-.floating-channels {
+.floating-channel-card {
+  box-sizing: border-box;
   position: absolute;
-  z-index: 20;
+  z-index: 10;
   right: 20px;
-  top: 110px;
-  -webkit-app-region: no-drag;
-}
-.floating-channels summary {
-  max-width: 150px;
-  min-height: 22px;
-  padding: 3px 7px;
+  top: 76px;
+  width: 172px;
+  height: 82px;
+  padding: 9px 10px;
   overflow: hidden;
-  border: 1px solid #dbe3ef;
-  border-radius: 6px;
-  background: #fff;
-  color: #475569;
-  cursor: pointer;
-  font-size: 10px;
-  list-style: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.floating-channels summary::-webkit-details-marker {
-  display: none;
-}
-.floating-channel-panel {
-  position: absolute;
-  right: 0;
-  top: 28px;
-  width: 245px;
-  max-height: 68px;
-  overflow: auto;
-  padding: 9px;
   display: grid;
-  gap: 6px;
-  border: 1px solid #dbe3ef;
+  align-content: space-between;
+  gap: 5px;
+  border: 1px solid #dbe7df;
   border-radius: 8px;
   background: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.17);
-  font-size: 10px;
+  color: #1e293b;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
 }
-.floating-channel-row {
+.floating-window:has(.query-status) .floating-channel-card {
+  top: 92px;
+  height: 68px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+.floating-channel-card:hover {
+  border-color: #94a3b8;
+  background: #fbfdfc;
+}
+.floating-channel-card:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+.floating-channel-heading {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px 8px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
 }
-.floating-channel-row span {
+.floating-channel-heading small {
+  color: #047857;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.floating-channel-heading strong {
   overflow: hidden;
+  color: #1e293b;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.floating-channel-row small {
-  grid-column: 1 / -1;
-  color: #64748b;
-}
-.floating-channel-row b.is-normal {
+.floating-channel-heading em,
+.floating-channel-dialog-row-heading em {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #ecfdf5;
   color: #047857;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
 }
-.floating-channel-row b.is-degraded,
-.floating-channel-row b.is-unknown {
+.floating-channel-card.is-degraded .floating-channel-heading em,
+.floating-channel-card.is-unknown .floating-channel-heading em,
+.floating-channel-dialog-row.is-degraded em,
+.floating-channel-dialog-row.is-unknown em {
+  background: #fffbeb;
   color: #b45309;
 }
-.floating-channel-row b.is-failed {
+.floating-channel-card.is-failed .floating-channel-heading em,
+.floating-channel-dialog-row.is-failed em {
+  background: #fef2f2;
   color: #b91c1c;
 }
-.floating-channel-empty {
+.floating-channel-health {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.floating-channel-health > small {
   color: #64748b;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.floating-channel-health > small b {
+  color: #334155;
+  font-size: 10px;
+}
+.floating-channel-timeline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(3px, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 5px;
+}
+.floating-channel-timeline i {
+  border-radius: 2px;
+  background: #10b981;
+}
+.floating-channel-timeline i.degraded {
+  background: #f59e0b;
+}
+.floating-channel-timeline i.failed {
+  background: #ef4444;
+}
+.floating-channel-timeline i.unknown {
+  background: #94a3b8;
+}
+.floating-channel-timeline i.empty {
+  background: #e2e8f0;
+}
+.floating-channel-card.is-message {
+  align-content: center;
+  gap: 4px;
+  border-color: #e2e8f0;
+  color: #475569;
+  cursor: default;
+}
+.floating-channel-card.is-message span {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floating-channel-card.is-message small {
+  color: #94a3b8;
+  font-size: 9px;
 }
 .floating-metrics {
   position: absolute;
@@ -204,8 +269,8 @@ body:has(.floating-window) {
   position: absolute;
   inset: auto 0 0;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 32px minmax(32px, 1fr) auto auto;
+  gap: 6px;
   align-items: center;
   margin-top: 0;
   height: 49px;
@@ -270,6 +335,98 @@ body:has(.floating-window) {
   align-items: center;
   gap: 2px;
   -webkit-app-region: no-drag;
+}
+.floating-channel-dialog-backdrop {
+  position: absolute;
+  z-index: 50;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.28);
+  -webkit-app-region: no-drag;
+}
+.floating-channel-dialog {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 224px;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.2);
+}
+.floating-channel-dialog > header {
+  min-height: 44px;
+  padding: 7px 10px 7px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #eef2f7;
+}
+.floating-channel-dialog > header div {
+  display: grid;
+  gap: 1px;
+}
+.floating-channel-dialog > header strong {
+  font-size: 12px;
+}
+.floating-channel-dialog > header small {
+  color: #64748b;
+  font-size: 9px;
+}
+.floating-channel-dialog > header button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #64748b;
+}
+.floating-channel-dialog-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.floating-channel-dialog-row {
+  padding: 7px 8px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+}
+.floating-channel-dialog-row.is-selected {
+  border-color: #a7d7bf;
+  background: #f8fffb;
+}
+.floating-channel-dialog-row-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 5px;
+}
+.floating-channel-dialog-row-heading strong {
+  overflow: hidden;
+  color: #1e293b;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floating-channel-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #047857;
+  font-size: 8px;
+  white-space: nowrap;
 }
 .floating-live-state i {
   width: 7px;

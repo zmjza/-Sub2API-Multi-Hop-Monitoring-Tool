@@ -58,6 +58,16 @@ export type FinalChannelAssociation<T extends RankableChannel & { id: string }> 
     }
   | { status: 'unmatched'; basis: 'none'; source: 'unmatched' };
 
+export type RecentChannelPoint = {
+  status: 'normal' | 'degraded' | 'failed' | 'unknown';
+  checkedAt: number;
+};
+
+export type RecentChannelHealth = {
+  availabilityPercent: number | undefined;
+  points: RecentChannelPoint[];
+};
+
 type RelatedSection = {
   relationshipName: string;
   section: AvailableChannelRelationship['platforms'][number];
@@ -192,6 +202,84 @@ export function resolveFinalChannelAssociation<T extends RankableChannel & { id:
     return { status: 'matched', channels: manual, basis: 'group-id', source: 'manual' };
 
   return { status: 'unmatched', basis: 'none', source: 'unmatched' };
+}
+
+/** Keeps the final association and primary monitor identical across Overview and Floating. */
+export function resolveChannelPresentation<T extends RankableChannel & { id: string }>(
+  channels: T[],
+  groupName: string | undefined,
+  relationships: AvailableChannelRelationship[] = [],
+  groupId?: string,
+  manualChannelIds: string[] = [],
+  automaticState: AutomaticRelationshipState = relationships.length ? 'complete' : 'empty',
+): {
+  association: FinalChannelAssociation<T>;
+  match: ChannelMatchResult<T>;
+  primary: T | undefined;
+} {
+  const association = resolveFinalChannelAssociation(
+    channels,
+    groupName,
+    relationships,
+    groupId,
+    manualChannelIds,
+    automaticState,
+  );
+  const stableAssociation: FinalChannelAssociation<T> =
+    association.status === 'matched'
+      ? {
+          ...association,
+          channels: [...association.channels].sort((left, right) =>
+            String(left.id).localeCompare(String(right.id), 'en'),
+          ),
+        }
+      : association;
+  const strictMatch: ChannelMatchResult<T> =
+    stableAssociation.status === 'matched'
+      ? {
+          status: 'matched',
+          channel: stableAssociation.channels[0]!,
+          basis: stableAssociation.basis,
+        }
+      : { status: 'unmatched', basis: 'none' };
+  const match = resolveOverviewChannelMatch(strictMatch, groupName, relationships, groupId);
+  return {
+    association: stableAssociation,
+    match,
+    primary: match.status === 'matched' ? match.channel : undefined,
+  };
+}
+
+/** Builds the fixed one-minute health view used by the compact floating channel cards. */
+export function summarizeRecentChannelHealth(
+  timeline: Array<{ status?: unknown; checkedAt?: unknown }>,
+  now = Date.now(),
+  maxSegments = 12,
+): RecentChannelHealth {
+  const cutoff = now - 60_000;
+  const explicitFailures = new Set(['failed', 'error', 'down', 'unavailable']);
+  const valid = timeline
+    .flatMap((point) => {
+      const checkedAt = Date.parse(String(point.checkedAt ?? ''));
+      if (!Number.isFinite(checkedAt) || checkedAt < cutoff || checkedAt > now) return [];
+      const rawStatus = String(point.status ?? '')
+        .trim()
+        .toLocaleLowerCase();
+      const status: RecentChannelPoint['status'] = explicitFailures.has(rawStatus)
+        ? 'failed'
+        : rawStatus === 'normal' || rawStatus === 'degraded' || rawStatus === 'unknown'
+          ? rawStatus
+          : 'unknown';
+      return [{ status, checkedAt }];
+    })
+    .sort((left, right) => left.checkedAt - right.checkedAt);
+  if (!valid.length) return { availabilityPercent: undefined, points: [] };
+  const available = valid.filter((point) => point.status !== 'failed').length;
+  const segmentCount = Math.min(16, Math.max(10, Math.floor(maxSegments)));
+  return {
+    availabilityPercent: (available / valid.length) * 100,
+    points: valid.slice(-segmentCount),
+  };
 }
 
 function textSimilarity(left: string, right: string): number {
