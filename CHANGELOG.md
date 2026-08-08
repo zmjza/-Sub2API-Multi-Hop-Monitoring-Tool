@@ -23,6 +23,7 @@
 - 将传递依赖 `nanoid` 固定到 `3.3.18`，官方 npm Registry 审计为 0 漏洞。
 - macOS ARM64 DMG `hdiutil verify` 为 `VALID`，只读挂载打包应用完整 E2E 为 7 项通过、1 项跳过，打包应用真实 Radar 网络用例 1/1 通过；DMG SHA-256 为 `f4fceec23647542264e038547f804d2be916c9569fa496d835707e2e6d3ded90`，blockmap 为 `f8d2939d923b20bc8691fedf065c0c97c7c40bf1ffe2a143158f31091e67ec41`。
 - Windows x64 NSIS 为交叉构建证据，主程序为 PE32+ x86-64；EXE SHA-256 为 `7d22d6a2edfb886592986e3a34567312df7a540cb258a2db1b7f3a07172493ed`，blockmap 为 `4ed882c8d2c24956f23044aaf8887b077fcbc42b3bb563a3c2fd2e14b18a2785`，不代表 Windows 真机通过。
+- 版本提交 `bab1d77` 已推送 GitHub 与 Gitee；GitHub stable Release `1.9.3` 为非草稿、非预发布，DMG、EXE、两个 blockmap 与 `update-manifest.json` 五项资产均为 uploaded。远端 manifest SHA-256：`35e93977a7f98376e81b022551d257cabfc3c04308b5d2b3916946b436d0efc2`。
 
 ## 1.9.2 - 2026-08-07
 
