@@ -7,7 +7,10 @@ const desktopBridge: DesktopBridge = {
   platform: process.platform,
   shellVersion: ipcRenderer.sendSync('app:version') as string,
   radar: {
-    open: (target) => ipcRenderer.send('radar:open', target),
+    list: () => ipcRenderer.invoke('radar:list'),
+    create: (input) => ipcRenderer.invoke('radar:create', input),
+    delete: (id) => ipcRenderer.invoke('radar:delete', id),
+    open: (id) => ipcRenderer.send('radar:open', id),
     close: () => ipcRenderer.send('radar:close'),
     onStateChange: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>

@@ -1,6 +1,6 @@
 {
   "name": "sub2api-multi-hub-monitor",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "private": true,
   "description": "Local desktop monitor for multiple sub2api-compatible sites",
   "main": "dist-electron/main/index.js",
@@ -53,6 +53,7 @@
   },
   "overrides": {
     "fast-uri": "3.1.5",
+    "nanoid": "3.3.18",
     "shell-quote": "1.10.0"
   },
   "build": {

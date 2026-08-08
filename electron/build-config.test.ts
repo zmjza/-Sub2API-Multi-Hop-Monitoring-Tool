@@ -110,10 +110,20 @@ describe('electron-builder manifest', () => {
     expect(mainSource).toContain(
       "view.webContents.removeListener('will-attach-webview', onWillAttachWebview)",
     );
-    expect(mainSource).toContain('if (!radarUrlForTarget(input)) return;');
-    expect(bridgeSource).toContain("ipcRenderer.send('radar:open', target)");
+    expect(mainSource).toContain("ipcMain.handle('radar:list'");
+    expect(mainSource).toContain("ipcMain.handle('radar:create'");
+    expect(mainSource).toContain("ipcMain.handle('radar:delete'");
+    expect(mainSource).toContain("ipcMain.on('radar:open'");
+    expect(mainSource).not.toContain('radarUrlForTarget');
+    expect(bridgeSource).toContain("ipcRenderer.invoke('radar:list')");
+    expect(bridgeSource).toContain("ipcRenderer.invoke('radar:create', input)");
+    expect(bridgeSource).toContain("ipcRenderer.invoke('radar:delete', id)");
+    expect(bridgeSource).toContain("ipcRenderer.send('radar:open', id)");
     expect(bridgeSource).toContain("ipcRenderer.send('radar:close')");
-    expect(bridgeTypes).toContain('open(target: RadarTargetId): void');
+    expect(bridgeTypes).toContain('list(): Promise<RadarEntry[]>');
+    expect(bridgeTypes).toContain('create(input: RadarEntryInput): Promise<RadarEntry[]>');
+    expect(bridgeTypes).toContain('delete(id: string): Promise<RadarEntry[]>');
+    expect(bridgeTypes).toContain('open(id: string): void');
     expect(bridgeTypes).toContain('onStateChange(listener: (state: RadarEmbedState) => void)');
   });
 });

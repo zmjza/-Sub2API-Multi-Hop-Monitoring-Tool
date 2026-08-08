@@ -79,7 +79,7 @@ TASK-01-03、TASK-01-04、TASK-12-07 至 TASK-12-09。
 
 本轮已复核生产 CSP、preload 桥、安全窗口选项、公开 Radar 来源白名单和敏感信息扫描；Windows asar 中包含 `dist-electron/preload/bridge.cjs`，未发现新增凭据泄露。
 
-- Radar 不再是 Renderer `fetch` 数据来源，也不再依赖 `current.json` 或主应用 CSP 的外部 `connect-src`；两个固定 HTTPS origin 由主进程受限 `WebContentsView` 承载。
-- Radar 远程页面不得经过站点 IPC、日志 redactor 以外的敏感数据流或 SQLite；只允许 `codexradar.com` 与 `deng.codexradar.com` 的精确顶层导航，不调用系统浏览器。
+- Radar 不再是 Renderer `fetch` 数据来源，也不再依赖 `current.json` 或主应用 CSP 的外部 `connect-src`；站点列表经 SQLite 设置表持久化，打开的 HTTPS origin 由主进程受限 `WebContentsView` 承载。
+- Radar 远程页面不得经过站点 IPC、日志 redactor 以外的敏感数据流或业务数据库表；只允许当前保存条目 HTTPS origin 内的顶层导航，不调用系统浏览器，不读取 Cookie、Token、凭据或页面数据。
 - 透明度设置必须继续通过现有 Zod IPC 边界，不开放任意窗口参数、文件路径、shell 或导航能力。
 - MERGE-03、MERGE-07、MERGE-08、MERGE-10 必须补充 CSP、preload 桥、敏感扫描、窗口显示和 Windows 结构证据。

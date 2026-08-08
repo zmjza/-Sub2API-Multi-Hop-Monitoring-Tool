@@ -1,5 +1,29 @@
 # 更新说明
 
+## 1.9.3 - 2026-08-09
+
+### Radar 动态站点列表
+
+- 将 Radar 从两个固定入口改为 SQLite 持久化的站点列表，支持新增、打开和删除，不提供编辑、排序、搜索、导入导出或恢复默认。
+- 首次启动仍返回 `Codex 雷达 / https://codexradar.com/` 与 `分布式雷达 Codex 站 / https://deng.codexradar.com/`；默认项允许删除，空列表保持为空。
+- 新增弹窗只接受名称和完整 HTTPS 网址，校验必填、长度、URL 格式、名称重复、规范化 URL 重复和 50 项上限；失败保留用户输入并显示行内错误。
+- 删除必须通过应用内二次确认，显示名称和网址，支持取消、确认删除、Esc、遮罩关闭、焦点陷阱、提交防重复和关闭后焦点恢复。
+- 列表支持 loading、读取失败重试、空态新增入口；打开按站点 ID 由主进程重新读取持久化 URL，不把任意 URL 直接暴露给打开路径。
+
+### 安全与嵌入边界
+
+- Renderer 通过 `radar:list`、`radar:create`、`radar:delete`、`radar:open`、`radar:close` 与状态订阅操作，主进程校验发送者、条目 ID、URL、重复项和数量上限。
+- `WebContentsView` 继续使用 sandbox、contextIsolation、nodeIntegration=false、独立内存 partition，并只允许当前目标 HTTPS origin 内导航；跨 origin、新窗口和额外 webview 继续阻止。
+- 删除正在打开的条目时先关闭嵌入视图；顶部关闭图标与 Esc 返回最新动态列表；主窗口 resize 和退出清理保持不变。
+
+### 验证边界
+
+- 格式检查、ESLint、TypeScript、全量 Vitest（46 个文件、345 项）、生产构建和完整 Electron E2E（7 项通过、1 项按配置跳过）已通过。
+- 新增 Electron E2E 覆盖默认项、无效 HTTP、重复网址、新增持久化、重启保留、删除取消、确认删除、重启消失和删除全部空态。
+- 将传递依赖 `nanoid` 固定到 `3.3.18`，官方 npm Registry 审计为 0 漏洞。
+- macOS ARM64 DMG `hdiutil verify` 为 `VALID`，只读挂载打包应用完整 E2E 为 7 项通过、1 项跳过，打包应用真实 Radar 网络用例 1/1 通过；DMG SHA-256 为 `f4fceec23647542264e038547f804d2be916c9569fa496d835707e2e6d3ded90`，blockmap 为 `f8d2939d923b20bc8691fedf065c0c97c7c40bf1ffe2a143158f31091e67ec41`。
+- Windows x64 NSIS 为交叉构建证据，主程序为 PE32+ x86-64；EXE SHA-256 为 `7d22d6a2edfb886592986e3a34567312df7a540cb258a2db1b7f3a07172493ed`，blockmap 为 `4ed882c8d2c24956f23044aaf8887b077fcbc42b3bb563a3c2fd2e14b18a2785`，不代表 Windows 真机通过。
+
 ## 1.9.2 - 2026-08-07
 
 ### 悬浮窗渠道历史

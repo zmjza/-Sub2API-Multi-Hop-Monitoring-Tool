@@ -1,6 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { AvailableRateGroup } from '../../shared/contracts.js';
 import type { ChannelAssociation } from '../../shared/contracts.js';
+import {
+  DEFAULT_RADAR_ENTRIES,
+  RADAR_ENTRIES_KEY,
+  radarEntriesSchema,
+  type RadarEntry,
+} from '../../shared/radar.js';
 
 export interface SiteRow {
   id: string;
@@ -371,6 +377,19 @@ export class AppDatabase {
     staleAfterMinutes: 2 | 5 | 10 | 30;
   }): void {
     this.setSetting('app:settings', value);
+  }
+
+  getRadarEntries(): RadarEntry[] {
+    const stored = this.getSetting<unknown>(RADAR_ENTRIES_KEY, undefined);
+    if (stored === undefined) {
+      return DEFAULT_RADAR_ENTRIES.map((entry) => ({ ...entry }));
+    }
+    const parsed = radarEntriesSchema.safeParse(stored);
+    return parsed.success ? parsed.data : DEFAULT_RADAR_ENTRIES.map((entry) => ({ ...entry }));
+  }
+
+  setRadarEntries(entries: RadarEntry[]): void {
+    this.setSetting(RADAR_ENTRIES_KEY, radarEntriesSchema.parse(entries));
   }
 
   getNotificationLastSent(siteId: string, fingerprint: string): number | undefined {

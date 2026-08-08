@@ -59,11 +59,7 @@ import type {
   RateContexts,
   ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
-import {
-  RADAR_TARGETS,
-  type RadarEmbedState,
-  type RadarTargetId,
-} from '../../electron/shared/radar';
+import { type RadarEntry, type RadarEmbedState } from '../../electron/shared/radar';
 import { safeRendererError, useNotifications } from './notifications';
 import type {
   UpdateCheckResult,
@@ -248,19 +244,19 @@ export function App() {
     if (radar) radar.close();
     else setRadarEmbedState({ status: 'idle' });
   };
-  const openEmbeddedRadar = (targetId: RadarTargetId) => {
+  const openEmbeddedRadar = (entry: RadarEntry) => {
     if (radarEmbedState.status !== 'idle') return;
     const radar = window.sub2apiDesktop?.radar;
     if (!radar) {
       setRadarEmbedState({
         status: 'error',
-        target: targetId,
+        target: { id: entry.id, label: entry.label },
         message: '当前 Electron 桥不可用，无法打开雷达网页。',
       });
       return;
     }
-    setRadarEmbedState({ status: 'opening', target: targetId });
-    radar.open(targetId);
+    setRadarEmbedState({ status: 'opening', target: { id: entry.id, label: entry.label } });
+    radar.open(entry.id);
   };
   const changeShell = (nextShell: MainShell) => {
     if (radarEmbedState.status !== 'idle' && nextShell !== 'radar') closeEmbeddedRadar();
@@ -1246,7 +1242,7 @@ export function App() {
             <>
               <div className="radar-embed-toolbar-label">
                 <Radio size={16} aria-hidden="true" />
-                <span>{RADAR_TARGETS[radarEmbedState.target].label}</span>
+                <span>{radarEmbedState.target.label}</span>
               </div>
               <button
                 className="icon-button radar-embed-close"

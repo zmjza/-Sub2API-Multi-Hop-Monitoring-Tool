@@ -126,10 +126,16 @@ test('opens the controlled renderer preview', async () => {
     if (shell === 'radar') {
       await expect(window.getByRole('heading', { name: '雷达', exact: true })).toBeVisible();
       await expect(window.locator('.radar-target-card')).toHaveCount(2);
-      await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
       await expect(
-        window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }),
+        window.getByRole('button', { name: '打开 Codex 雷达', exact: true }),
       ).toBeVisible();
+      await expect(
+        window.getByRole('button', { name: '打开 分布式雷达 Codex 站', exact: true }),
+      ).toBeVisible();
+      await expect(
+        window.getByRole('button', { name: '删除 Codex 雷达', exact: true }),
+      ).toBeVisible();
+      await expect(window.getByRole('button', { name: '新增雷达站点', exact: true })).toBeVisible();
       await expect(window.locator('body')).not.toContainText('模型选型雷达');
       await expect(window.locator('body')).not.toContainText('current.json');
     }
@@ -156,10 +162,99 @@ test('opens the controlled renderer preview', async () => {
   await application.close();
 });
 
+test('manages persistent dynamic Radar entries', async () => {
+  type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
+  const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-radar-manage-e2e-'));
+  const launch = () => launchApplication(userData);
+  const findMain = async (application: ElectronApplication) => {
+    await expect
+      .poll(
+        async () => {
+          for (const candidate of await application.windows())
+            if ((await candidate.locator('.app-shell').count()) > 0) return true;
+          return false;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    for (const candidate of await application.windows())
+      if ((await candidate.locator('.app-shell').count()) > 0) return candidate;
+    throw new Error('Main renderer window unavailable');
+  };
+  let application: ElectronApplication | undefined = await launch();
+
+  try {
+    let window = await findMain(application);
+    await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
+    await expect(window.getByRole('heading', { name: '雷达', exact: true })).toBeVisible();
+    await expect(window.locator('.radar-target-card')).toHaveCount(2);
+
+    await window.getByRole('button', { name: '新增雷达站点', exact: true }).click();
+    const addDialog = window.getByRole('dialog', { name: '新增雷达站点' });
+    await expect(addDialog).toBeVisible();
+    await expect(window.getByLabel('名称')).toBeFocused();
+    await window.getByLabel('名称').fill('测试雷达');
+    await window.getByLabel('网址').fill('http://example.com');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog.getByText('网址必须是完整的 HTTPS 地址')).toBeVisible();
+    await window.getByLabel('网址').fill('https://codexradar.com/');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog.getByText('该网址已存在，请换一个网址')).toBeVisible();
+    await window.getByLabel('网址').fill('https://example.com/');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog).toHaveCount(0);
+    await expect(window.locator('.radar-target-card')).toHaveCount(3);
+    await expect(window.getByRole('button', { name: '打开 测试雷达', exact: true })).toBeVisible();
+    await expect(window.getByRole('button', { name: '删除 测试雷达', exact: true })).toBeVisible();
+
+    await application!.close();
+    application = await launch();
+    window = await findMain(application);
+    await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
+    await expect(window.locator('.radar-target-card')).toHaveCount(3);
+    await expect(window.getByRole('button', { name: '打开 测试雷达', exact: true })).toBeVisible();
+
+    await window.getByRole('button', { name: '删除 测试雷达', exact: true }).click();
+    const deleteDialog = window.getByRole('dialog', { name: '删除雷达站点' });
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteDialog).toContainText('https://example.com/');
+    await deleteDialog.getByRole('button', { name: '取消', exact: true }).click();
+    await expect(deleteDialog).toHaveCount(0);
+    await expect(window.getByRole('button', { name: '打开 测试雷达', exact: true })).toBeVisible();
+
+    await window.getByRole('button', { name: '删除 测试雷达', exact: true }).click();
+    await window.getByRole('button', { name: '确认删除', exact: true }).click();
+    await expect(deleteDialog).toHaveCount(0);
+    await expect(window.getByRole('button', { name: '打开 测试雷达', exact: true })).toHaveCount(0);
+    await expect(window.locator('.radar-target-card')).toHaveCount(2);
+
+    await application!.close();
+    application = await launch();
+    window = await findMain(application);
+    await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
+    await expect(window.locator('.radar-target-card')).toHaveCount(2);
+    await expect(window.getByRole('button', { name: '打开 测试雷达', exact: true })).toHaveCount(0);
+
+    while (await window.locator('.radar-target-card').count()) {
+      await window.locator('.radar-target-delete').first().click();
+      await window
+        .getByRole('dialog', { name: '删除雷达站点' })
+        .getByRole('button', { name: '确认删除', exact: true })
+        .click();
+      await expect(window.getByRole('dialog', { name: '删除雷达站点' })).toHaveCount(0);
+    }
+    await expect(window.locator('.radar-list-state[data-radar-list-state="empty"]')).toBeVisible();
+    await expect(window.locator('.radar-add-button')).toBeVisible();
+  } finally {
+    await application?.close().catch(() => undefined);
+  }
+});
+
 test('embeds both real Radar sites in the main Electron window', async () => {
+  test.setTimeout(180_000);
   test.skip(process.env.SUB2API_RADAR_REAL_E2E !== '1', 'real Radar acceptance is opt-in');
   const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-radar-e2e-'));
-  const application = await launchApplication(userData);
+  let application = await launchApplication(userData);
   const evidenceDirectory = process.env.SUB2API_REAL_EVIDENCE_DIR;
   if (evidenceDirectory) await mkdir(evidenceDirectory, { recursive: true });
 
@@ -206,6 +301,10 @@ test('embeds both real Radar sites in the main Electron window', async () => {
     });
     if (image) await writeFile(path.join(evidenceDirectory, `${name}.png`), image, 'base64');
   };
+  const capturePage = async (window: Page, name: string) => {
+    if (!evidenceDirectory) return;
+    await window.screenshot({ path: path.join(evidenceDirectory, `${name}.png`) });
+  };
   const captureDesktop = async (name: string) => {
     if (!evidenceDirectory || process.platform !== 'darwin') return;
     const electronPid = await application.evaluate(() => process.pid);
@@ -213,13 +312,12 @@ test('embeds both real Radar sites in the main Electron window', async () => {
       encoding: 'utf8',
     }).trim();
     if (!windowId) throw new Error(`Unable to find the Electron window for PID ${electronPid}`);
-    execFileSync(
-      'screencapture',
-      ['-x', '-l', windowId, path.join(evidenceDirectory, `${name}.png`)],
-      {
-        stdio: 'ignore',
-      },
-    );
+    const target = path.join(evidenceDirectory, `${name}.png`);
+    try {
+      execFileSync('screencapture', ['-x', '-l', windowId, target], { stdio: 'ignore' });
+    } catch {
+      execFileSync('screencapture', ['-x', target], { stdio: 'ignore' });
+    }
   };
   const focusMainWindow = async () => {
     await application.evaluate(({ app, BrowserWindow }) => {
@@ -234,14 +332,49 @@ test('embeds both real Radar sites in the main Electron window', async () => {
   };
 
   try {
-    const window = await main();
+    let window = await main();
     await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
-    await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: '打开 Codex 雷达', exact: true }),
+    ).toBeVisible();
     await expect(window.locator('.radar-target-card')).toHaveCount(2);
     if (evidenceDirectory)
       await window.screenshot({ path: path.join(evidenceDirectory, 'radar-chooser.png') });
 
-    await window.getByRole('button', { name: 'Codex 雷达', exact: true }).click();
+    await window.getByRole('button', { name: '新增雷达站点', exact: true }).click();
+    const addDialog = window.getByRole('dialog', { name: '新增雷达站点' });
+    await expect(addDialog).toBeVisible();
+    await capturePage(window, 'radar-add-dialog');
+    const longLabel = '这是一个用于验证长名称换行和卡片稳定性的雷达站点名称测试';
+    await window.getByLabel('名称').fill(longLabel);
+    await window.getByLabel('网址').fill('http://example.com');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog.getByText('网址必须是完整的 HTTPS 地址')).toBeVisible();
+    await capturePage(window, 'radar-add-invalid-http');
+
+    await window.getByLabel('名称').fill('Codex 雷达');
+    await window.getByLabel('网址').fill('https://other.example/');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog.getByText('该名称已存在，请换一个名称')).toBeVisible();
+
+    await window.getByLabel('名称').fill('重复网址副本');
+    await window.getByLabel('网址').fill('https://codexradar.com/');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog.getByText('该网址已存在，请换一个网址')).toBeVisible();
+
+    await window.getByLabel('名称').fill(longLabel);
+    await window
+      .getByLabel('网址')
+      .fill('https://example.com/very/long/path?query=radar-long-url-test');
+    await window.getByRole('button', { name: '确认新增', exact: true }).click();
+    await expect(addDialog).toHaveCount(0);
+    await expect(window.locator('.radar-target-card')).toHaveCount(3);
+    await expect(
+      window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }),
+    ).toBeVisible();
+    await capturePage(window, 'radar-after-add-long');
+
+    await window.getByRole('button', { name: '打开 Codex 雷达', exact: true }).click();
     await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toBeVisible();
     await expect
       .poll(async () =>
@@ -293,14 +426,16 @@ test('embeds both real Radar sites in the main Electron window', async () => {
       }, originalContentSize);
 
     await window.getByRole('button', { name: '关闭雷达网页', exact: true }).click();
-    await expect(window.getByRole('button', { name: 'Codex 雷达', exact: true })).toBeVisible();
+    await expect(
+      window.getByRole('button', { name: '打开 Codex 雷达', exact: true }),
+    ).toBeVisible();
     await expect
       .poll(async () =>
         (await radarSnapshot()).some((view) => view.url.startsWith('https://codexradar.com')),
       )
       .toBe(false);
 
-    await window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }).click();
+    await window.getByRole('button', { name: '打开 分布式雷达 Codex 站', exact: true }).click();
     await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toBeVisible();
     await expect
       .poll(async () =>
@@ -321,9 +456,64 @@ test('embeds both real Radar sites in the main Electron window', async () => {
       view?.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     });
     await expect(
-      window.getByRole('button', { name: '分布式雷达 Codex 站', exact: true }),
+      window.getByRole('button', { name: '打开 分布式雷达 Codex 站', exact: true }),
     ).toBeVisible();
     await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toHaveCount(0);
+
+    await window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }).click();
+    await expect(window.getByRole('button', { name: '关闭雷达网页', exact: true })).toBeVisible();
+    await expect
+      .poll(async () =>
+        (await radarSnapshot()).some((view) => view.url.startsWith('https://example.com')),
+      )
+      .toBe(true);
+    await focusMainWindow();
+    await captureDesktop('radar-added-window');
+    await captureRadar('radar-added');
+    await window.getByRole('button', { name: '关闭雷达网页', exact: true }).click();
+    await expect(
+      window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }),
+    ).toBeVisible();
+
+    await application!.close();
+    application = await launchApplication(userData);
+    window = await main();
+    await window.goto(`file://${process.cwd()}/dist/index.html?surface=main&shell=radar`);
+    await expect(window.locator('.radar-target-card')).toHaveCount(3);
+    await expect(
+      window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }),
+    ).toBeVisible();
+    await capturePage(window, 'radar-persisted-after-restart');
+
+    await window.getByRole('button', { name: `删除 ${longLabel}`, exact: true }).click();
+    const deleteDialog = window.getByRole('dialog', { name: '删除雷达站点' });
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteDialog).toContainText('https://example.com/very/long/path');
+    await capturePage(window, 'radar-delete-dialog');
+    await deleteDialog.getByRole('button', { name: '取消', exact: true }).click();
+    await expect(deleteDialog).toHaveCount(0);
+    await expect(
+      window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: `删除 ${longLabel}`, exact: true }).click();
+    await window.getByRole('button', { name: '确认删除', exact: true }).click();
+    await expect(deleteDialog).toHaveCount(0);
+    await expect(
+      window.getByRole('button', { name: `打开 ${longLabel}`, exact: true }),
+    ).toHaveCount(0);
+    await expect(window.locator('.radar-target-card')).toHaveCount(2);
+
+    while (await window.locator('.radar-target-card').count()) {
+      await window.locator('.radar-target-delete').first().click();
+      await window
+        .getByRole('dialog', { name: '删除雷达站点' })
+        .getByRole('button', { name: '确认删除', exact: true })
+        .click();
+      await expect(window.getByRole('dialog', { name: '删除雷达站点' })).toHaveCount(0);
+    }
+    await expect(window.locator('.radar-list-state[data-radar-list-state="empty"]')).toBeVisible();
+    await capturePage(window, 'radar-empty');
   } finally {
     await application.close();
   }

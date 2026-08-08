@@ -13,6 +13,7 @@ import {
   dialog,
   clipboard,
 } from 'electron';
+import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
@@ -72,11 +73,16 @@ import {
   interactiveHostResolverRule,
 } from './services/interactive-auth-policy.js';
 import {
+  RADAR_ENTRY_LIMIT,
   isAllowedRadarNavigation,
-  radarUrlForTarget,
+  normalizeRadarUrl,
+  radarEntriesSchema,
+  radarEntryIdSchema,
+  radarEntryInputSchema,
   radarViewBounds,
   type RadarEmbedState,
-  type RadarTargetId,
+  type RadarEntry,
+  type RadarTarget,
 } from '../shared/radar.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -144,7 +150,7 @@ function protectNavigation(window: BrowserWindow) {
 }
 
 const RADAR_LOAD_ERROR_MESSAGE = '雷达网页加载失败，请检查网络后重试。';
-let radarViewTarget: RadarTargetId | undefined;
+let radarViewTarget: RadarTarget | undefined;
 let radarViewCleanup: (() => void) | undefined;
 
 function sendRadarState(state: RadarEmbedState) {
@@ -179,9 +185,10 @@ function failRadarView(view: WebContentsView) {
   sendRadarState({ status: 'error', target, message: RADAR_LOAD_ERROR_MESSAGE });
 }
 
-async function openRadarView(target: RadarTargetId) {
-  const url = radarUrlForTarget(target);
+async function openRadarView(entry: RadarEntry) {
+  const url = normalizeRadarUrl(entry.url);
   if (!url || !mainWindow || mainWindow.isDestroyed()) return;
+  const target: RadarTarget = { id: entry.id, label: entry.label };
 
   closeRadarView(false);
   sendRadarState({ status: 'opening', target });
@@ -202,7 +209,8 @@ async function openRadarView(target: RadarTargetId) {
   const rejectExternalNavigation = (
     event: Electron.Event<{ isMainFrame: boolean; url: string }>,
   ) => {
-    if (!event.isMainFrame || isAllowedRadarNavigation(event.url)) return;
+    const allowedOrigin = new URL(url).origin;
+    if (!event.isMainFrame || isAllowedRadarNavigation(event.url, allowedOrigin)) return;
     event.preventDefault();
     failRadarView(view);
   };
@@ -519,10 +527,44 @@ function registerIpc() {
     siteService.setNotificationSettings(notificationSettingsSchema.parse(input)),
   );
   ipcMain.handle('notifications:permission', () => ({ supported: Notification.isSupported() }));
+  ipcMain.handle('radar:list', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('RADAR_IPC_FORBIDDEN');
+    return radarEntriesSchema.parse(appDatabase.getRadarEntries());
+  });
+  ipcMain.handle('radar:create', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('RADAR_IPC_FORBIDDEN');
+    const parsed = radarEntryInputSchema.parse(input);
+    const current = appDatabase.getRadarEntries();
+    if (current.length >= RADAR_ENTRY_LIMIT) throw new Error('RADAR_ENTRY_LIMIT_REACHED');
+    const label = parsed.label.trim();
+    const url = normalizeRadarUrl(parsed.url);
+    if (current.some((entry) => entry.label.trim() === label))
+      throw new Error('RADAR_DUPLICATE_LABEL');
+    if (current.some((entry) => entry.url === url)) throw new Error('RADAR_DUPLICATE_URL');
+    const entry: RadarEntry = { id: randomUUID(), label, url };
+    appDatabase.setRadarEntries([...current, entry]);
+    return radarEntriesSchema.parse(appDatabase.getRadarEntries());
+  });
+  ipcMain.handle('radar:delete', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('RADAR_IPC_FORBIDDEN');
+    const id = radarEntryIdSchema.parse(input);
+    const current = appDatabase.getRadarEntries();
+    if (!current.some((entry) => entry.id === id)) throw new Error('RADAR_ENTRY_NOT_FOUND');
+    if (radarViewTarget?.id === id) closeRadarView();
+    const next = current.filter((entry) => entry.id !== id);
+    appDatabase.setRadarEntries(next);
+    return radarEntriesSchema.parse(next);
+  });
   ipcMain.on('radar:open', (event, input: unknown) => {
     if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
-    if (!radarUrlForTarget(input)) return;
-    void openRadarView(input as RadarTargetId);
+    const parsed = radarEntryIdSchema.safeParse(input);
+    if (!parsed.success) return;
+    const entry = appDatabase.getRadarEntries().find((candidate) => candidate.id === parsed.data);
+    if (!entry) return;
+    void openRadarView(entry);
   });
   ipcMain.on('radar:close', (event) => {
     if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;

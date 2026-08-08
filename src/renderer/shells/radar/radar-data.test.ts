@@ -1,37 +1,42 @@
 import { describe, expect, it } from 'vitest';
 import {
-  RADAR_TARGETS,
-  RADAR_TARGET_IDS,
+  DEFAULT_RADAR_ENTRIES,
+  isSafeRadarUrl,
   isAllowedRadarNavigation,
-  radarUrlForTarget,
+  normalizeRadarUrl,
 } from './radar-data';
 
-describe('Radar target configuration', () => {
-  it('exposes exactly the two fixed entry points', () => {
-    expect(RADAR_TARGET_IDS).toEqual(['codex', 'distributed']);
-    expect(RADAR_TARGETS).toEqual({
-      codex: { label: 'Codex 雷达', url: 'https://codexradar.com/' },
-      distributed: {
+describe('Radar dynamic target configuration', () => {
+  it('keeps the two legacy entries as defaults for first launch', () => {
+    expect(DEFAULT_RADAR_ENTRIES).toEqual([
+      { id: 'radar-codex', label: 'Codex 雷达', url: 'https://codexradar.com/' },
+      {
+        id: 'radar-distributed',
         label: '分布式雷达 Codex 站',
         url: 'https://deng.codexradar.com/',
       },
-    });
+    ]);
   });
 
-  it('resolves only fixed target identifiers', () => {
-    expect(radarUrlForTarget('codex')).toBe('https://codexradar.com/');
-    expect(radarUrlForTarget('distributed')).toBe('https://deng.codexradar.com/');
-    expect(radarUrlForTarget('https://example.com')).toBeUndefined();
-    expect(radarUrlForTarget(undefined)).toBeUndefined();
+  it('normalizes and validates HTTPS-only radar URLs', () => {
+    expect(normalizeRadarUrl('https://example.com')).toBe('https://example.com/');
+    expect(isSafeRadarUrl('https://example.com/a')).toBe(true);
+    expect(isSafeRadarUrl('http://example.com')).toBe(false);
+    expect(isSafeRadarUrl('https://user:pass@example.com')).toBe(false);
   });
 
-  it('allows only exact HTTPS radar origins for top-level navigation', () => {
-    expect(isAllowedRadarNavigation('https://codexradar.com/')).toBe(true);
-    expect(isAllowedRadarNavigation('https://codexradar.com/anything')).toBe(true);
-    expect(isAllowedRadarNavigation('https://deng.codexradar.com/')).toBe(true);
-    expect(isAllowedRadarNavigation('http://codexradar.com/')).toBe(false);
-    expect(isAllowedRadarNavigation('https://www.codexradar.com/')).toBe(false);
-    expect(isAllowedRadarNavigation('https://codexradar.com.evil.example/')).toBe(false);
-    expect(isAllowedRadarNavigation('file:///tmp/radar.html')).toBe(false);
+  it('allows only the current entry origin for top-level navigation', () => {
+    expect(
+      isAllowedRadarNavigation('https://codexradar.com/anything', 'https://codexradar.com'),
+    ).toBe(true);
+    expect(isAllowedRadarNavigation('https://www.codexradar.com/', 'https://codexradar.com')).toBe(
+      false,
+    );
+    expect(
+      isAllowedRadarNavigation('https://codexradar.com.evil.example/', 'https://codexradar.com'),
+    ).toBe(false);
+    expect(isAllowedRadarNavigation('file:///tmp/radar.html', 'https://codexradar.com')).toBe(
+      false,
+    );
   });
 });

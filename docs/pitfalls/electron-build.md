@@ -1106,7 +1106,7 @@ macOS/Windows Chrome 真实启动、临时 Profile 隔离、CDP 进程观察和�
 
 **验证方式**
 
-运行真实 Electron Radar 流程，打开两个公网目标，断言远程视图 URL 和 bounds；将内容尺寸调整为 `960x640` 后断言 bounds 为 `x=284,y=80,width=676,height=560`，再通过应用关闭按钮和远程 webContents 的 `Escape` 输入恢复两个卡片。证据见 `real-test-evidence/macos-1.8.1-radar-final/`。
+运行真实 Electron Radar 流程，打开两个公网目标，断言远程视图 URL 和 bounds；将内容尺寸调整为 `960x640` 后断言 bounds 为 `x=284,y=80,width=676,height=560`，再通过应用关闭按钮和远程 webContents 的 `Escape` 输入恢复两个卡片。历史证据见 `real-test-evidence/macos-1.8.1-radar-final/`，1.9.3 动态列表复测证据见 `real-test-evidence/macos-1.9.3/`。
 
 **禁止事项**
 
@@ -1122,6 +1122,39 @@ macOS/Windows Chrome 真实启动、临时 Profile 隔离、CDP 进程观察和�
 **适用范围**
 
 所有把 `WebContentsView`、BrowserView 或其他 Electron 原生子视图挂载到无框主窗口 contentView 的功能。
+
+## Radar 持久化重复校验必须比较规范化 URL
+
+**现象**
+
+Radar 从固定枚举改为持久化站点列表后，`https://example.com` 与 `https://example.com/` 被当作不同网址通过，用户可保存语义重复的条目。
+
+**根因**
+
+重复校验直接比较用户输入的字符串；`URL.toString()` 会补全根路径、编码和默认端口，但原始字符串不会。
+
+**正确做法**
+
+在共享 Zod schema 的数组 `superRefine` 和主进程创建 IPC 中统一调用 `normalizeRadarUrl()` 后比较；同时限制仅 `https:`、禁止用户名密码，并在新增时持久化规范化 URL。
+
+**验证方式**
+
+`electron/shared/radar.test.ts` 断言 `https://example.com` 与 `https://example.com/` 重复被拒绝；Electron E2E 在新增弹窗填入 `https://codexradar.com/` 时显示重复网址错误。
+
+**禁止事项**
+
+不要只比较 trim 后的原始字符串；不要把 `URL` 解析失败吞掉；不要允许 `http/file/data/javascript` 或带凭据 URL 进入持久化列表。
+
+**相关文件或命令**
+
+- `electron/shared/radar.ts`
+- `electron/main/index.ts`
+- `electron/shared/radar.test.ts`
+- `tests/e2e/electron-smoke.spec.ts`
+
+**适用范围**
+
+所有需要保存并重新打开外部 HTTPS 地址的本地列表功能。
 
 ## 固定尺寸悬浮窗必须按真实盒模型预留页脚
 

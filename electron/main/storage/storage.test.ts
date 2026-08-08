@@ -141,6 +141,46 @@ describe('AppDatabase', () => {
     expect(db.getSetting('siteOrder', [])).toEqual(['site-b', 'site-c']);
     raw.close();
   });
+
+  it('seeds radar defaults only when the radar setting is absent', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    expect(db.getRadarEntries()).toEqual([
+      { id: 'radar-codex', label: 'Codex 雷达', url: 'https://codexradar.com/' },
+      {
+        id: 'radar-distributed',
+        label: '分布式雷达 Codex 站',
+        url: 'https://deng.codexradar.com/',
+      },
+    ]);
+    db.setRadarEntries([]);
+    expect(db.getRadarEntries()).toEqual([]);
+    raw.close();
+  });
+
+  it('persists dynamic radar entries as non-secret settings', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    db.setRadarEntries([
+      { id: 'radar-test', label: '测试雷达', url: 'https://example.com/' },
+      ...db.getRadarEntries(),
+    ]);
+    expect(db.getRadarEntries()).toEqual([
+      { id: 'radar-test', label: '测试雷达', url: 'https://example.com/' },
+      { id: 'radar-codex', label: 'Codex 雷达', url: 'https://codexradar.com/' },
+      {
+        id: 'radar-distributed',
+        label: '分布式雷达 Codex 站',
+        url: 'https://deng.codexradar.com/',
+      },
+    ]);
+    expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
+      /password|token/i,
+    );
+    raw.close();
+  });
 });
 
 describe('CredentialVault', () => {

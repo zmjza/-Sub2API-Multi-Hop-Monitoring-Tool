@@ -19,13 +19,16 @@ import type {
   ChannelAssociation,
 } from '../shared/contracts.js';
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
-import type { RadarEmbedState, RadarTargetId } from '../shared/radar.js';
+import type { RadarEmbedState, RadarEntry, RadarEntryInput } from '../shared/radar.js';
 
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
   readonly shellVersion: string;
   readonly radar: {
-    open(target: RadarTargetId): void;
+    list(): Promise<RadarEntry[]>;
+    create(input: RadarEntryInput): Promise<RadarEntry[]>;
+    delete(id: string): Promise<RadarEntry[]>;
+    open(id: string): void;
     close(): void;
     onStateChange(listener: (state: RadarEmbedState) => void): () => void;
   };
