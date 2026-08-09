@@ -26,6 +26,7 @@
 - 格式检查、ESLint、TypeScript、全量 Vitest（47 个文件、359 项）和生产构建已通过；完整 Electron E2E 为 8 项通过、1 项按配置跳过，覆盖 Sub2API 服务器 CRUD/重启保留、菜单映射、悬浮窗 20 格、余额不闪总额与本地站点全链路。
 - 官方 npm Registry 生产依赖审计为 0 漏洞。
 - macOS ARM64 DMG 与 Windows x64 NSIS 按 2.0.0 重新构建，Windows 仅记录交叉构建与结构证据，不代表 Windows 真机通过。
+- 最终 Release 资产哈希：macOS ARM64 DMG `b35b3f2388eee09f0d1f98a76522ebcea2b460a0dfc13d5d8038e8c49bed00ce`，DMG blockmap `e114c63f31058b50bc2e74d6ea6e9a1e8d1e20e8b93f7da4063e8efd00d4e5d8`；Windows x64 EXE `d4316906e662f8971eb78454a54331c6c4037d60993c16a49efcf2514cbb9239`，EXE blockmap `5c7274b5b26b597880560b279fbc361669296b0ad2417abb1b8d353e6dbe96ae`。
 
 ## 1.9.3 - 2026-08-09
 
