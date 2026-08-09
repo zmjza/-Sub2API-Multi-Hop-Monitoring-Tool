@@ -7,7 +7,7 @@
 - 悬浮窗主渠道短卡与全部关联渠道弹框中的“近 12 次可用 / 最近 12 次”文案统一改为“近期可用率”；百分比仍按最近真实有效检查点计算，20 格时间线、左旧右新、不足补空与无记录语义不变。
 - 同步更新 Renderer 与 Electron E2E 断言、UI 壳清单和需求文档；历史 1.9.2 记录作为版本事实保留。
 - 验证：格式、ESLint、TypeScript、Vitest 366 项、生产构建、Electron E2E 9 通过 1 跳过；macOS 打包应用夹具菜单流程复测通过。
-- DMG `af7a9c7ea6ad79e598f334cbb0ee794631708530b0665f9c4366e7f6588792da`；DMG blockmap `2c9fb8e7b9627ccf7cee6aacad80f305d8be1555892cfe59f00d813deda7fdd0`；EXE `031b2d1c32a3cef18bf7d67cd774abc852693d6a5b7a6377f767eee1060dfd28`；EXE blockmap `da7a2777927107c186cef079ef70849d892980ea92cfce62d3b6296cb3643b4f`。
+- DMG `cacfcf0bf65d5974ae0ee824f820ced30ceedc85b57e1cf713b641a189ff7939`；EXE `11e583581bbc1e0311a175a3f0408fc475dcecef5ca88e388ec006c68bd11072`；blockmap 与 `update-manifest.json` 已随 Release 上传，远端 manifest 哈希 `35fdf06c53abec12775f9d114d5df5d7060212f6e7d39f7d2523b354318dfac1`。
 
 ## 2.1.0 - 2026-08-09
 
