@@ -15,6 +15,7 @@
 - 格式检查、ESLint、TypeScript、全量 Vitest（49 文件、370 项）、生产构建、Electron E2E（9 项通过、2 项按配置跳过；真实站点用例单独 1/1 通过）与官方源 `npm audit` 0 漏洞通过。
 - macOS ARM64 打包目录应用与只读挂载 DMG 均在真实 `https://www.api-feng.online/` 完成保存后选择、5 项、重启保留、快捷入口直达、登录和重启登录态复用，真实站点用例各 1/1 通过；证据目录 `real-test-evidence/macos-2.1.2/` 与 `real-test-evidence/macos-2.1.2-dmg/`。
 - DMG `hdiutil verify` 为 `VALID`；DMG `fa5d84a78e56078ef82120f6027610b5bc8464cae285dfab1295f547cbfa46ee`，DMG blockmap `f550e9983df851dfe5eb649323dc5f1ef01bb15ac468cc3255875867fcc9ecd9`；EXE `61ac35709003a33d603884609263023d42c3cc7bb7ddded5b7839580869b8d3c`，EXE blockmap `88c86346317e203595a4d749c33858e6c2165530c010f956d500dd59d076c5c4`；Windows 仅记录 x64 交叉构建。
+- 版本提交 `43f284f` 已推送 GitHub 与 Gitee 当前分支及 `2.1.2` 标签；GitHub stable Release 为非草稿、非预发布，DMG、EXE、两个 blockmap 与 `update-manifest.json` 五项资产均为 uploaded；远端 manifest SHA-256 `6ef0d6a0ad162aa14bd811c1d4dd77c6bf5e4ff3f38859d029b1f3035921576a`。
 
 ## 2.1.1 - 2026-08-09
 
