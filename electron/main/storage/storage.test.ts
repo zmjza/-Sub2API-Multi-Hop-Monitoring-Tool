@@ -185,6 +185,26 @@ describe('AppDatabase', () => {
     raw.close();
   });
 
+  it('persists and clears discovered sub2api server menus separately from servers', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    expect(db.getSub2ApiMenus('server-a')).toEqual([]);
+    db.setSub2ApiMenus('server-a', [
+      { id: 'm1', label: '账号管理', path: '/account', order: 0, discoveredAt: 123 },
+    ]);
+    expect(db.getSub2ApiMenus('server-a')).toEqual([
+      { id: 'm1', label: '账号管理', path: '/account', order: 0, discoveredAt: 123 },
+    ]);
+    expect(db.getSub2ApiMenus('server-b')).toEqual([]);
+    db.clearSub2ApiMenus('server-a');
+    expect(db.getSub2ApiMenus('server-a')).toEqual([]);
+    expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
+      /password|access.?token|refresh.?token/i,
+    );
+    raw.close();
+  });
+
   it('persists dynamic radar entries as non-secret settings', () => {
     const raw = new DatabaseSync(':memory:');
     const db = new AppDatabase(raw);

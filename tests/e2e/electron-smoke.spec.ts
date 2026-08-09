@@ -2,6 +2,7 @@ import { _electron as electron, expect, type Page, test } from '@playwright/test
 import { execFileSync } from 'node:child_process';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -40,6 +41,39 @@ const captureEvidence = async (page: Page, name: string) => {
   await page.waitForTimeout(150);
   const shell = page.locator('.app-shell, .floating-window').first();
   await shell.screenshot({ path: path.join(evidenceDirectory, `${name}.png`) });
+};
+
+const seedSub2ApiServer = (userData: string) => {
+  const database = new DatabaseSync(path.join(userData, 'sub2api.sqlite'));
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL
+    );
+  `);
+  database
+    .prepare(
+      `INSERT OR REPLACE INTO settings(key, value_json)
+       VALUES ('sub2api-servers:entries', ?)`,
+    )
+    .run(
+      JSON.stringify([
+        {
+          id: 'legacy-server',
+          partitionId: 'persist:sub2api-server-legacy-server',
+          loginState: 'logged-in',
+          seenLoggedIn: true,
+          createdAt: 1,
+          updatedAt: 1,
+          name: '旧服务器',
+          baseUrl: 'https://example.invalid/',
+          shortcuts: [
+            { id: 'legacy-shortcut', label: '账号管理', path: '/account', icon: 'Users' },
+          ],
+        },
+      ]),
+    );
+  database.close();
 };
 
 test('opens the controlled renderer preview', async () => {
@@ -258,9 +292,63 @@ test('manages persistent dynamic Radar entries', async () => {
   }
 });
 
-test('manages persistent Sub2API servers with editable shortcuts', async () => {
+test('manages persistent Sub2API servers with menu-sourced shortcuts', async () => {
   type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
   const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-servers-e2e-'));
+  const launch = () => launchApplication(userData);
+  const findMain = async (application: ElectronApplication) => {
+    await expect
+      .poll(
+        async () => {
+          for (const candidate of await application.windows())
+            if ((await candidate.locator('.app-shell').count()) > 0) return true;
+          return false;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    for (const candidate of await application.windows())
+      if ((await candidate.locator('.app-shell').count()) > 0) return candidate;
+    throw new Error('MAIN_WINDOW_NOT_FOUND');
+  };
+
+  await mkdir(userData, { recursive: true });
+  seedSub2ApiServer(userData);
+  let application = await launch();
+  let main = await findMain(application);
+  await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await expect(main.locator('.svr-target-card')).toContainText('旧服务器');
+  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
+
+  await main.getByRole('button', { name: '编辑 旧服务器', exact: true }).click();
+  let editor = main.locator('.svr-dialog');
+  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toBeVisible();
+  await expect(editor.getByText('当前菜单不可用')).toBeVisible();
+  await editor.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
+
+  await application.close();
+  application = await launch();
+  main = await findMain(application);
+  await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await main.getByRole('button', { name: '编辑 旧服务器', exact: true }).click();
+  editor = main.locator('.svr-dialog');
+  await editor.locator('input').nth(0).fill('测试服务器改');
+  await editor.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
+  await main.getByRole('button', { name: '删除 测试服务器改', exact: true }).click();
+  await expect(main.getByRole('heading', { name: '确认删除', exact: true })).toBeVisible();
+  await main.getByRole('button', { name: '确认删除', exact: true }).click();
+  await expect(main.locator('[data-svr-list-state="empty"]')).toBeVisible();
+  await application.close();
+});
+
+test('adds a Sub2API server without manual shortcut fields', async () => {
+  type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
+  const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-servers-add-e2e-'));
   const launch = () => launchApplication(userData);
   const findMain = async (application: ElectronApplication) => {
     await expect
@@ -286,13 +374,9 @@ test('manages persistent Sub2API servers with editable shortcuts', async () => {
   let editor = main.locator('.svr-dialog');
   await editor.locator('input').nth(0).fill('测试服务器');
   await editor.locator('input').nth(1).fill('https://example.invalid');
-  await editor.getByRole('button', { name: '添加快捷入口', exact: true }).click();
-  const shortcut = editor.locator('.svr-shortcut-row');
-  await shortcut.locator('input').nth(0).fill('账号管理');
-  await shortcut.locator('input').nth(1).fill('/account');
+  await expect(editor.getByText('保存服务器后打开并登录')).toBeVisible();
   await editor.getByRole('button', { name: '添加服务器', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toHaveCount(1);
-  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
   await expect(main.locator('.svr-target-card')).toContainText('example.invalid');
 
   await application.close();
@@ -303,6 +387,7 @@ test('manages persistent Sub2API servers with editable shortcuts', async () => {
   await main.getByRole('button', { name: '编辑 测试服务器', exact: true }).click();
   editor = main.locator('.svr-dialog');
   await editor.locator('input').nth(0).fill('测试服务器改');
+  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: '保存修改', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
   await main.getByRole('button', { name: '删除 测试服务器改', exact: true }).click();

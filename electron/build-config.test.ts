@@ -126,4 +126,17 @@ describe('electron-builder manifest', () => {
     expect(bridgeTypes).toContain('open(id: string): void');
     expect(bridgeTypes).toContain('onStateChange(listener: (state: RadarEmbedState) => void)');
   });
+
+  it('keeps Sub2API menu discovery wired through main and preload layers', () => {
+    const mainSource = readFileSync('electron/main/index.ts', 'utf8');
+    const bridgeSource = readFileSync('electron/preload/bridge.cts', 'utf8');
+    const bridgeTypes = readFileSync('electron/preload/index.ts', 'utf8');
+
+    for (const channel of ['sub2api-servers:list-menus', 'sub2api-servers:discover-menus']) {
+      expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
+      expect(bridgeSource).toContain(`ipcRenderer.invoke('${channel}'`);
+    }
+    expect(bridgeTypes).toContain('listMenus(id: string): Promise<Sub2ApiMenu[]>');
+    expect(bridgeTypes).toContain('discoverMenus(id: string): Promise<Sub2ApiMenuDiscoveryResult>');
+  });
 });

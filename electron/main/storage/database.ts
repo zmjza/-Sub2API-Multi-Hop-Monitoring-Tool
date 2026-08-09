@@ -9,7 +9,10 @@ import {
 } from '../../shared/radar.js';
 import {
   SUB2API_SERVERS_KEY,
+  sub2apiMenusKey,
+  sub2apiMenusSchema,
   sub2apiServersSchema,
+  type Sub2ApiMenu,
   type Sub2ApiServer,
 } from '../../shared/sub2api-server.js';
 
@@ -406,6 +409,21 @@ export class AppDatabase {
 
   setSub2ApiServers(servers: Sub2ApiServer[]): void {
     this.setSetting(SUB2API_SERVERS_KEY, sub2apiServersSchema.parse(servers));
+  }
+
+  getSub2ApiMenus(serverId: string): Sub2ApiMenu[] {
+    const stored = this.getSetting<unknown>(sub2apiMenusKey(serverId), undefined);
+    if (stored === undefined) return [];
+    const parsed = sub2apiMenusSchema.safeParse(stored);
+    return parsed.success ? parsed.data : [];
+  }
+
+  setSub2ApiMenus(serverId: string, menus: Sub2ApiMenu[]): void {
+    this.setSetting(sub2apiMenusKey(serverId), sub2apiMenusSchema.parse(menus));
+  }
+
+  clearSub2ApiMenus(serverId: string): void {
+    this.deleteSetting(sub2apiMenusKey(serverId));
   }
 
   getNotificationLastSent(siteId: string, fingerprint: string): number | undefined {

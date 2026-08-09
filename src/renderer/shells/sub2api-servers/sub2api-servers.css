@@ -374,7 +374,7 @@
 }
 
 .svr-dialog {
-  width: min(680px, 100%);
+  width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 48px));
   overflow: auto;
   padding: 24px;
@@ -549,50 +549,11 @@
   font-size: 12px;
 }
 
-.svr-shortcut-list {
-  display: grid;
-  gap: 10px;
-}
-
-.svr-shortcut-row {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.4fr) 110px auto;
-  align-items: end;
-  gap: 10px;
-}
-
-.svr-shortcut-row > svg {
-  align-self: center;
-  color: #94a3b8;
-}
-
-.svr-shortcut-row .svr-field {
-  min-width: 0;
-}
-
-.svr-shortcut-row-actions {
+.svr-menu-editor-heading {
   display: flex;
-  gap: 4px;
-  height: 40px;
-}
-
-.svr-shortcut-row-actions button {
-  width: 32px;
-  height: 32px;
-  display: inline-grid;
-  place-items: center;
-  align-self: center;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-  background: #fff;
-  color: #64748b;
-  cursor: pointer;
-}
-
-.svr-shortcut-row-actions button.danger:hover {
-  border-color: #fecdd3;
-  background: #fff1f2;
-  color: #be123c;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .svr-shortcut-add {
@@ -616,11 +577,150 @@
   opacity: 0.5;
 }
 
-.svr-shortcut-hint {
+.svr-menu-state {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
   margin: 0;
-  color: #94a3b8;
+  padding: 12px;
+  border: 1px dashed #d7e0ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.svr-menu-state.is-login {
+  border-color: #fed7aa;
+  background: #fffbf5;
+  color: #b45309;
+}
+
+.svr-menu-state.is-error {
+  border-color: #fecdd3;
+  background: #fff9fa;
+  color: #be123c;
+}
+
+.svr-menu-list {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.svr-menu-option {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.svr-menu-option:hover {
+  border-color: #a8bce9;
+  background: #f8fbff;
+}
+
+.svr-menu-option.is-selected {
+  border-color: #9db9ef;
+  background: #eff6ff;
+}
+
+.svr-menu-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+.svr-menu-option input:disabled {
+  cursor: not-allowed;
+}
+
+.svr-menu-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.svr-menu-option-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #17213a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.svr-menu-option-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8793a8;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.4;
+}
+
+.svr-menu-selected-mark {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.svr-menu-unavailable {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.svr-menu-unavailable strong {
+  color: #64748b;
+}
+
+.svr-menu-unavailable span {
+  padding: 4px 9px;
+  border: 1px dashed #d7e0ef;
+  border-radius: 8px;
+  color: #94a3b8;
+}
+
+.svr-menu-unavailable-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.svr-menu-unavailable-item button {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.svr-menu-unavailable-item button:hover {
+  background: #fff1f2;
+  color: #be123c;
 }
 
 @keyframes svr-pulse {
@@ -685,17 +785,9 @@
     height: 44px;
   }
 
-  .svr-shortcut-row {
-    grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .svr-shortcut-row .svr-shortcut-icon-field,
-  .svr-shortcut-row-actions {
-    grid-column: 2 / -1;
-  }
-
-  .svr-shortcut-row-actions {
-    justify-self: end;
+  .svr-menu-editor-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .svr-dialog-backdrop {

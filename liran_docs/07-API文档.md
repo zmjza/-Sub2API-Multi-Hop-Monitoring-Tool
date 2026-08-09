@@ -258,5 +258,8 @@ Key 与渠道监控关联口径：`/keys` 的 `group_id/group.id` 不能与监�
 - `sub2api-servers:open`：发送不透明 ID，主进程读取持久化 URL 并挂载 `WebContentsView`。
 - `sub2api-servers:close/back/forward/reload/home/clear-session`：只接受当前打开状态操作；`clear-session` 清理 partition 后重新加载首页并重置登录状态。
 - `sub2api-servers:state`：主进程广播 `{ status, target?, url?, canGoBack?, canGoForward?, loading?, loginState? }` 给主窗口。
+- `sub2api-servers:list-menus`：按服务器 ID 返回已发现的菜单数组；无缓存返回空数组，服务器不存在抛出 `SUB2API_SERVER_NOT_FOUND`。
+- `sub2api-servers:discover-menus`：主进程复用已打开视图或临时隐藏同 partition 视图，从当前账号可见导航提取同源 HTTPS 菜单；返回 `{ status: 'ready', menus }` 或 `{ status: 'login', message }`；登录过期、发现失败和其他服务器已打开时抛出结构化错误。
+- 菜单发现只读取页面导航结构的最小字段；禁止读取 Cookie、Token、localStorage/sessionStorage、完整 HTML 或私有接口响应，主进程到 Renderer 的 IPC 同样只传最小菜单字段。
 - 站点 favicon 不新增上游请求能力；所有抓取使用安全同源 HTML/icon 读取，限制 8 秒超时、3 次重定向、256KB HTML、128KB 图片与图片 MIME。
 - 无渠道推荐过滤是纯 Renderer 评分规则，不新增 IPC；时间线排序/20 格/余额口径与菜单映射均属于本地展示与通知逻辑。

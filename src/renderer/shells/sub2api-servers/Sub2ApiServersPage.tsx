@@ -1,21 +1,14 @@
 import {
   AlertCircle,
   ArrowUpRight,
-  ChevronDown,
-  ChevronUp,
-  GripVertical,
-  History,
-  KeyRound,
-  LayoutGrid,
   LoaderCircle,
   LogOut,
+  Menu,
   Pencil,
   Plus,
   RefreshCw,
   Server,
-  Settings,
   Trash2,
-  Users,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
@@ -24,7 +17,9 @@ import {
   SUB2API_SERVER_SHORTCUT_LIMIT,
   isSafeSub2ApiServerUrl,
   normalizeSub2ApiServerUrl,
+  sub2apiMenuPathKey,
   sub2apiShortcutUrl,
+  type Sub2ApiMenu,
   type Sub2ApiServer,
   type Sub2ApiServerEmbedState,
   type Sub2ApiShortcut,
@@ -34,6 +29,7 @@ import './sub2api-servers.css';
 type Sub2ApiServersPageProps = {
   embedState: Sub2ApiServerEmbedState;
   onOpen: (server: Sub2ApiServer) => void;
+  onOpenServer: (server: Sub2ApiServer) => void;
   onOpenShortcut: (server: Sub2ApiServer, shortcut: Sub2ApiShortcut) => void;
 };
 
@@ -48,6 +44,7 @@ type ShortcutDraft = {
   label: string;
   path: string;
   icon?: string;
+  menuId?: string;
 };
 
 type ServerDraft = {
@@ -56,20 +53,21 @@ type ServerDraft = {
   baseUrl: string;
   loginRule: string;
   shortcuts: ShortcutDraft[];
+  menuState?: MenuEditorState;
 };
 
-const shortcutIconOptions = [
-  { value: 'Users', label: '账号管理', Icon: Users },
-  { value: 'History', label: '使用记录', Icon: History },
-  { value: 'KeyRound', label: 'API 密钥', Icon: KeyRound },
-  { value: 'LayoutGrid', label: '渠道管理', Icon: LayoutGrid },
-  { value: 'Settings', label: '系统设置', Icon: Settings },
-];
+type MenuEditorState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; menus: Sub2ApiMenu[]; discoveredAt?: number }
+  | { status: 'login'; message: string }
+  | { status: 'error'; message: string };
 
 export function Sub2ApiServersPage({
   embedState,
   onOpen,
   onOpenShortcut,
+  onOpenServer,
 }: Sub2ApiServersPageProps) {
   const [listState, setListState] = useState<ListState>({ status: 'loading', servers: [] });
   const [editor, setEditor] = useState<ServerDraft | undefined>();
@@ -132,7 +130,13 @@ export function Sub2ApiServersPage({
   const openAdd = () => {
     if (submitting) return;
     setFormError(undefined);
-    setEditor({ name: '', baseUrl: '', loginRule: '', shortcuts: [] });
+    setEditor({
+      name: '',
+      baseUrl: '',
+      loginRule: '',
+      shortcuts: [],
+      menuState: { status: 'idle' },
+    });
   };
 
   const openEdit = (server: Sub2ApiServer) => {
@@ -148,8 +152,64 @@ export function Sub2ApiServersPage({
         label: shortcut.label,
         path: shortcut.path,
         icon: shortcut.icon,
+        menuId: shortcut.menuId,
       })),
+      menuState: { status: 'loading' },
     });
+    void loadMenus(server.id);
+  };
+
+  const loadMenus = async (serverId: string) => {
+    const bridge = window.sub2apiDesktop?.sub2apiServers;
+    if (!bridge) return;
+    try {
+      const menus = await bridge.listMenus(serverId);
+      setEditor((current) =>
+        current && current.id === serverId
+          ? {
+              ...current,
+              menuState: {
+                status: 'ready',
+                menus,
+                discoveredAt: menus[0]?.discoveredAt,
+              },
+            }
+          : current,
+      );
+    } catch {
+      setEditor((current) =>
+        current && current.id === serverId
+          ? { ...current, menuState: { status: 'error', message: '菜单读取失败，请稍后重试。' } }
+          : current,
+      );
+    }
+  };
+
+  const refreshMenus = async () => {
+    if (!editor?.id || !editor.menuState || editor.menuState.status === 'loading') return;
+    const bridge = window.sub2apiDesktop?.sub2apiServers;
+    if (!bridge) return;
+    setEditor({ ...editor, menuState: { status: 'loading' } });
+    try {
+      const result = await bridge.discoverMenus(editor.id);
+      if (result.status === 'login') {
+        setEditor((current) =>
+          current
+            ? { ...current, menuState: { status: 'login', message: result.message } }
+            : current,
+        );
+      } else {
+        await loadMenus(editor.id);
+      }
+      const servers = await bridge.list();
+      setListState({ status: 'ready', servers });
+    } catch (error) {
+      setEditor((current) =>
+        current
+          ? { ...current, menuState: { status: 'error', message: serverErrorMessage(error) } }
+          : current,
+      );
+    }
   };
 
   const validateDraft = (draft: ServerDraft): string | undefined => {
@@ -202,6 +262,7 @@ export function Sub2ApiServersPage({
         label: shortcut.label.trim(),
         path: shortcut.path.trim(),
         ...(shortcut.icon ? { icon: shortcut.icon } : {}),
+        ...(shortcut.menuId ? { menuId: shortcut.menuId } : {}),
       }));
       const next = editor.id
         ? await bridge.update({
@@ -420,7 +481,16 @@ export function Sub2ApiServersPage({
                   value={editor.baseUrl}
                   maxLength={500}
                   placeholder="https://example.com"
-                  onChange={(event) => setEditor({ ...editor, baseUrl: event.target.value })}
+                  onChange={(event) =>
+                    setEditor({
+                      ...editor,
+                      baseUrl: event.target.value,
+                      menuState:
+                        editor.id && event.target.value.trim() !== editor.baseUrl.trim()
+                          ? { status: 'idle' }
+                          : editor.menuState,
+                    })
+                  }
                 />
               </label>
               <label className="svr-field">
@@ -432,10 +502,41 @@ export function Sub2ApiServersPage({
                   onChange={(event) => setEditor({ ...editor, loginRule: event.target.value })}
                 />
               </label>
-              <ShortcutEditor
-                shortcuts={editor.shortcuts}
-                onChange={(shortcuts) => setEditor({ ...editor, shortcuts })}
-              />
+              {editor.id ? (
+                <MenuEditor
+                  state={editor.menuState}
+                  shortcuts={editor.shortcuts}
+                  onRefresh={() => void refreshMenus()}
+                  onToggle={(menu) => setEditor((current) => toggleShortcut(current, menu))}
+                  onRemoveUnavailable={(path) =>
+                    setEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            shortcuts: current.shortcuts.filter(
+                              (shortcut) =>
+                                sub2apiMenuPathKey(shortcut.path) !== sub2apiMenuPathKey(path),
+                            ),
+                          }
+                        : current,
+                    )
+                  }
+                  onOpenServer={() => {
+                    const server = listState.servers.find((item) => item.id === editor.id);
+                    if (server) {
+                      setEditor(undefined);
+                      onOpenServer(server);
+                    }
+                  }}
+                />
+              ) : (
+                <fieldset className="svr-shortcut-editor">
+                  <legend>快捷入口</legend>
+                  <p className="svr-shortcut-empty">
+                    保存服务器后打开并登录，即可从服务器菜单中勾选快捷入口。
+                  </p>
+                </fieldset>
+              )}
               {formError && (
                 <p className="svr-form-error" role="alert">
                   <AlertCircle size={14} />
@@ -590,7 +691,6 @@ function ServerCard({
       {server.shortcuts.length > 0 && (
         <div className="svr-card-shortcuts" aria-label="快捷入口">
           {server.shortcuts.map((shortcut) => {
-            const Icon = shortcutIconFor(shortcut.icon);
             return (
               <button
                 type="button"
@@ -598,7 +698,7 @@ function ServerCard({
                 title={shortcut.label}
                 onClick={() => onOpenShortcut(shortcut)}
               >
-                <Icon size={14} aria-hidden="true" />
+                <Menu size={14} aria-hidden="true" />
                 <span>{shortcut.label}</span>
               </button>
             );
@@ -609,112 +709,157 @@ function ServerCard({
   );
 }
 
-function ShortcutEditor({
+function MenuEditor({
+  state,
   shortcuts,
-  onChange,
+  onRefresh,
+  onToggle,
+  onRemoveUnavailable,
+  onOpenServer,
 }: {
+  state: MenuEditorState | undefined;
   shortcuts: ShortcutDraft[];
-  onChange: (shortcuts: ShortcutDraft[]) => void;
+  onRefresh: () => void;
+  onToggle: (menu: Sub2ApiMenu) => void;
+  onRemoveUnavailable: (path: string) => void;
+  onOpenServer: () => void;
 }) {
-  const addShortcut = () => {
-    if (shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT) return;
-    onChange([...shortcuts, { label: '', path: '', icon: 'Users' }]);
-  };
-  const updateShortcut = (index: number, patch: Partial<ShortcutDraft>) =>
-    onChange(
-      shortcuts.map((shortcut, shortcutIndex) =>
-        shortcutIndex === index ? { ...shortcut, ...patch } : shortcut,
-      ),
-    );
-  const removeShortcut = (index: number) =>
-    onChange(shortcuts.filter((_, shortcutIndex) => shortcutIndex !== index));
-  const moveShortcut = (index: number, direction: -1 | 1) => {
-    const next = [...shortcuts];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target]!, next[index]!];
-    onChange(next);
-  };
+  const selectedCount = shortcuts.length;
+  const ready = state?.status === 'ready';
+  const menus = state?.status === 'ready' ? state.menus : [];
+  const selectedMenuKeys = new Set(shortcuts.map((shortcut) => sub2apiMenuPathKey(shortcut.path)));
+  const unavailable = ready
+    ? shortcuts.filter(
+        (shortcut) =>
+          !menus.some(
+            (menu) => sub2apiMenuPathKey(menu.path) === sub2apiMenuPathKey(shortcut.path),
+          ),
+      )
+    : [];
   return (
     <fieldset className="svr-shortcut-editor">
-      <legend>快捷入口（最多 {SUB2API_SERVER_SHORTCUT_LIMIT} 个）</legend>
-      {shortcuts.length === 0 && <span className="svr-shortcut-empty">还没有快捷入口</span>}
-      <div className="svr-shortcut-list">
-        {shortcuts.map((shortcut, index) => (
-          <div className="svr-shortcut-row" key={shortcut.id ?? `draft-${index}`}>
-            <GripVertical size={14} aria-hidden="true" />
-            <label className="svr-field">
-              名称
-              <input
-                value={shortcut.label}
-                maxLength={40}
-                onChange={(event) => updateShortcut(index, { label: event.target.value })}
-              />
-            </label>
-            <label className="svr-field">
-              路径
-              <input
-                value={shortcut.path}
-                maxLength={500}
-                placeholder="/account"
-                onChange={(event) => updateShortcut(index, { path: event.target.value })}
-              />
-            </label>
-            <label className="svr-field svr-shortcut-icon-field">
-              图标
-              <select
-                value={shortcut.icon ?? 'Users'}
-                onChange={(event) => updateShortcut(index, { icon: event.target.value })}
-              >
-                {shortcutIconOptions.map((option) => (
-                  <option value={option.value} key={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="svr-shortcut-row-actions">
-              <button
-                type="button"
-                aria-label="上移快捷入口"
-                title="上移"
-                onClick={() => moveShortcut(index, -1)}
-              >
-                <ChevronUp size={14} />
-              </button>
-              <button
-                type="button"
-                aria-label="下移快捷入口"
-                title="下移"
-                onClick={() => moveShortcut(index, 1)}
-              >
-                <ChevronDown size={14} />
-              </button>
-              <button
-                type="button"
-                aria-label="删除快捷入口"
-                title="删除"
-                className="danger"
-                onClick={() => removeShortcut(index)}
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="svr-menu-editor-heading">
+        <legend>
+          快捷入口（已选 {selectedCount}/{SUB2API_SERVER_SHORTCUT_LIMIT}）
+        </legend>
+        <button
+          type="button"
+          className="svr-shortcut-add"
+          disabled={state?.status === 'loading'}
+          onClick={onRefresh}
+        >
+          {state?.status === 'loading' ? (
+            <LoaderCircle size={14} className="spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          获取菜单
+        </button>
       </div>
-      <button
-        type="button"
-        className="svr-shortcut-add"
-        disabled={shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT}
-        onClick={addShortcut}
-      >
-        <Plus size={14} aria-hidden="true" />
-        添加快捷入口
-      </button>
-      <p className="svr-shortcut-hint">路径必须指向当前服务器同源地址，例如 /account</p>
+      {state?.status === 'loading' && (
+        <p className="svr-menu-state" role="status">
+          正在读取服务器菜单…
+        </p>
+      )}
+      {state?.status === 'login' && (
+        <div className="svr-menu-state is-login">
+          <p>{state.message}</p>
+          <button type="button" className="secondary-action" onClick={onOpenServer}>
+            <Server size={14} />
+            打开服务器登录
+          </button>
+        </div>
+      )}
+      {state?.status === 'error' && (
+        <div className="svr-menu-state is-error">
+          <p>{state.message}</p>
+          <button type="button" className="secondary-action" onClick={onRefresh}>
+            <RefreshCw size={14} />
+            重试
+          </button>
+        </div>
+      )}
+      {ready && menus.length === 0 && (
+        <p className="svr-menu-state">服务器菜单中暂未发现可用入口。</p>
+      )}
+      {ready && menus.length > 0 && (
+        <div className="svr-menu-list">
+          {menus.map((menu) => {
+            const pathKey = sub2apiMenuPathKey(menu.path);
+            const selected = selectedMenuKeys.has(pathKey);
+            const disabled = !selected && shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT;
+            return (
+              <label className={`svr-menu-option${selected ? ' is-selected' : ''}`} key={menu.id}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  disabled={disabled}
+                  onChange={() => onToggle(menu)}
+                />
+                <span className="svr-menu-option-copy">
+                  <strong>{menu.label}</strong>
+                  <small>
+                    {menu.parentLabel ? `${menu.parentLabel} · ` : ''}
+                    {menu.path}
+                  </small>
+                </span>
+                {selected && <span className="svr-menu-selected-mark">已选</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+      {ready && unavailable.length > 0 && (
+        <div className="svr-menu-unavailable">
+          <strong>当前菜单不可用</strong>
+          {unavailable.map((shortcut) => (
+            <span className="svr-menu-unavailable-item" key={shortcut.id ?? shortcut.path}>
+              {shortcut.label}
+              <button
+                type="button"
+                aria-label={`移除 ${shortcut.label}`}
+                title="移除"
+                onClick={() => onRemoveUnavailable(shortcut.path)}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </fieldset>
   );
+}
+
+function toggleShortcut(
+  current: ServerDraft | undefined,
+  menu: Sub2ApiMenu,
+): ServerDraft | undefined {
+  if (!current) return current;
+  const pathKey = sub2apiMenuPathKey(menu.path);
+  const existingIndex = current.shortcuts.findIndex(
+    (shortcut) => sub2apiMenuPathKey(shortcut.path) === pathKey,
+  );
+  if (existingIndex >= 0) {
+    const shortcuts = current.shortcuts.filter((_, index) => index !== existingIndex);
+    return { ...current, shortcuts };
+  }
+  if (current.shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT) return current;
+  const existing = current.shortcuts.find(
+    (shortcut) => shortcut.menuId === menu.id || sub2apiMenuPathKey(shortcut.path) === pathKey,
+  );
+  return {
+    ...current,
+    shortcuts: [
+      ...current.shortcuts,
+      {
+        label: menu.label,
+        path: menu.path,
+        icon: existing?.icon,
+        menuId: menu.id,
+      },
+    ],
+  };
 }
 
 function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement): void {
@@ -734,10 +879,6 @@ function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement): void {
     event.preventDefault();
     first.focus();
   }
-}
-
-function shortcutIconFor(icon: string | undefined): typeof Users {
-  return shortcutIconOptions.find((option) => option.value === icon)?.Icon ?? Users;
 }
 
 function loginStateLabel(state: Sub2ApiServer['loginState']): string {

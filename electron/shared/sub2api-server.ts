@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const SUB2API_SERVERS_KEY = 'sub2api-servers:entries';
 export const SUB2API_SERVER_LIMIT = 50;
 export const SUB2API_SERVER_SHORTCUT_LIMIT = 5;
+export const SUB2API_SERVER_MENU_LIMIT = 100;
+export const SUB2API_MENUS_KEY_PREFIX = 'sub2api-servers:menus:';
 
 export const sub2apiServerLoginStateSchema = z.enum([
   'unknown',
@@ -50,6 +52,24 @@ export function sub2apiShortcutUrl(baseUrl: string, path: string): string | unde
   }
 }
 
+export function sub2apiMenuPathKey(path: string): string {
+  try {
+    const url = new URL(path.startsWith('/') ? `https://placeholder.invalid${path}` : path);
+    return url.pathname.replace(/\/+$/, '').toLocaleLowerCase();
+  } catch {
+    return path.trim().replace(/\/+$/, '').toLocaleLowerCase();
+  }
+}
+
+export function isSub2ApiServerMenuLoginPath(path: string): boolean {
+  const value = path.trim().toLocaleLowerCase();
+  return (
+    value === '/' ||
+    value === '' ||
+    /(^|\/)(login|signin|sign-in|auth|logon|logout|signout|register|forgot)([/?#]|$)/.test(value)
+  );
+}
+
 export const sub2apiShortcutInputSchema = z
   .object({
     label: z.string().trim().min(1, '请输入快捷入口名称').max(40, '快捷入口名称不能超过 40 个字符'),
@@ -59,6 +79,7 @@ export const sub2apiShortcutInputSchema = z
       .min(1, '请输入快捷入口路径')
       .max(500, '快捷入口路径不能超过 500 个字符'),
     icon: z.string().trim().min(1).max(40).optional(),
+    menuId: z.string().trim().min(1).max(128).optional(),
   })
   .strict();
 
@@ -69,6 +90,77 @@ export const sub2apiShortcutSchema = sub2apiShortcutInputSchema.extend({
 export const sub2apiShortcutUpdateSchema = sub2apiShortcutInputSchema.extend({
   id: z.string().min(1).max(128).optional(),
 });
+
+export const sub2apiDiscoveredMenuSchema = z
+  .object({
+    label: z.string().trim().min(1, '菜单名称不能为空').max(80, '菜单名称不能超过 80 个字符'),
+    path: z.string().trim().min(1, '菜单路径不能为空').max(500, '菜单路径不能超过 500 个字符'),
+    parentLabel: z.string().trim().max(80, '上级菜单名称不能超过 80 个字符').optional(),
+    order: z.number().int().min(0).max(100000),
+  })
+  .strict();
+
+export const sub2apiMenuSchema = sub2apiDiscoveredMenuSchema.extend({
+  id: z.string().min(1).max(128),
+  discoveredAt: z.number().int().positive(),
+});
+
+export const sub2apiMenusSchema = z
+  .array(sub2apiMenuSchema)
+  .max(SUB2API_SERVER_MENU_LIMIT, `菜单最多 ${SUB2API_SERVER_MENU_LIMIT} 项`);
+
+export const sub2apiMenuDiscoveryResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ready'), menus: sub2apiMenusSchema }),
+  z.object({
+    status: z.literal('login'),
+    message: z.string().max(200),
+  }),
+]);
+
+export type Sub2ApiDiscoveredMenu = z.infer<typeof sub2apiDiscoveredMenuSchema>;
+export type Sub2ApiMenu = z.infer<typeof sub2apiMenuSchema>;
+export type Sub2ApiMenuDiscoveryResult = z.infer<typeof sub2apiMenuDiscoveryResultSchema>;
+
+export function sub2apiMenusKey(serverId: string): string {
+  return `${SUB2API_MENUS_KEY_PREFIX}${serverId}`;
+}
+
+export function sanitizeSub2ApiDiscoveredMenus(
+  baseUrl: string,
+  discovered: Array<{ label: string; href: string; parentLabel?: string }>,
+): Sub2ApiDiscoveredMenu[] {
+  const root = normalizeSub2ApiServerUrl(baseUrl);
+  const allowedOrigin = new URL(root).origin;
+  const seen = new Set<string>();
+  const menus: Sub2ApiDiscoveredMenu[] = [];
+  for (const [order, item] of discovered.entries()) {
+    if (order >= SUB2API_SERVER_MENU_LIMIT) break;
+    const label = item.label.replace(/\s+/g, ' ').trim();
+    if (!label) continue;
+    let path: string | undefined;
+    try {
+      const url = new URL(item.href, root);
+      if (url.protocol !== 'https:' || url.username || url.password || url.origin !== allowedOrigin)
+        continue;
+      path = url.pathname + url.search + url.hash;
+      if (path.length > 500) continue;
+    } catch {
+      continue;
+    }
+    if (isSub2ApiServerMenuLoginPath(path)) continue;
+    const key = sub2apiMenuPathKey(path);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const parentLabel = item.parentLabel?.replace(/\s+/g, ' ').trim().slice(0, 80);
+    menus.push({
+      label: label.slice(0, 80),
+      path,
+      ...(parentLabel ? { parentLabel } : {}),
+      order,
+    });
+  }
+  return menus;
+}
 
 export const sub2apiServerInputSchema = z
   .object({

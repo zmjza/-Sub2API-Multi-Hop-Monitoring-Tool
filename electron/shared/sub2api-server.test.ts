@@ -3,13 +3,17 @@ import {
   SUB2API_SERVER_SHORTCUT_LIMIT,
   isAllowedSub2ApiServerNavigation,
   isSafeSub2ApiServerUrl,
+  isSub2ApiServerMenuLoginPath,
   isSub2ApiServerLoginRoute,
   normalizeSub2ApiServerUrl,
   resolveSub2ApiServerLoginState,
+  sanitizeSub2ApiDiscoveredMenus,
   sub2apiServerInputSchema,
+  sub2apiMenusSchema,
   sub2apiServersSchema,
   sub2apiShortcutUrl,
   sub2apiServerViewBounds,
+  sub2apiMenuPathKey,
 } from './sub2api-server.js';
 
 describe('sub2api server boundary', () => {
@@ -67,6 +71,50 @@ describe('sub2api server boundary', () => {
     expect(sub2apiShortcutUrl('https://example.com', 'javascript:alert(1)')).toBeUndefined();
   });
 
+  it('accepts menu-sourced shortcuts while keeping legacy shortcut input legal', () => {
+    const input = {
+      name: '测试站',
+      baseUrl: 'https://example.com/',
+      shortcuts: [{ label: '账号管理', path: '/account', menuId: 'menu-account' }],
+    };
+    expect(sub2apiServerInputSchema.parse(input)).toMatchObject({
+      shortcuts: [{ label: '账号管理', path: '/account', menuId: 'menu-account' }],
+    });
+    expect(
+      sub2apiServerInputSchema.safeParse({
+        ...input,
+        shortcuts: [{ label: '旧入口', path: '/legacy', icon: 'Users' }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('sanitizes discovered menus to same-origin HTTPS relative paths', () => {
+    const menus = sanitizeSub2ApiDiscoveredMenus('https://example.com/', [
+      { label: '  账号\n管理 ', href: 'https://example.com/account?tab=keys#top' },
+      { label: '使用记录', href: 'https://example.com/usage' },
+      { label: '外站', href: 'https://other.example/usage' },
+      { label: '登录', href: 'https://example.com/login' },
+      { label: '注销', href: 'https://example.com/logout' },
+      { label: '重复', href: 'https://example.com/usage?from=nav' },
+      { label: '危险', href: 'javascript:void(0)' },
+    ]);
+    expect(menus).toEqual([
+      { label: '账号 管理', path: '/account?tab=keys#top', order: 0 },
+      { label: '使用记录', path: '/usage', order: 1 },
+    ]);
+    expect(menus.map((menu) => menu.path)).toHaveLength(2);
+  });
+
+  it('keeps menu paths unique and stable for shortcut matching', () => {
+    const pathKey = sub2apiMenuPathKey;
+    expect(pathKey('/Account/')).toBe(pathKey('/account'));
+    expect(pathKey('/usage?from=nav')).toBe(pathKey('/usage?from=nav'));
+    expect(pathKey('/usage#top')).toBe(pathKey('/usage'));
+    expect(pathKey('/usage?from=nav')).toBe(pathKey('/usage'));
+    expect(isSub2ApiServerMenuLoginPath('/login')).toBe(true);
+    expect(isSub2ApiServerMenuLoginPath('/account')).toBe(false);
+  });
+
   it('rejects duplicate server names, URLs and shortcut labels in persisted entries', () => {
     const server = (id: string, name: string, url: string) => ({
       id,
@@ -90,6 +138,22 @@ describe('sub2api server boundary', () => {
         server('a', 'A', 'https://a.example'),
         server('b', 'B', 'https://a.example'),
       ]).success,
+    ).toBe(false);
+  });
+
+  it('persists discovered menus with stable ids and discovery time', () => {
+    const parsed = sub2apiMenusSchema.parse([
+      { id: 'm1', label: '账号管理', path: '/account', order: 0, discoveredAt: 123 },
+    ]);
+    expect(parsed[0]).toMatchObject({
+      id: 'm1',
+      label: '账号管理',
+      path: '/account',
+      order: 0,
+      discoveredAt: 123,
+    });
+    expect(
+      sub2apiMenusSchema.safeParse([{ id: 'm1', label: '', path: '/account', order: 0 }]).success,
     ).toBe(false);
   });
 
