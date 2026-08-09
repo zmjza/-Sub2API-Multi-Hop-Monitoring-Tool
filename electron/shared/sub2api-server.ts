@@ -192,6 +192,36 @@ export function isAllowedSub2ApiServerNavigation(value: unknown, allowedOrigin: 
   }
 }
 
+export function isSub2ApiServerLoginRoute(url: string, loginRule?: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.toLocaleLowerCase();
+    const rule = loginRule?.trim().toLocaleLowerCase().replace(/^\//, '');
+    if (rule) return pathname.includes(rule);
+    return /(^|\/)(login|signin|sign-in|auth|logon|logout|signout)([/?#]|$)/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSub2ApiServerLoginState(
+  current: { loginState: Sub2ApiServerLoginState; seenLoggedIn: boolean; loginRule?: string },
+  url: string,
+  httpResponseCode: number,
+): { loginState: Sub2ApiServerLoginState; seenLoggedIn: boolean } {
+  let loginState = current.loginState;
+  let seenLoggedIn = current.seenLoggedIn;
+  if (httpResponseCode === 401 || httpResponseCode === 403) {
+    loginState = 'expired';
+    seenLoggedIn = true;
+  } else if (isSub2ApiServerLoginRoute(url, current.loginRule)) {
+    loginState = seenLoggedIn ? 'expired' : 'please-login';
+  } else if (httpResponseCode >= 200 && httpResponseCode < 400) {
+    loginState = 'logged-in';
+    seenLoggedIn = true;
+  }
+  return { loginState, seenLoggedIn };
+}
+
 export type Sub2ApiServerContentSize = { width: number; height: number };
 
 export const SUB2API_SERVER_VIEW_LEFT = 284;

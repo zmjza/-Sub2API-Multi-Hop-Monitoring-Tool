@@ -5,6 +5,7 @@ import {
   SUB2API_SERVER_LIMIT,
   isAllowedSub2ApiServerNavigation,
   normalizeSub2ApiServerUrl,
+  resolveSub2ApiServerLoginState,
   sub2apiShortcutUrl,
   sub2apiServerViewBounds,
   type Sub2ApiServer,
@@ -303,19 +304,13 @@ export class Sub2ApiServerManager {
   private updateLoginState(server: Sub2ApiServer, url: string, httpResponseCode: number): void {
     const current = this.db.getSub2ApiServers().find((item) => item.id === server.id);
     if (!current) return;
-    let loginState: Sub2ApiServerLoginState = current.loginState;
-    let seenLoggedIn = current.seenLoggedIn;
-    if (httpResponseCode === 401 || httpResponseCode === 403) {
-      loginState = 'expired';
-      seenLoggedIn = true;
-    } else if (this.isLoginRoute(current, url)) {
-      loginState = seenLoggedIn ? 'expired' : 'please-login';
-    } else if (httpResponseCode >= 200 && httpResponseCode < 400) {
-      loginState = 'logged-in';
-      seenLoggedIn = true;
-    }
-    if (loginState === current.loginState && seenLoggedIn === current.seenLoggedIn) return;
-    this.persistLoginState(current.id, loginState, seenLoggedIn);
+    const resolved = resolveSub2ApiServerLoginState(current, url, httpResponseCode);
+    if (
+      resolved.loginState === current.loginState &&
+      resolved.seenLoggedIn === current.seenLoggedIn
+    )
+      return;
+    this.persistLoginState(current.id, resolved.loginState, resolved.seenLoggedIn);
   }
 
   private persistLoginState(
@@ -330,17 +325,6 @@ export class Sub2ApiServerManager {
           item.id === id ? { ...item, loginState, seenLoggedIn, updatedAt: Date.now() } : item,
         ),
     );
-  }
-
-  private isLoginRoute(server: Sub2ApiServer, url: string): boolean {
-    try {
-      const pathname = new URL(url).pathname.toLocaleLowerCase();
-      const rule = server.loginRule?.trim().toLocaleLowerCase().replace(/^\//, '');
-      if (rule) return pathname.includes(rule);
-      return /(^|\/)(login|signin|sign-in|auth|logon|logout|signout)([/?#]|$)/.test(pathname);
-    } catch {
-      return false;
-    }
   }
 
   private assertUnique(servers: Sub2ApiServer[], name: string, baseUrl: string): void {

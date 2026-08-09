@@ -3,7 +3,9 @@ import {
   SUB2API_SERVER_SHORTCUT_LIMIT,
   isAllowedSub2ApiServerNavigation,
   isSafeSub2ApiServerUrl,
+  isSub2ApiServerLoginRoute,
   normalizeSub2ApiServerUrl,
+  resolveSub2ApiServerLoginState,
   sub2apiServerInputSchema,
   sub2apiServersSchema,
   sub2apiShortcutUrl,
@@ -107,5 +109,38 @@ describe('sub2api server boundary', () => {
       width: 916,
       height: 720,
     });
+  });
+
+  it('resolves first-login, expired, 401/403 and recovered login states', () => {
+    expect(
+      resolveSub2ApiServerLoginState(
+        { loginState: 'unknown', seenLoggedIn: false },
+        'https://example.com/login',
+        200,
+      ),
+    ).toEqual({ loginState: 'please-login', seenLoggedIn: false });
+    expect(
+      resolveSub2ApiServerLoginState(
+        { loginState: 'logged-in', seenLoggedIn: true },
+        'https://example.com/login',
+        200,
+      ),
+    ).toEqual({ loginState: 'expired', seenLoggedIn: true });
+    expect(
+      resolveSub2ApiServerLoginState(
+        { loginState: 'logged-in', seenLoggedIn: true },
+        'https://example.com/home',
+        401,
+      ),
+    ).toEqual({ loginState: 'expired', seenLoggedIn: true });
+    expect(
+      resolveSub2ApiServerLoginState(
+        { loginState: 'expired', seenLoggedIn: true },
+        'https://example.com/home',
+        200,
+      ),
+    ).toEqual({ loginState: 'logged-in', seenLoggedIn: true });
+    expect(isSub2ApiServerLoginRoute('https://example.com/signin')).toBe(true);
+    expect(isSub2ApiServerLoginRoute('https://example.com/home')).toBe(false);
   });
 });
