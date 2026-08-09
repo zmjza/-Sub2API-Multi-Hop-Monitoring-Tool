@@ -4,6 +4,7 @@ dist-electron/
 release/
 test-results/
 playwright-report/
+real-test-evidence/
 real-test-evidence/macos-1.1.0/
 real-test-evidence/windows-1.1.0/
 .DS_Store
