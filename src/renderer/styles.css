@@ -141,10 +141,65 @@ input {
   flex: 0 0 auto;
   color: #2563eb;
 }
+.svr-embed-toolbar-label {
+  -webkit-app-region: no-drag;
+  min-width: 0;
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #33415f;
+  font-size: 13px;
+  font-weight: 700;
+}
+.svr-embed-toolbar-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.svr-embed-toolbar-label > svg {
+  flex: 0 0 auto;
+  color: #2563eb;
+}
+.svr-embed-nav {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  gap: 4px;
+}
+.svr-toolbar-login {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+.svr-toolbar-login.is-logged-in {
+  background: #ecfdf5;
+  color: #047857;
+}
+.svr-toolbar-login.is-please-login {
+  background: #fff7ed;
+  color: #b45309;
+}
+.svr-toolbar-login.is-expired {
+  background: #fff1f2;
+  color: #be123c;
+}
+.svr-embed-close {
+  border: 1px solid #cddbf8;
+  background: #eff6ff;
+  color: #2563eb;
+}
 .radar-embed-close {
   color: #2563eb;
 }
 .app-shell[data-radar-embedded='true'] .app-toolbar::after {
+  width: 132px;
+}
+.app-shell[data-server-embedded='true'] .app-toolbar::after {
   width: 132px;
 }
 .toolbar-site-switch {

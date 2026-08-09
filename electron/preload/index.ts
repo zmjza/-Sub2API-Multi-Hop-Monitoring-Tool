@@ -20,6 +20,12 @@ import type {
 } from '../shared/contracts.js';
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 import type { RadarEmbedState, RadarEntry, RadarEntryInput } from '../shared/radar.js';
+import type {
+  Sub2ApiServer,
+  Sub2ApiServerEmbedState,
+  Sub2ApiServerInput,
+  Sub2ApiServerUpdateInput,
+} from '../shared/sub2api-server.js';
 
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
@@ -31,6 +37,21 @@ export interface DesktopBridge {
     open(id: string): void;
     close(): void;
     onStateChange(listener: (state: RadarEmbedState) => void): () => void;
+  };
+  readonly sub2apiServers: {
+    list(): Promise<Sub2ApiServer[]>;
+    create(input: Sub2ApiServerInput): Promise<Sub2ApiServer[]>;
+    update(input: Sub2ApiServerUpdateInput): Promise<Sub2ApiServer[]>;
+    delete(id: string): Promise<Sub2ApiServer[]>;
+    open(id: string): void;
+    openShortcut(serverId: string, shortcutId: string): void;
+    close(): void;
+    back(): void;
+    forward(): void;
+    reload(): void;
+    home(): void;
+    clearSession(id: string): Promise<void>;
+    onStateChange(listener: (state: Sub2ApiServerEmbedState) => void): () => void;
   };
   readonly sites: {
     list(): Promise<DashboardSnapshot>;

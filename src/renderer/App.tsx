@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowLeft,
+  ArrowRight,
   Bell,
   ChevronDown,
   Download,
   History,
+  House,
   KeyRound,
   LayoutDashboard,
   LoaderCircle,
   Network,
   Radio,
+  RefreshCw,
+  Server,
   Settings,
   SlidersHorizontal,
   TimerReset,
@@ -48,6 +53,7 @@ import {
   stateForSelectedUsageSite,
 } from './shells/floating/latest-usage-site';
 import { RadarPage } from './shells/radar/RadarPage';
+import { Sub2ApiServersPage } from './shells/sub2api-servers/Sub2ApiServersPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
 import type {
@@ -60,6 +66,10 @@ import type {
   ApiKeyManagementPayload,
 } from '../../electron/shared/contracts';
 import { type RadarEntry, type RadarEmbedState } from '../../electron/shared/radar';
+import {
+  type Sub2ApiServer,
+  type Sub2ApiServerEmbedState,
+} from '../../electron/shared/sub2api-server';
 import { safeRendererError, useNotifications } from './notifications';
 import type {
   UpdateCheckResult,
@@ -70,7 +80,7 @@ const showPreviewControls =
   import.meta.env.DEV || new URLSearchParams(window.location.search).get('preview') === 'true';
 const hasExplicitShell = new URLSearchParams(window.location.search).has('shell');
 export function App() {
-  const { notify } = useNotifications();
+  const { dismiss, notify } = useNotifications();
   const [shell, setShell] = useState<MainShell>(initialLocation.shell);
   const [state, setState] = useState<PreviewState>(initialLocation.state);
   const [queryPhase, setQueryPhase] = useState<string>();
@@ -118,6 +128,9 @@ export function App() {
   const [isRefreshingRates, setIsRefreshingRates] = useState(false);
   const [refreshingRateSiteIds, setRefreshingRateSiteIds] = useState<Set<string>>(() => new Set());
   const [radarEmbedState, setRadarEmbedState] = useState<RadarEmbedState>({ status: 'idle' });
+  const [sub2apiServerEmbedState, setSub2ApiServerEmbedState] = useState<Sub2ApiServerEmbedState>({
+    status: 'idle',
+  });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
     position: 'top-right',
     opacity: 84,
@@ -245,7 +258,7 @@ export function App() {
     else setRadarEmbedState({ status: 'idle' });
   };
   const openEmbeddedRadar = (entry: RadarEntry) => {
-    if (radarEmbedState.status !== 'idle') return;
+    if (radarEmbedState.status !== 'idle' || sub2apiServerEmbedState.status !== 'idle') return;
     const radar = window.sub2apiDesktop?.radar;
     if (!radar) {
       setRadarEmbedState({
@@ -258,13 +271,56 @@ export function App() {
     setRadarEmbedState({ status: 'opening', target: { id: entry.id, label: entry.label } });
     radar.open(entry.id);
   };
+  const closeEmbeddedSub2ApiServer = () => {
+    const servers = window.sub2apiDesktop?.sub2apiServers;
+    if (servers) servers.close();
+    else setSub2ApiServerEmbedState({ status: 'idle' });
+  };
+  const openEmbeddedSub2ApiServer = (server: Sub2ApiServer) => {
+    if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;
+    const servers = window.sub2apiDesktop?.sub2apiServers;
+    if (!servers) {
+      setSub2ApiServerEmbedState({
+        status: 'error',
+        target: { id: server.id, label: server.name },
+        message: '当前 Electron 桥不可用，无法打开服务器网页。',
+      });
+      return;
+    }
+    setSub2ApiServerEmbedState({
+      status: 'opening',
+      target: { id: server.id, label: server.name },
+    });
+    servers.open(server.id);
+  };
+  const openSub2ApiServerShortcut = (
+    server: Sub2ApiServer,
+    shortcut: import('../../electron/shared/sub2api-server').Sub2ApiShortcut,
+  ) => {
+    if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;
+    const servers = window.sub2apiDesktop?.sub2apiServers;
+    if (!servers) return;
+    setSub2ApiServerEmbedState({
+      status: 'opening',
+      target: { id: server.id, label: server.name },
+    });
+    servers.openShortcut(server.id, shortcut.id);
+  };
   const changeShell = (nextShell: MainShell) => {
     if (radarEmbedState.status !== 'idle' && nextShell !== 'radar') closeEmbeddedRadar();
+    if (sub2apiServerEmbedState.status !== 'idle' && nextShell !== 'sub2api-servers')
+      closeEmbeddedSub2ApiServer();
     setShell(nextShell);
   };
   useEffect(() => {
     const unsubscribe = window.sub2apiDesktop?.radar.onStateChange((nextState) => {
       setRadarEmbedState(nextState);
+    });
+    return () => unsubscribe?.();
+  }, []);
+  useEffect(() => {
+    const unsubscribe = window.sub2apiDesktop?.sub2apiServers.onStateChange((nextState) => {
+      setSub2ApiServerEmbedState(nextState);
     });
     return () => unsubscribe?.();
   }, []);
@@ -278,6 +334,16 @@ export function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [radarEmbedState.status]);
+  useEffect(() => {
+    if (sub2apiServerEmbedState.status === 'idle') return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeEmbeddedSub2ApiServer();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sub2apiServerEmbedState.status]);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -778,6 +844,13 @@ export function App() {
         setState(value.state);
         setQueryPhase(value.phase);
       }
+      if (value.state === 'auth-required')
+        notify({
+          id: `site-auth:${value.siteId}`,
+          kind: 'warning',
+          message: '登录过期，请去站点管理重新验证',
+        });
+      else if (value.state === 'success') dismiss(`site-auth:${value.siteId}`);
     });
     return () => {
       window.removeEventListener('sub2api:refresh', refresh);
@@ -1176,6 +1249,13 @@ export function App() {
     usage: <UsagePage {...context} />,
     channels: <ChannelsPage {...context} />,
     sites: <SitesPage {...context} />,
+    'sub2api-servers': (
+      <Sub2ApiServersPage
+        embedState={sub2apiServerEmbedState}
+        onOpen={openEmbeddedSub2ApiServer}
+        onOpenShortcut={openSub2ApiServerShortcut}
+      />
+    ),
     radar: <RadarPage embedState={radarEmbedState} onOpen={openEmbeddedRadar} />,
     'general-settings': (
       <GeneralSettingsPage updateChecking={updateChecking} onCheckForUpdate={checkForUpdate} />
@@ -1188,6 +1268,7 @@ export function App() {
     ['usage', '使用记录', TimerReset],
     ['channels', '渠道状态', Network],
     ['sites', '站点管理', SlidersHorizontal],
+    ['sub2api-servers', 'Sub2API 服务器', Server],
     ['radar', '雷达', Radio],
   ] as const;
   return (
@@ -1196,6 +1277,7 @@ export function App() {
       data-shell={shell}
       data-state={effectiveState}
       data-radar-embedded={radarEmbedState.status !== 'idle'}
+      data-server-embedded={sub2apiServerEmbedState.status !== 'idle'}
     >
       <aside className="app-sidebar">
         <div className="brand-lockup">
@@ -1221,15 +1303,15 @@ export function App() {
         </nav>
         <div className="sidebar-footer">
           <button
-            className={shell === 'general-settings' ? 'nav-item active' : 'nav-item'}
-            onClick={() => changeShell('general-settings')}
+            className={shell === 'notification-rules' ? 'nav-item active' : 'nav-item'}
+            onClick={() => changeShell('notification-rules')}
           >
             <Bell size={18} />
             <span>通知</span>
           </button>
           <button
-            className={shell === 'notification-rules' ? 'nav-item active' : 'nav-item'}
-            onClick={() => changeShell('notification-rules')}
+            className={shell === 'general-settings' ? 'nav-item active' : 'nav-item'}
+            onClick={() => changeShell('general-settings')}
           >
             <Settings size={18} />
             <span>设置</span>
@@ -1238,7 +1320,70 @@ export function App() {
       </aside>
       <section className="app-content">
         <header className="app-toolbar">
-          {radarEmbedState.status !== 'idle' ? (
+          {sub2apiServerEmbedState.status !== 'idle' ? (
+            <>
+              <div className="svr-embed-toolbar-label">
+                <Server size={16} aria-hidden="true" />
+                <span>{sub2apiServerEmbedState.target.label}</span>
+                {sub2apiServerEmbedState.status === 'open' && (
+                  <em className={`svr-toolbar-login is-${sub2apiServerEmbedState.loginState}`}>
+                    {serverLoginLabel(sub2apiServerEmbedState.loginState)}
+                  </em>
+                )}
+              </div>
+              <div className="svr-embed-nav">
+                <button
+                  className="icon-button"
+                  aria-label="后退"
+                  title="后退"
+                  disabled={
+                    sub2apiServerEmbedState.status !== 'open' || !sub2apiServerEmbedState.canGoBack
+                  }
+                  onClick={() => window.sub2apiDesktop?.sub2apiServers.back()}
+                >
+                  <ArrowLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="前进"
+                  title="前进"
+                  disabled={
+                    sub2apiServerEmbedState.status !== 'open' ||
+                    !sub2apiServerEmbedState.canGoForward
+                  }
+                  onClick={() => window.sub2apiDesktop?.sub2apiServers.forward()}
+                >
+                  <ArrowRight size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="返回服务器主页"
+                  title="主页"
+                  disabled={sub2apiServerEmbedState.status !== 'open'}
+                  onClick={() => window.sub2apiDesktop?.sub2apiServers.home()}
+                >
+                  <House size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="刷新服务器网页"
+                  title="刷新"
+                  disabled={sub2apiServerEmbedState.status !== 'open'}
+                  onClick={() => window.sub2apiDesktop?.sub2apiServers.reload()}
+                >
+                  <RefreshCw size={17} />
+                </button>
+              </div>
+              <button
+                className="icon-button svr-embed-close"
+                aria-label="关闭服务器网页"
+                title="关闭服务器网页"
+                onClick={closeEmbeddedSub2ApiServer}
+              >
+                <X size={18} />
+              </button>
+            </>
+          ) : radarEmbedState.status !== 'idle' ? (
             <>
               <div className="radar-embed-toolbar-label">
                 <Radio size={16} aria-hidden="true" />
@@ -1444,6 +1589,15 @@ export function App() {
       )}
     </main>
   );
+}
+
+function serverLoginLabel(
+  state: Extract<Sub2ApiServerEmbedState, { status: 'open' }>['loginState'],
+): string {
+  if (state === 'logged-in') return '已登录';
+  if (state === 'please-login') return '请登录';
+  if (state === 'expired') return '登录过期';
+  return '状态未知';
 }
 
 function isKeyPreference(value: unknown): value is SiteKeyContext['preference'] {

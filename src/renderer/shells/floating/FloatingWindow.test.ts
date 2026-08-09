@@ -127,7 +127,7 @@ describe('floating window transparency', () => {
     expect(css).toContain('-webkit-app-region: no-drag');
   });
 
-  it('renders only the latest-twelve summary in the clickable compact channel card', () => {
+  it('renders twenty slots while keeping the latest-twelve percentage in the channel card', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingWindow, {
         state: 'success',
@@ -185,8 +185,8 @@ describe('floating window transparency', () => {
     expect(html).not.toContain('Plus【特惠通道009】很长很长的渠道名称</strong>');
     expect(html).not.toContain('floating-channel-heading');
     expect(html).toContain('aria-label="Plus【特惠通道009】很长很长的渠道名称，查看全部关联渠道"');
-    expect(html.match(/<i [^>]*class=/g)).toHaveLength(12);
-    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(9);
+    expect(html.match(/<i [^>]*class=/g)).toHaveLength(20);
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(17);
     expect(html.indexOf('class="empty"')).toBeLessThan(html.indexOf('class="normal"'));
     expect(html.indexOf('class="normal"')).toBeLessThan(html.indexOf('class="failed"'));
     expect(html.indexOf('class="failed"')).toBeLessThan(html.indexOf('class="unknown"'));
@@ -197,7 +197,7 @@ describe('floating window transparency', () => {
     })} 未知`;
     expect(html).toContain(`title="${latestLabel}"`);
     expect(html).toContain(`aria-label="${latestLabel}"`);
-    expect(html).toContain('aria-label="最近 12 次渠道状态时间线"');
+    expect(html).toContain('aria-label="最近 20 次渠道状态时间线"');
     expect(html).not.toContain('近 1 分钟');
     expect(html).not.toContain('floating-channels');
     expect(html).not.toContain('floating-channel-panel');
@@ -246,7 +246,33 @@ describe('floating window transparency', () => {
 
     expect(html).toContain('暂无渠道记录');
     expect(html).not.toContain('0.00%');
-    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(12);
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(20);
+  });
+
+  it('does not flash the site total balance when the current key credit is unavailable', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          balance: 88,
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        currentKeyStatsBySite: {
+          'site-1': { state: 'loading', keyId: 'key-1' },
+        },
+      }),
+    );
+    expect(html).not.toContain('$88.00');
+    expect(html).toContain('>—</span>');
   });
 
   it('keeps an unavailable channel state in the same compact slot without an empty dialog trigger', () => {

@@ -1,7 +1,7 @@
 .app-notification-viewport {
   position: fixed;
   z-index: 1200;
-  top: 70px;
+  top: 96px;
   right: 18px;
   width: min(360px, calc(100vw - 32px));
   display: grid;
@@ -79,7 +79,7 @@
 
 @media (max-width: 520px) {
   .app-notification-viewport {
-    top: 62px;
+    top: 90px;
     right: 16px;
     left: 16px;
     width: auto;

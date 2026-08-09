@@ -67,6 +67,14 @@ export interface PlatformRateComparison {
 }
 
 const RATE_EPSILON = 1e-9;
+const disabledNoChannelKeywords = ['生图', '停用', '禁止', 'image2', '图片'];
+
+export function isDisabledNoChannelGroup(group: AvailableRateGroup): boolean {
+  const name = group.name.normalize('NFKC').toLocaleLowerCase();
+  return disabledNoChannelKeywords.some((keyword) =>
+    name.includes(keyword.normalize('NFKC').toLocaleLowerCase()),
+  );
+}
 
 export function effectiveRate(rate: number, ratio?: number): number | undefined {
   if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(ratio) || (ratio ?? 0) <= 0)
@@ -239,7 +247,6 @@ export function channelEligibility(
   if (channelState === 'unsupported') return { eligible: false, reason: 'unsupported' };
   if (channelState === 'error') return { eligible: false, reason: 'request-error' };
   if (!channel) return { eligible: false, reason: 'unmatched' };
-  if (isUnstableChannelStatus(channel.status)) return { eligible: false, reason: 'current-issue' };
 
   const parsed = (channel.timeline ?? []).map((point) => ({
     point,
@@ -255,10 +262,15 @@ export function channelEligibility(
     // An explicitly unknown/empty current status is still an allowed stable value.
     // Other statuses require a fresh timeline point to prove the one-minute window.
     if (channel.status === 'unknown') return { eligible: true, score: 10, label: '稳定' };
+    if (isUnstableChannelStatus(channel.status))
+      return { eligible: false, reason: 'current-issue' };
     return { eligible: false, reason: 'no-recent-record' };
   }
   if (recent.some((item) => isUnstableChannelStatus(item.point.status)))
-    return { eligible: false, reason: 'recent-issue' };
+    return {
+      eligible: false,
+      reason: isUnstableChannelStatus(channel.status) ? 'current-issue' : 'recent-issue',
+    };
   return { eligible: true, score: 10, label: '稳定' };
 }
 
@@ -354,6 +366,7 @@ export function comparePlatformRates(
       };
       const noChannelStatus = site.channelState !== 'supported' || matchedChannels.length === 0;
       if (noChannelStatus) {
+        if (isDisabledNoChannelGroup(group)) continue;
         pool.candidates.push({
           siteId: site.siteId,
           siteName: site.siteName,

@@ -19,6 +19,27 @@ const desktopBridge: DesktopBridge = {
       return () => ipcRenderer.removeListener('radar:state', handler);
     },
   },
+  sub2apiServers: {
+    list: () => ipcRenderer.invoke('sub2api-servers:list'),
+    create: (input) => ipcRenderer.invoke('sub2api-servers:create', input),
+    update: (input) => ipcRenderer.invoke('sub2api-servers:update', input),
+    delete: (id) => ipcRenderer.invoke('sub2api-servers:delete', id),
+    open: (id) => ipcRenderer.send('sub2api-servers:open', id),
+    openShortcut: (serverId, shortcutId) =>
+      ipcRenderer.send('sub2api-servers:open-shortcut', { serverId, shortcutId }),
+    close: () => ipcRenderer.send('sub2api-servers:close'),
+    back: () => ipcRenderer.send('sub2api-servers:back'),
+    forward: () => ipcRenderer.send('sub2api-servers:forward'),
+    reload: () => ipcRenderer.send('sub2api-servers:reload'),
+    home: () => ipcRenderer.send('sub2api-servers:home'),
+    clearSession: (id) => ipcRenderer.invoke('sub2api-servers:clear-session', id),
+    onStateChange: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('sub2api-servers:state', handler);
+      return () => ipcRenderer.removeListener('sub2api-servers:state', handler);
+    },
+  },
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),

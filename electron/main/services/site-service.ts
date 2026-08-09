@@ -359,7 +359,9 @@ export class SiteService {
       if (provider) throw new InteractiveVerificationRequiredError(provider);
       throw new Error(siteInputErrorMessage(error));
     });
-    return this.verifyAndSave(input, normalized, session, 'password');
+    const site = await this.verifyAndSave(input, normalized, session, 'password');
+    await this.safeAttachMetadata(site.id);
+    return site;
   }
 
   async requiresInteractiveVerification(
@@ -382,7 +384,49 @@ export class SiteService {
     provider: InteractiveVerificationProvider = 'geetest',
   ): Promise<SiteSummary> {
     const normalized = this.normalizedNewSite(input);
-    return this.verifyAndSave(input, normalized, session, 'interactive', provider);
+    const site = await this.verifyAndSave(input, normalized, session, 'interactive', provider);
+    await this.safeAttachMetadata(site.id);
+    return site;
+  }
+
+  startMetadataBackfill(): Promise<void> {
+    return this.runMetadataBackfill();
+  }
+
+  private async runMetadataBackfill(): Promise<void> {
+    const pending = this.db
+      .listSites()
+      .filter(
+        (site) =>
+          !site.iconDataUrl &&
+          !this.db.getSetting<boolean>(`site:${site.id}:metadataBackfillAttempted`, false),
+      );
+    let index = 0;
+    const worker = async () => {
+      while (index < pending.length) {
+        const site = pending[index++]!;
+        this.db.setSetting(`site:${site.id}:metadataBackfillAttempted`, true);
+        await this.safeAttachMetadata(site.id);
+      }
+    };
+    await Promise.allSettled([worker(), worker()]);
+  }
+
+  private async safeAttachMetadata(siteId: string, updateName = false): Promise<void> {
+    try {
+      const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+      if (!site) return;
+      if (site.iconDataUrl && !updateName) return;
+      const metadata = await fetchSafeSiteMetadata(site.baseUrl);
+      if (!this.db.listSites().some((candidate) => candidate.id === siteId)) return;
+      this.db.setSiteMetadata(
+        siteId,
+        updateName ? metadata.name : site.name,
+        metadata.iconDataUrl ?? site.iconDataUrl,
+      );
+    } catch {
+      /* Metadata is best-effort and never blocks site verification. */
+    }
   }
 
   getInteractiveAuthContext(siteId: string): InteractiveAuthContext {
@@ -701,8 +745,7 @@ export class SiteService {
         const provider = await this.requiresInteractiveVerification(siteInput);
         if (provider) throw new InteractiveVerificationRequiredError(provider);
         const site = await this.addAndVerify(siteInput);
-        const metadata = await fetchSafeSiteMetadata(site.baseUrl);
-        this.db.setSiteMetadata(site.id, metadata.name, metadata.iconDataUrl);
+        await this.safeAttachMetadata(site.id, true);
         const savedSite = this.db.listSites().find((candidate) => candidate.id === site.id);
         successes.push(savedSite ? this.toSummary(savedSite) : site);
         onProgress({ current: index + 1, total: input.urls.length, url, status: 'success' });

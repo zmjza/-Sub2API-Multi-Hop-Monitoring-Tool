@@ -141,6 +141,10 @@
   border-radius: 6px;
   padding: 0 8px;
 }
+.threshold-field input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .permission-state {
   min-width: 52px;
   padding: 5px 8px;

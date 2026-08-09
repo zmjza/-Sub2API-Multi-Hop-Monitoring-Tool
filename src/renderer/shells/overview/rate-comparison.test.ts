@@ -8,6 +8,7 @@ import {
   filterRateGroups,
   findPlatformMinima,
   formatRateMultiplier,
+  isDisabledNoChannelGroup,
   normalizePlatform,
   normalizedPriceScore,
   parseRechargeRatio,
@@ -118,6 +119,69 @@ describe('rate comparison rules', () => {
         ),
       ).toMatchObject({ eligible: false, reason: 'current-issue' });
     }
+  });
+
+  it('does not let a stale top-level failure override a recent normal record', () => {
+    const now = Date.parse('2026-07-20T10:00:00Z');
+    expect(
+      channelEligibility(
+        {
+          id: 'stale-failed',
+          name: '分组',
+          status: 'failed',
+          timeline: [{ status: 'normal', checkedAt: '2026-07-20T09:59:30Z' }],
+        },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: true, score: 10, label: '稳定' });
+    expect(
+      channelEligibility(
+        {
+          id: 'recent-failed',
+          name: '分组',
+          status: 'failed',
+          timeline: [{ status: 'failed', checkedAt: '2026-07-20T09:59:30Z' }],
+        },
+        now,
+        'supported',
+      ),
+    ).toMatchObject({ eligible: false, reason: 'current-issue' });
+  });
+
+  it('excludes disabled no-channel groups by normalized API name keywords', () => {
+    const checkedAt = new Date().toISOString();
+    const disabledNames = ['图片生图通道', '停用分组', '禁止购买', 'image2 通道', '图片模型'];
+    const result = comparePlatformRates([
+      ...disabledNames.map((name, index) => ({
+        siteId: `disabled-${index}`,
+        siteName: `禁用站 ${index}`,
+        ratio: 1,
+        groups: [group(`d-${index}`, 'openai', 0.01, { name })],
+        channelState: 'unsupported' as const,
+      })),
+      {
+        siteId: 'live',
+        siteName: '正常站',
+        ratio: 1,
+        groups: [group('live', 'openai', 0.2)],
+        channels: [
+          {
+            id: 'live-channel',
+            name: '正常渠道',
+            status: 'normal' as const,
+            availability7d: 99,
+            timeline: [{ status: 'normal' as const, checkedAt }],
+          },
+        ],
+        channelState: 'supported' as const,
+        relationships: relationship('live', '正常渠道'),
+      },
+    ]);
+    expect(result[0]?.sites.map((site) => site.siteId)).toEqual(['live']);
+    expect(result[0]?.sites[0]?.recommendationKind).toBe('with-status');
+    expect(isDisabledNoChannelGroup(group('x', 'openai', 0.1, { name: ' 生图 API ' }))).toBe(true);
+    expect(isDisabledNoChannelGroup(group('x', 'openai', 0.1, { name: '正常分组' }))).toBe(false);
   });
 
   it('classifies a misleading OpenAI group as Grok from stronger evidence', () => {
@@ -712,6 +776,19 @@ describe('rate comparison rules', () => {
         'supported',
       ),
     ).toEqual({ score: 0, label: '存在异常' });
+    const checkedAt = new Date().toISOString();
+    expect(
+      channelStability(
+        {
+          id: 'failed-recent',
+          name: '最近失败',
+          status: 'failed',
+          timeline: [{ status: 'failed', checkedAt }],
+        },
+        Date.now(),
+        'supported',
+      ),
+    ).toEqual({ score: 0, label: '存在异常' });
     expect(
       channelStability(
         {
@@ -763,7 +840,7 @@ describe('rate comparison rules', () => {
         Date.now(),
         'supported',
       ),
-    ).toEqual({ score: 0, label: '存在异常' });
+    ).toEqual({ score: 10, label: '稳定' });
   });
 
   it('keeps the requested platform order regardless of labels', () => {

@@ -159,6 +159,32 @@ describe('AppDatabase', () => {
     raw.close();
   });
 
+  it('persists sub2api server entries and keeps the empty array legal', () => {
+    const raw = new DatabaseSync(':memory:');
+    const db = new AppDatabase(raw);
+    db.migrate();
+    expect(db.getSub2ApiServers()).toEqual([]);
+    const server = {
+      id: 'server-a',
+      partitionId: 'persist:sub2api-server-server-a',
+      loginState: 'unknown' as const,
+      seenLoggedIn: false,
+      createdAt: 1,
+      updatedAt: 1,
+      name: '测试站',
+      baseUrl: 'https://a.example/',
+      shortcuts: [{ id: 's1', label: '账号管理', path: '/account' }],
+    };
+    db.setSub2ApiServers([server]);
+    expect(db.getSub2ApiServers()).toEqual([server]);
+    db.setSub2ApiServers([]);
+    expect(db.getSub2ApiServers()).toEqual([]);
+    expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
+      /password|access.?token|refresh.?token/i,
+    );
+    raw.close();
+  });
+
   it('persists dynamic radar entries as non-secret settings', () => {
     const raw = new DatabaseSync(':memory:');
     const db = new AppDatabase(raw);

@@ -1,0 +1,721 @@
+.svr-page {
+  min-height: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+
+.svr-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.svr-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.svr-heading h1,
+.svr-page-state h1 {
+  margin: 0;
+  color: #17213a;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.svr-subtitle {
+  margin: 8px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.svr-add-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.svr-target-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 920px;
+  margin-top: 32px;
+}
+
+.svr-target-card {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(54, 73, 120, 0.04);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.svr-target-card:hover,
+.svr-target-card:focus-within {
+  border-color: #a8bce9;
+  box-shadow: 0 8px 24px rgba(54, 73, 120, 0.1);
+  transform: translateY(-2px);
+}
+
+.svr-target-card:active {
+  transform: translateY(0);
+}
+
+.svr-target-open {
+  min-width: 0;
+  min-height: 150px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 22px 140px 14px 22px;
+  border: 0;
+  background: transparent;
+  color: #17213a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.svr-target-open:focus-visible,
+.svr-card-actions button:focus-visible,
+.svr-card-shortcuts button:focus-visible,
+.svr-add-button:focus-visible,
+.svr-list-state button:focus-visible,
+.svr-dialog button:focus-visible,
+.svr-field input:focus-visible,
+.svr-field select:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+.svr-target-card-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cddbf8;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.svr-target-card-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.svr-target-card-copy strong {
+  overflow-wrap: break-word;
+  word-break: keep-all;
+  color: #17213a;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.svr-target-card-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8793a8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.svr-target-card-arrow {
+  display: none;
+  align-self: start;
+  margin-top: 2px;
+  color: #8793a8;
+}
+
+.svr-target-card:hover .svr-target-card-arrow,
+.svr-target-card:focus-within .svr-target-card-arrow {
+  color: #2563eb;
+}
+
+.svr-card-actions {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 4px;
+  padding: 0;
+}
+
+.svr-card-actions button {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #e4eaf3;
+  border-radius: 8px;
+  background: #fbfcff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.svr-card-actions button:hover {
+  border-color: #cddbf8;
+  background: #f4f8ff;
+  color: #2563eb;
+}
+
+.svr-card-actions button.danger:hover {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.svr-card-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.svr-login-state {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.svr-login-state.is-logged-in {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.svr-login-state.is-please-login {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.svr-login-state.is-expired {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.svr-card-shortcuts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+
+.svr-card-shortcuts button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.svr-card-shortcuts button:hover {
+  border-color: #a8bce9;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.svr-page-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 100%;
+  padding: 48px 32px;
+  text-align: center;
+}
+
+.svr-page-state p {
+  max-width: 480px;
+  margin: 12px 0 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.svr-page-state > span {
+  margin-top: 8px;
+  color: #8793a8;
+  font-size: 12px;
+}
+
+.svr-state-icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+  border: 1px solid #d7e1f3;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #2563eb;
+}
+
+.svr-state-icon-loading svg {
+  animation: svr-pulse 1.2s ease-in-out infinite;
+}
+
+[data-svr-state='error'] .svr-state-icon {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.svr-list-state {
+  max-width: 920px;
+  min-height: 210px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  margin-top: 32px;
+  padding: 36px 24px;
+  border: 1px dashed #d7e0ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #17213a;
+  text-align: center;
+}
+
+.svr-list-state h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.svr-list-state p {
+  max-width: 420px;
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.svr-list-state button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.svr-list-error {
+  border-color: #fecdd3;
+  background: #fff9fa;
+  color: #be123c;
+}
+
+.svr-empty-icon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d7e1f3;
+  border-radius: 14px;
+  background: #f8fbff;
+  color: #2563eb;
+}
+
+.svr-loading-icon {
+  color: #2563eb;
+  animation: svr-spin 1s linear infinite;
+}
+
+.svr-dialog-backdrop {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 33, 58, 0.28);
+  backdrop-filter: blur(4px);
+}
+
+.svr-dialog {
+  width: min(680px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid #dce4f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(23, 33, 58, 0.22);
+}
+
+.svr-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.svr-dialog-header h2 {
+  margin: 0;
+  color: #17213a;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.svr-dialog-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-bottom: 9px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.svr-dialog-eyebrow-danger {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.svr-editor-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.svr-field {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.svr-field input,
+.svr-field select {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d5ddeb;
+  border-radius: 8px;
+  background: #fff;
+  color: #17213a;
+  font: inherit;
+}
+
+.svr-field input::placeholder {
+  color: #a4b0c2;
+}
+
+.svr-field input:disabled {
+  opacity: 0.6;
+}
+
+.svr-form-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.svr-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.svr-dialog-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.svr-dialog-actions button:disabled,
+.svr-add-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.svr-danger-action {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+.svr-delete-entry {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #e5e9f1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.svr-delete-entry strong,
+.svr-delete-entry code {
+  overflow-wrap: anywhere;
+}
+
+.svr-delete-entry strong {
+  color: #17213a;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.svr-delete-entry code {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.svr-delete-entry p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.svr-shortcut-editor {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #e3e9f2;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.svr-shortcut-editor legend {
+  padding: 0 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.svr-shortcut-empty {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.svr-shortcut-list {
+  display: grid;
+  gap: 10px;
+}
+
+.svr-shortcut-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.4fr) 110px auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.svr-shortcut-row > svg {
+  align-self: center;
+  color: #94a3b8;
+}
+
+.svr-shortcut-row .svr-field {
+  min-width: 0;
+}
+
+.svr-shortcut-row-actions {
+  display: flex;
+  gap: 4px;
+  height: 40px;
+}
+
+.svr-shortcut-row-actions button {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.svr-shortcut-row-actions button.danger:hover {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.svr-shortcut-add {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #cddbf8;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.svr-shortcut-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.svr-shortcut-hint {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@keyframes svr-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes svr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .svr-target-grid {
+    grid-template-columns: 1fr;
+    max-width: 640px;
+  }
+}
+
+@media (max-width: 800px) {
+  .svr-page {
+    padding: 20px 16px 32px;
+  }
+
+  .svr-heading {
+    align-items: flex-start;
+  }
+
+  .svr-heading h1,
+  .svr-page-state h1 {
+    font-size: 24px;
+  }
+
+  .svr-add-button {
+    width: 42px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .svr-target-grid,
+  .svr-list-state {
+    margin-top: 24px;
+  }
+
+  .svr-target-open {
+    min-height: 142px;
+    grid-template-columns: 44px minmax(0, 1fr) 20px;
+    gap: 14px;
+    padding: 18px 14px 12px 18px;
+  }
+
+  .svr-target-card-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .svr-shortcut-row {
+    grid-template-columns: 16px minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .svr-shortcut-row .svr-shortcut-icon-field,
+  .svr-shortcut-row-actions {
+    grid-column: 2 / -1;
+  }
+
+  .svr-shortcut-row-actions {
+    justify-self: end;
+  }
+
+  .svr-dialog-backdrop {
+    padding: 16px;
+  }
+
+  .svr-dialog {
+    padding: 18px;
+  }
+
+  .svr-dialog-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .svr-target-card,
+  .svr-state-icon-loading svg,
+  .svr-loading-icon {
+    transition: none;
+    animation: none;
+  }
+}

@@ -278,10 +278,12 @@ export function summarizeLatestChannelChecks(
         : [];
     })
     .sort((left, right) => left.checkedAt - right.checkedAt)
-    .slice(-12);
+    .slice(-20);
   if (!points.length) return { availabilityPercent: undefined, points: [] };
-  const available = points.filter((point) => point.status !== 'failed').length;
-  return { availabilityPercent: (available / points.length) * 100, points };
+  const denominator = Math.min(12, points.length);
+  const percentPoints = points.slice(-denominator);
+  const available = percentPoints.filter((point) => point.status !== 'failed').length;
+  return { availabilityPercent: (available / percentPoints.length) * 100, points };
 }
 
 /** Builds the fixed one-minute health view used by channel stability logic. */
@@ -543,6 +545,24 @@ export function latestTimelinePoint<T extends { checkedAt?: string }>(
     const latestTime = Date.parse(latest?.checkedAt ?? '');
     return !latest || Number.isNaN(latestTime) || pointTime > latestTime ? point : latest;
   }, undefined);
+}
+
+export function channelTimelineForDisplay<T extends { checkedAt?: unknown }>(
+  timeline: T[],
+  now = Date.now(),
+  limit = 20,
+): T[] {
+  return timeline
+    .flatMap((point) => {
+      const checkedAt = Date.parse(String(point.checkedAt ?? ''));
+      return Number.isFinite(checkedAt) && checkedAt <= now ? [point] : [];
+    })
+    .sort((left, right) => {
+      const leftTime = Date.parse(String(left.checkedAt ?? ''));
+      const rightTime = Date.parse(String(right.checkedAt ?? ''));
+      return leftTime - rightTime;
+    })
+    .slice(-Math.max(1, Math.floor(limit)));
 }
 
 export function isChannelDataStale(value: unknown, now = Date.now()): boolean {

@@ -7,6 +7,11 @@ import {
   radarEntriesSchema,
   type RadarEntry,
 } from '../../shared/radar.js';
+import {
+  SUB2API_SERVERS_KEY,
+  sub2apiServersSchema,
+  type Sub2ApiServer,
+} from '../../shared/sub2api-server.js';
 
 export interface SiteRow {
   id: string;
@@ -390,6 +395,17 @@ export class AppDatabase {
 
   setRadarEntries(entries: RadarEntry[]): void {
     this.setSetting(RADAR_ENTRIES_KEY, radarEntriesSchema.parse(entries));
+  }
+
+  getSub2ApiServers(): Sub2ApiServer[] {
+    const stored = this.getSetting<unknown>(SUB2API_SERVERS_KEY, undefined);
+    if (stored === undefined) return [];
+    const parsed = sub2apiServersSchema.safeParse(stored);
+    return parsed.success ? parsed.data : [];
+  }
+
+  setSub2ApiServers(servers: Sub2ApiServer[]): void {
+    this.setSetting(SUB2API_SERVERS_KEY, sub2apiServersSchema.parse(servers));
   }
 
   getNotificationLastSent(siteId: string, fingerprint: string): number | undefined {

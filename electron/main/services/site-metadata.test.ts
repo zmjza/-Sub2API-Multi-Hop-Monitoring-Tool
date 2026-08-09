@@ -66,6 +66,25 @@ describe('fetchSafeSiteMetadata', () => {
       name: 'Relay',
     });
   });
+
+  it('falls back to the same-origin favicon.ico and drops cross-origin candidates', async () => {
+    const fetcher = mockFetch(
+      new Response('<title>Relay</title><link rel="icon" href="https://cdn.example/favicon.png">', {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      }),
+      new Response(new Uint8Array([9]), {
+        headers: { 'content-type': 'image/x-icon' },
+      }),
+    );
+
+    await expect(fetchSafeSiteMetadata('https://relay.example', fetcher)).resolves.toEqual({
+      name: 'Relay',
+      iconDataUrl: 'data:image/x-icon;base64,CQ==',
+    });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const calls = (fetcher as unknown as { mock: { calls: Array<Array<unknown>> } }).mock.calls;
+    expect(String(calls[1]?.[0])).toBe('https://relay.example/favicon.ico');
+  });
 });
 
 describe('sanitizeSiteTitle', () => {

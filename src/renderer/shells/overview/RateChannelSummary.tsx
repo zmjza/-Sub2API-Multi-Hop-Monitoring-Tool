@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { ChannelDetailPayload } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
 import type { InlineChannelRefreshState } from './OverviewPage';
+import { channelTimelineForDisplay } from '../channels/channel-ranking';
 
 type Channel = RateChannelSnapshot;
 
@@ -58,7 +59,7 @@ export function RateChannelSummary(props: {
   const status = model?.status ?? props.channel.status;
   const availability = model?.availability7d ?? props.channel.availability7d;
   const detailFailed = props.detailState?.state === 'error';
-  const timeline = props.channel.timeline ?? [];
+  const timeline = channelTimelineForDisplay(props.channel.timeline ?? [], Date.now(), 20);
 
   return (
     <div className={`rate-inline-channel is-${status}`} aria-label={`${props.groupName} 当前渠道`}>

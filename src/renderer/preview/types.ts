@@ -19,6 +19,7 @@ export type MainShell =
   | 'usage'
   | 'channels'
   | 'sites'
+  | 'sub2api-servers'
   | 'radar'
   | 'general-settings'
   | 'notification-rules';
@@ -128,6 +129,7 @@ export function parsePreviewLocation(search: string): PreviewLocation {
     'usage',
     'channels',
     'sites',
+    'sub2api-servers',
     'radar',
     'general-settings',
     'notification-rules',

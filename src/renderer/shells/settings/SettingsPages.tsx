@@ -237,6 +237,7 @@ export function NotificationRulesPage(props: { selectedSite?: SiteSummary }) {
                 min="0"
                 step="0.1"
                 value={settings.threshold}
+                disabled={!settings.enabled}
                 onChange={(event) =>
                   setSettings({ ...settings, threshold: Math.max(0, Number(event.target.value)) })
                 }
@@ -302,6 +303,7 @@ export function NotificationRulesPage(props: { selectedSite?: SiteSummary }) {
                   min="0"
                   step="0.1"
                   value={siteRule?.threshold ?? settings.threshold}
+                  disabled={!(siteRule?.enabled ?? settings.enabled)}
                   onChange={(event) => {
                     const threshold = Math.max(0, Number(event.target.value));
                     setSettings({

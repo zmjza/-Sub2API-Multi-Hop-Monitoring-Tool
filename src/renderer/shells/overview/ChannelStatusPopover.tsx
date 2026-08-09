@@ -15,7 +15,7 @@ import type {
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
-import { toggleChannelAssociation } from '../channels/channel-ranking';
+import { channelTimelineForDisplay, toggleChannelAssociation } from '../channels/channel-ranking';
 
 type Channel = ChannelViewPayload['channels'][number];
 
@@ -250,7 +250,12 @@ export function ChannelStatusPopover(props: {
 
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
   const model = detail?.models[0];
-  const checkedAt = selected?.timeline.at(-1)?.checkedAt;
+  const displayTimeline = selected
+    ? channelTimelineForDisplay(selected.timeline ?? [], Date.now(), 20)
+    : [];
+  const displayChannelTimeline = (channel: Channel) =>
+    channelTimelineForDisplay(channel.timeline ?? [], Date.now(), 20);
+  const checkedAt = displayTimeline.at(-1)?.checkedAt;
   const toggleAssociation = async (channelId: string) => {
     const groupId = props.associationGroupId;
     if (!groupId || !props.onAssociationSave || associationBusyId) return;
@@ -403,11 +408,11 @@ export function ChannelStatusPopover(props: {
           <div className="rate-channel-timeline">
             <div>
               <span>状态时间线</span>
-              <small>近 {selected.timeline.length} 次记录</small>
+              <small>近 {displayTimeline.length} 次记录</small>
             </div>
-            {selected.timeline.length ? (
+            {displayTimeline.length ? (
               <div className="rate-channel-sparkline">
-                {selected.timeline.map((point, index) => (
+                {displayTimeline.map((point, index) => (
                   <i className={point.status} key={`${point.checkedAt}-${index}`} />
                 ))}
               </div>
@@ -455,8 +460,8 @@ export function ChannelStatusPopover(props: {
                       <small>可用率 {formatAvailability(channel.availability7d)}</small>
                     </span>
                     <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
-                      {channel.timeline.length ? (
-                        channel.timeline.map((point, index) => (
+                      {displayChannelTimeline(channel).length ? (
+                        displayChannelTimeline(channel).map((point, index) => (
                           <i className={point.status} key={`${point.checkedAt}-${index}`} />
                         ))
                       ) : (

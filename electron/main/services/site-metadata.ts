@@ -17,8 +17,13 @@ export async function fetchSafeSiteMetadata(
     const page = await fetchSameOrigin(root, root, fetcher, 'text/html', HTML_LIMIT_BYTES);
     const html = new TextDecoder().decode(page.bytes);
     const name = sanitizeSiteTitle(readTagText(html, 'title')) || fallbackName;
-    const iconUrl = new URL(readIconHref(html) || '/favicon.ico', page.url);
-    if (iconUrl.origin !== root.origin) return { name };
+    let iconUrl: URL;
+    try {
+      iconUrl = new URL(readIconHref(html) || '/favicon.ico', page.url);
+    } catch {
+      iconUrl = new URL('/favicon.ico', page.url);
+    }
+    if (iconUrl.origin !== root.origin) iconUrl = new URL('/favicon.ico', page.url);
     try {
       const icon = await fetchSameOrigin(root, iconUrl, fetcher, 'image/', ICON_LIMIT_BYTES);
       return {

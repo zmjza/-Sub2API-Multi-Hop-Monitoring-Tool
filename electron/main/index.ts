@@ -59,6 +59,7 @@ import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
 import { FileSecretBackend } from './storage/file-secret-backend.js';
 import { InteractiveVerificationRequiredError, SiteService } from './services/site-service.js';
+import { Sub2ApiServerManager } from './services/sub2api-server-manager.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
@@ -84,6 +85,12 @@ import {
   type RadarEntry,
   type RadarTarget,
 } from '../shared/radar.js';
+import {
+  sub2apiServerIdSchema,
+  sub2apiServerInputSchema,
+  sub2apiServersSchema,
+  sub2apiServerUpdateSchema,
+} from '../shared/sub2api-server.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -115,6 +122,7 @@ let scheduler: RefreshScheduler;
 let notificationService: NotificationService;
 let updateService: UpdateService;
 let radarView: WebContentsView | undefined;
+let sub2apiServerManager: Sub2ApiServerManager;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
@@ -527,6 +535,72 @@ function registerIpc() {
     siteService.setNotificationSettings(notificationSettingsSchema.parse(input)),
   );
   ipcMain.handle('notifications:permission', () => ({ supported: Notification.isSupported() }));
+  ipcMain.handle('sub2api-servers:list', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
+    return sub2apiServersSchema.parse(sub2apiServerManager.list());
+  });
+  ipcMain.handle('sub2api-servers:create', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
+    const parsed = sub2apiServerInputSchema.parse(input);
+    return sub2apiServersSchema.parse(sub2apiServerManager.create(parsed));
+  });
+  ipcMain.handle('sub2api-servers:update', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
+    const parsed = sub2apiServerUpdateSchema.parse(input);
+    return sub2apiServersSchema.parse(await sub2apiServerManager.update(parsed));
+  });
+  ipcMain.handle('sub2api-servers:delete', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
+    const id = sub2apiServerIdSchema.parse(input);
+    return sub2apiServersSchema.parse(await sub2apiServerManager.delete(id));
+  });
+  ipcMain.handle('sub2api-servers:clear-session', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
+    const id = sub2apiServerIdSchema.parse(input);
+    await sub2apiServerManager.clearSession(id);
+  });
+  ipcMain.on('sub2api-servers:open', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    const parsed = sub2apiServerIdSchema.safeParse(input);
+    if (!parsed.success) return;
+    void sub2apiServerManager.open(parsed.data);
+  });
+  ipcMain.on('sub2api-servers:open-shortcut', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    const candidate = input as { serverId?: unknown; shortcutId?: unknown };
+    const serverId = sub2apiServerIdSchema.safeParse(candidate.serverId);
+    const shortcutId =
+      typeof candidate.shortcutId === 'string' && candidate.shortcutId.length > 0
+        ? candidate.shortcutId
+        : undefined;
+    if (!serverId.success || !shortcutId) return;
+    void sub2apiServerManager.openShortcut(serverId.data, shortcutId);
+  });
+  ipcMain.on('sub2api-servers:close', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    sub2apiServerManager.close();
+  });
+  ipcMain.on('sub2api-servers:back', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    sub2apiServerManager.navigateBack();
+  });
+  ipcMain.on('sub2api-servers:forward', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    sub2apiServerManager.navigateForward();
+  });
+  ipcMain.on('sub2api-servers:reload', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    sub2apiServerManager.reload();
+  });
+  ipcMain.on('sub2api-servers:home', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    sub2apiServerManager.home();
+  });
   ipcMain.handle('radar:list', (event) => {
     if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
       throw new Error('RADAR_IPC_FORBIDDEN');
@@ -736,6 +810,7 @@ async function createWindows() {
   protectNavigation(mainWindow);
   mainWindow.on('close', (event) => {
     closeRadarView(false);
+    sub2apiServerManager.closeView(false);
     if (!isQuitting) {
       event.preventDefault();
       app.quit();
@@ -746,6 +821,7 @@ async function createWindows() {
   if (mainBounds.x !== undefined && mainBounds.y !== undefined) mainWindow.setBounds(mainBounds);
   mainWindow.on('resize', () => {
     syncRadarViewBounds();
+    sub2apiServerManager.syncBounds();
     saveBounds('window:main', mainWindow);
   });
   mainWindow.on('move', () => saveBounds('window:main', mainWindow));
@@ -826,6 +902,14 @@ app.whenReady().then(async () => {
   database.migrate();
   database.cleanupSnapshots(Date.now() - 30 * 24 * 60 * 60_000);
   appDatabase = database;
+  sub2apiServerManager = new Sub2ApiServerManager(
+    appDatabase,
+    () => mainWindow,
+    (state) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+        mainWindow.webContents.send('sub2api-servers:state', state);
+    },
+  );
   updateService = new UpdateService(app.getVersion(), {
     get: (key, fallback) => database.getSetting(key, fallback),
     set: (key, value) => database.setSetting(key, value),
@@ -853,6 +937,7 @@ app.whenReady().then(async () => {
     for (const window of BrowserWindow.getAllWindows())
       window.webContents.send('keys:changed', { siteId });
   });
+  void siteService.startMetadataBackfill();
   const notifications = new NotificationService(
     { send: (title, body) => new Notification({ title, body }).show() },
     {
@@ -911,6 +996,7 @@ app.on('before-quit', (event) => {
   if (isQuitting) return;
   isQuitting = true;
   closeRadarView(false);
+  sub2apiServerManager.closeView(false);
   scheduler?.stop();
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);

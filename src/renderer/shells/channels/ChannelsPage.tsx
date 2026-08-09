@@ -20,6 +20,7 @@ import {
 } from '../../channel-polling';
 import {
   channelSyncPresentation,
+  channelTimelineForDisplay,
   currentKeyGroup,
   isChannelDataStale,
   rankChannels,
@@ -239,6 +240,7 @@ export function ChannelsPage(props: ChannelsProps) {
       ) : (
         <div className="channel-cards">
           {rankedChannels.map((item) => {
+            const displayTimeline = channelTimelineForDisplay(item.timeline, Date.now(), 20);
             return (
               <article
                 className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
@@ -284,9 +286,9 @@ export function ChannelsPage(props: ChannelsProps) {
                     <span>可用性 · 7 天</span>
                     <strong>{formatAvailability(item.availability7d)}</strong>
                   </div>
-                  {item.timeline.length ? (
+                  {displayTimeline.length ? (
                     <div className="sparkline">
-                      {item.timeline.map((point, index) => (
+                      {displayTimeline.map((point, index) => (
                         <i
                           className={statusClass(point.status)}
                           key={`${point.checkedAt}-${index}`}
@@ -297,8 +299,8 @@ export function ChannelsPage(props: ChannelsProps) {
                     <div className="timeline-empty">暂无状态记录</div>
                   )}
                   <small>
-                    近 {item.timeline.length} 次记录{' '}
-                    <em>{formatCheckedAt(item.timeline.at(-1)?.checkedAt)}</em>
+                    近 {displayTimeline.length} 次记录{' '}
+                    <em>{formatCheckedAt(displayTimeline.at(-1)?.checkedAt)}</em>
                   </small>
                   <div className="timeline-label">
                     <span>PAST</span>

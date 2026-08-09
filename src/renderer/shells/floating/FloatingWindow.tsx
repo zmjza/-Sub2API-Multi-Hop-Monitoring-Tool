@@ -36,7 +36,6 @@ export function FloatingWindow(props: FloatingProps) {
   const busy = props.state === 'loading' || props.state === 'refreshing';
   const failed =
     props.state === 'error' || props.state === 'auth-required' || props.state === 'unsupported';
-  const liveBalance = props.selectedSite?.balance;
   const currentKeyStats = props.selectedSite
     ? props.currentKeyStatsBySite?.[props.selectedSite.id]
     : undefined;
@@ -48,7 +47,10 @@ export function FloatingWindow(props: FloatingProps) {
     currentKeyStats?.state === 'success' && currentKeyStats.availableCredit.kind === 'amount'
       ? currentKeyStats.availableCredit.value
       : undefined;
-  const displayedBalance = keyAvailableCredit ?? liveBalance;
+  const displayedBalance =
+    currentKeyStats?.state === 'success' && keyAvailableCredit !== undefined
+      ? keyAvailableCredit
+      : undefined;
   const tokensPerSecond = calculateTokensPerSecond(
     props.latestUsageRecord?.outputTokens,
     props.latestUsageRecord?.durationMs,
@@ -400,9 +402,9 @@ function ChannelTimeline({ health }: { health: RecentHealth }) {
           </>
         )}
       </small>
-      <span className="floating-channel-timeline" aria-label="最近 12 次渠道状态时间线">
-        {Array.from({ length: 12 }, (_, index) => {
-          const point = health.points[index - (12 - health.points.length)];
+      <span className="floating-channel-timeline" aria-label="最近 20 次渠道状态时间线">
+        {Array.from({ length: 20 }, (_, index) => {
+          const point = health.points[index - (20 - health.points.length)];
           const label = point ? channelPointLabel(point) : '暂无更早记录';
           return (
             <i

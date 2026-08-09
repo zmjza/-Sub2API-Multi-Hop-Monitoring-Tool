@@ -249,3 +249,14 @@ Key 与渠道监控关联口径：`/keys` 的 `group_id/group.id` 不能与监�
 - 弹窗未打开时不会因倍率、站点或全站刷新触发渠道 IPC；页面会话缓存命中时关闭重开不再次请求，主动重试绕过缓存。
 - 悬浮窗复用本地 `usage:list`，每站传入 `{ period:'30d', page:1, pageSize:1, sort:'desc' }`；其中 `sort` 是应用内部查询字段，不是上游 `GET /usage` 参数。该流程只读取标准化 `createdAt` 比较站点，不保存记录内容或新增持久化字段。
 - 2026-07-19 三站只读复测：walkai 18 个倍率分组、maok 8 个、hanhegufei 22 个；三站 usage list、channel list 和 channel detail 均返回 supported。
+
+## 2026-08-09 2.0.0 本地 IPC 增量
+
+- `sub2api-servers:list`：返回当前服务器数组，无默认项。
+- `sub2api-servers:create/update`：输入经共享 Zod schema 校验，返回更新后的完整数组；更新时主进程自行判断 origin 变化并清理旧 partition。
+- `sub2api-servers:delete`：先关闭当前视图并清理该服务器 partition 的全部站点数据，再删除条目。
+- `sub2api-servers:open`：发送不透明 ID，主进程读取持久化 URL 并挂载 `WebContentsView`。
+- `sub2api-servers:close/back/forward/reload/home/clear-session`：只接受当前打开状态操作；`clear-session` 清理 partition 后重新加载首页并重置登录状态。
+- `sub2api-servers:state`：主进程广播 `{ status, target?, url?, canGoBack?, canGoForward?, loading?, loginState? }` 给主窗口。
+- 站点 favicon 不新增上游请求能力；所有抓取使用安全同源 HTML/icon 读取，限制 8 秒超时、3 次重定向、256KB HTML、128KB 图片与图片 MIME。
+- 无渠道推荐过滤是纯 Renderer 评分规则，不新增 IPC；时间线排序/20 格/余额口径与菜单映射均属于本地展示与通知逻辑。

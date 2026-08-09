@@ -69,6 +69,20 @@ describe('controlled UI shell preview', () => {
     expect(settings).toContain('通知规则设置');
   });
 
+  it('registers the Sub2API server shell and the login expiry notice', () => {
+    const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
+    const page = readFileSync(
+      fileURLToPath(new URL('../shells/sub2api-servers/Sub2ApiServersPage.tsx', import.meta.url)),
+      'utf8',
+    );
+
+    expect(app).toContain("'sub2api-servers'");
+    expect(app).toContain('<Sub2ApiServersPage');
+    expect(page).toContain('新增服务器');
+    expect(page).toContain('快捷入口');
+    expect(app).toContain('登录过期，请去站点管理重新验证');
+  });
+
   it('exposes update feedback and confirmation actions in the main shell', () => {
     const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
     const settingsPage = readFileSync(

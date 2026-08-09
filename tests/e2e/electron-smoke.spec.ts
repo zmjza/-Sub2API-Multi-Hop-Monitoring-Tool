@@ -117,6 +117,7 @@ test('opens the controlled renderer preview', async () => {
     'usage',
     'channels',
     'sites',
+    'sub2api-servers',
     'radar',
     'general-settings',
     'notification-rules',
@@ -138,6 +139,13 @@ test('opens the controlled renderer preview', async () => {
       await expect(window.getByRole('button', { name: '新增雷达站点', exact: true })).toBeVisible();
       await expect(window.locator('body')).not.toContainText('模型选型雷达');
       await expect(window.locator('body')).not.toContainText('current.json');
+    }
+    if (shell === 'sub2api-servers') {
+      await expect(
+        window.getByRole('heading', { name: 'Sub2API 服务器管理', exact: true }),
+      ).toBeVisible();
+      await expect(window.locator('.svr-add-button')).toBeVisible();
+      await expect(window.locator('[data-svr-list-state="empty"]')).toBeVisible();
     }
     await window.screenshot({ path: `test-results/${shell}.png` });
   }
@@ -248,6 +256,60 @@ test('manages persistent dynamic Radar entries', async () => {
   } finally {
     await application?.close().catch(() => undefined);
   }
+});
+
+test('manages persistent Sub2API servers with editable shortcuts', async () => {
+  type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
+  const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-servers-e2e-'));
+  const launch = () => launchApplication(userData);
+  const findMain = async (application: ElectronApplication) => {
+    await expect
+      .poll(
+        async () => {
+          for (const candidate of await application.windows())
+            if ((await candidate.locator('.app-shell').count()) > 0) return true;
+          return false;
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    for (const candidate of await application.windows())
+      if ((await candidate.locator('.app-shell').count()) > 0) return candidate;
+    throw new Error('MAIN_WINDOW_NOT_FOUND');
+  };
+
+  let application = await launch();
+  let main = await findMain(application);
+  await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
+  await expect(main.locator('[data-svr-list-state="empty"]')).toBeVisible();
+  await main.locator('.svr-add-button').click();
+  let editor = main.locator('.svr-dialog');
+  await editor.locator('input').nth(0).fill('测试服务器');
+  await editor.locator('input').nth(1).fill('https://example.invalid');
+  await editor.getByRole('button', { name: '添加快捷入口', exact: true }).click();
+  const shortcut = editor.locator('.svr-shortcut-row');
+  await shortcut.locator('input').nth(0).fill('账号管理');
+  await shortcut.locator('input').nth(1).fill('/account');
+  await editor.getByRole('button', { name: '添加服务器', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
+  await expect(main.locator('.svr-target-card')).toContainText('example.invalid');
+
+  await application.close();
+  application = await launch();
+  main = await findMain(application);
+  await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await main.getByRole('button', { name: '编辑 测试服务器', exact: true }).click();
+  editor = main.locator('.svr-dialog');
+  await editor.locator('input').nth(0).fill('测试服务器改');
+  await editor.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
+  await main.getByRole('button', { name: '删除 测试服务器改', exact: true }).click();
+  await expect(main.getByRole('heading', { name: '确认删除', exact: true })).toBeVisible();
+  await main.getByRole('button', { name: '确认删除', exact: true }).click();
+  await expect(main.locator('[data-svr-list-state="empty"]')).toBeVisible();
+  await application.close();
 });
 
 test('embeds both real Radar sites in the main Electron window', async () => {
@@ -681,7 +743,7 @@ test('persists floating placement and general settings across restarts', async (
   for (const candidate of await first.windows())
     if ((await candidate.locator('.app-shell').count()) > 0) main = candidate;
 
-  await main.getByRole('button', { name: '通知', exact: true }).click();
+  await main.getByRole('button', { name: '设置', exact: true }).click();
   await main.getByLabel('悬浮窗固定位置').selectOption('bottom-left');
   await expect
     .poll(() =>
@@ -1352,6 +1414,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     '使用记录',
     '渠道状态',
     '站点管理',
+    'Sub2API 服务器',
     '雷达',
   ]);
   await main.getByRole('button', { name: 'API 密钥', exact: true }).click();
@@ -2198,15 +2261,16 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   includeSecondaryG1Association = true;
   availableChannelsMode = 'complete';
   await main.getByRole('button', { name: '通知', exact: true }).click();
+  await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'notification-rules');
+  await expect(main.getByRole('heading', { name: '通知规则设置' })).toBeVisible();
+  await main.getByLabel('通知冷却时间').selectOption('15');
+  await captureEvidence(main, '24-notification-rules');
+  await main.getByRole('button', { name: '设置', exact: true }).click();
   await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'general-settings');
   await expect(main.getByRole('heading', { name: '通用设置' })).toBeVisible();
   await main.getByLabel('自动刷新频率').selectOption('10');
   await main.getByLabel('数据过期提示').selectOption('5');
   await captureEvidence(main, '23-general-settings');
-  await main.getByRole('button', { name: '设置', exact: true }).click();
-  await expect(main.locator('.app-shell')).toHaveAttribute('data-shell', 'notification-rules');
-  await expect(main.getByRole('heading', { name: '通知规则设置' })).toBeVisible();
-  await main.getByLabel('通知冷却时间').selectOption('15');
   await expect
     .poll(() =>
       main.evaluate(async () => ({
@@ -2218,7 +2282,6 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       app: { refreshIntervalMinutes: 10, staleAfterMinutes: 5 },
       notifications: { cooldownMs: 900_000, recoveryNotifications: true },
     });
-  await captureEvidence(main, '24-notification-rules');
   let floating: typeof main | undefined;
   for (const candidate of await application.windows())
     if ((await candidate.locator('.floating-window').count()) > 0) floating = candidate;
@@ -2244,9 +2307,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(compactChannel).not.toContainText('自动关联');
     await expect(compactChannel).not.toContainText('E2E 分组精准通道');
     const timelineCells = compactChannel.locator('.floating-channel-timeline i');
-    await expect(timelineCells).toHaveCount(12);
-    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(0);
-    await expect(timelineCells.first()).toHaveClass('normal');
+    await expect(timelineCells).toHaveCount(20);
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(8);
+    await expect(timelineCells.first()).toHaveClass('empty');
+    await expect(timelineCells.nth(8)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveAttribute('title', /正常$/);
 
@@ -2270,7 +2334,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
       timeout: 15_000,
     });
-    await expect(timelineCells.first()).toHaveClass('degraded');
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(7);
+    await expect(timelineCells.first()).toHaveClass('empty');
+    await expect(timelineCells.nth(7)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('degraded');
     await expect(timelineCells.last()).toHaveAttribute('title', /降级$/);
     await compactChannel.click();
@@ -2281,7 +2347,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floatingChannelDialog).not.toContainText('最近 1 分钟');
     await expect(
       floatingChannelDialog.locator('.floating-channel-dialog-row').first().locator('i'),
-    ).toHaveCount(12);
+    ).toHaveCount(20);
     await expect(floatingChannelDialog).toContainText('E2E 分组精准通道');
     await expect(floatingChannelDialog).toContainText('OpenAI 便宜 A');
     await expect(floatingChannelDialog.getByText('当前展示')).toHaveCount(1);
@@ -2362,11 +2428,11 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect
       .poll(() => channelRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(channelsBeforeShortHistoryRefresh);
-    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(9);
-    await expect(timelineCells.nth(8)).toHaveClass('empty');
-    await expect(timelineCells.nth(9)).toHaveClass('normal');
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(17);
+    await expect(timelineCells.nth(16)).toHaveClass('empty');
+    await expect(timelineCells.nth(17)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('unknown');
-    await expect(timelineCells.nth(8)).toHaveAttribute('title', '暂无更早记录');
+    await expect(timelineCells.nth(16)).toHaveAttribute('title', '暂无更早记录');
     await expect(timelineCells.last()).toHaveAttribute('title', /未知$/);
     await captureEvidence(floating, '28-floating-short-history');
   }
