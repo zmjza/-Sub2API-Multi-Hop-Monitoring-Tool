@@ -21,8 +21,6 @@ import type {
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 import type { RadarEmbedState, RadarEntry, RadarEntryInput } from '../shared/radar.js';
 import type {
-  Sub2ApiMenu,
-  Sub2ApiMenuDiscoveryResult,
   Sub2ApiServer,
   Sub2ApiServerEmbedState,
   Sub2ApiServerInput,
@@ -53,8 +51,6 @@ export interface DesktopBridge {
     reload(): void;
     home(): void;
     clearSession(id: string): Promise<void>;
-    listMenus(id: string): Promise<Sub2ApiMenu[]>;
-    discoverMenus(id: string): Promise<Sub2ApiMenuDiscoveryResult>;
     onStateChange(listener: (state: Sub2ApiServerEmbedState) => void): () => void;
   };
   readonly sites: {

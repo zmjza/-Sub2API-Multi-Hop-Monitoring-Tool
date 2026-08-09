@@ -1,15 +1,41 @@
 import {
+  Activity,
   AlertCircle,
   ArrowUpRight,
+  BadgePercent,
+  BarChart3,
+  Bell,
+  ClipboardList,
+  CreditCard,
+  Folder,
+  Gift,
+  Globe,
+  History,
+  Images,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
   LoaderCircle,
   LogOut,
   Menu,
+  PackageCheck,
   Pencil,
   Plus,
+  ReceiptText,
   RefreshCw,
+  ScrollText,
+  Search,
   Server,
+  ServerCog,
+  Settings2,
+  ShieldCheck,
+  Ticket,
   Trash2,
+  UserRound,
+  Users,
+  Wallet,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -19,17 +45,23 @@ import {
   normalizeSub2ApiServerUrl,
   sub2apiMenuPathKey,
   sub2apiShortcutUrl,
-  type Sub2ApiMenu,
   type Sub2ApiServer,
   type Sub2ApiServerEmbedState,
   type Sub2ApiShortcut,
 } from '../../../../electron/shared/sub2api-server';
+import {
+  SUB2API_STANDARD_MENUS,
+  normalizeSub2ApiShortcutForTemplate,
+  sub2apiStandardMenuByPath,
+  sub2apiTemplateGroupLabel,
+  type Sub2ApiStandardMenu,
+  type Sub2ApiTemplateGroup,
+} from '../../../../electron/shared/sub2api-menu-template';
 import './sub2api-servers.css';
 
 type Sub2ApiServersPageProps = {
   embedState: Sub2ApiServerEmbedState;
   onOpen: (server: Sub2ApiServer) => void;
-  onOpenServer: (server: Sub2ApiServer) => void;
   onOpenShortcut: (server: Sub2ApiServer, shortcut: Sub2ApiShortcut) => void;
 };
 
@@ -53,21 +85,12 @@ type ServerDraft = {
   baseUrl: string;
   loginRule: string;
   shortcuts: ShortcutDraft[];
-  menuState?: MenuEditorState;
 };
-
-type MenuEditorState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; menus: Sub2ApiMenu[]; discoveredAt?: number }
-  | { status: 'login'; message: string }
-  | { status: 'error'; message: string };
 
 export function Sub2ApiServersPage({
   embedState,
   onOpen,
   onOpenShortcut,
-  onOpenServer,
 }: Sub2ApiServersPageProps) {
   const [listState, setListState] = useState<ListState>({ status: 'loading', servers: [] });
   const [editor, setEditor] = useState<ServerDraft | undefined>();
@@ -135,7 +158,6 @@ export function Sub2ApiServersPage({
       baseUrl: '',
       loginRule: '',
       shortcuts: [],
-      menuState: { status: 'idle' },
     });
   };
 
@@ -149,67 +171,9 @@ export function Sub2ApiServersPage({
       loginRule: server.loginRule ?? '',
       shortcuts: server.shortcuts.map((shortcut) => ({
         id: shortcut.id,
-        label: shortcut.label,
-        path: shortcut.path,
-        icon: shortcut.icon,
-        menuId: shortcut.menuId,
+        ...normalizeSub2ApiShortcutForTemplate(shortcut),
       })),
-      menuState: { status: 'loading' },
     });
-    void loadMenus(server.id);
-  };
-
-  const loadMenus = async (serverId: string) => {
-    const bridge = window.sub2apiDesktop?.sub2apiServers;
-    if (!bridge) return;
-    try {
-      const menus = await bridge.listMenus(serverId);
-      setEditor((current) =>
-        current && current.id === serverId
-          ? {
-              ...current,
-              menuState: {
-                status: 'ready',
-                menus,
-                discoveredAt: menus[0]?.discoveredAt,
-              },
-            }
-          : current,
-      );
-    } catch {
-      setEditor((current) =>
-        current && current.id === serverId
-          ? { ...current, menuState: { status: 'error', message: '菜单读取失败，请稍后重试。' } }
-          : current,
-      );
-    }
-  };
-
-  const refreshMenus = async () => {
-    if (!editor?.id || !editor.menuState || editor.menuState.status === 'loading') return;
-    const bridge = window.sub2apiDesktop?.sub2apiServers;
-    if (!bridge) return;
-    setEditor({ ...editor, menuState: { status: 'loading' } });
-    try {
-      const result = await bridge.discoverMenus(editor.id);
-      if (result.status === 'login') {
-        setEditor((current) =>
-          current
-            ? { ...current, menuState: { status: 'login', message: result.message } }
-            : current,
-        );
-      } else {
-        await loadMenus(editor.id);
-      }
-      const servers = await bridge.list();
-      setListState({ status: 'ready', servers });
-    } catch (error) {
-      setEditor((current) =>
-        current
-          ? { ...current, menuState: { status: 'error', message: serverErrorMessage(error) } }
-          : current,
-      );
-    }
   };
 
   const validateDraft = (draft: ServerDraft): string | undefined => {
@@ -257,13 +221,15 @@ export function Sub2ApiServersPage({
     try {
       const bridge = window.sub2apiDesktop?.sub2apiServers;
       if (!bridge) throw new Error('SUB2API_SERVER_BRIDGE_UNAVAILABLE');
-      const shortcuts = editor.shortcuts.map((shortcut) => ({
-        ...(shortcut.id ? { id: shortcut.id } : {}),
-        label: shortcut.label.trim(),
-        path: shortcut.path.trim(),
-        ...(shortcut.icon ? { icon: shortcut.icon } : {}),
-        ...(shortcut.menuId ? { menuId: shortcut.menuId } : {}),
-      }));
+      const shortcuts = editor.shortcuts
+        .map(normalizeSub2ApiShortcutForTemplate)
+        .map((shortcut) => ({
+          ...(shortcut.id ? { id: shortcut.id } : {}),
+          label: shortcut.label.trim(),
+          path: shortcut.path.trim(),
+          ...(shortcut.icon ? { icon: shortcut.icon } : {}),
+          ...(shortcut.menuId ? { menuId: shortcut.menuId } : {}),
+        }));
       const next = editor.id
         ? await bridge.update({
             id: editor.id,
@@ -485,10 +451,6 @@ export function Sub2ApiServersPage({
                     setEditor({
                       ...editor,
                       baseUrl: event.target.value,
-                      menuState:
-                        editor.id && event.target.value.trim() !== editor.baseUrl.trim()
-                          ? { status: 'idle' }
-                          : editor.menuState,
                     })
                   }
                 />
@@ -504,9 +466,7 @@ export function Sub2ApiServersPage({
               </label>
               {editor.id ? (
                 <MenuEditor
-                  state={editor.menuState}
                   shortcuts={editor.shortcuts}
-                  onRefresh={() => void refreshMenus()}
                   onToggle={(menu) => setEditor((current) => toggleShortcut(current, menu))}
                   onRemoveUnavailable={(path) =>
                     setEditor((current) =>
@@ -521,19 +481,12 @@ export function Sub2ApiServersPage({
                         : current,
                     )
                   }
-                  onOpenServer={() => {
-                    const server = listState.servers.find((item) => item.id === editor.id);
-                    if (server) {
-                      setEditor(undefined);
-                      onOpenServer(server);
-                    }
-                  }}
                 />
               ) : (
                 <fieldset className="svr-shortcut-editor">
                   <legend>快捷入口</legend>
                   <p className="svr-shortcut-empty">
-                    保存服务器后打开并登录，即可从服务器菜单中勾选快捷入口。
+                    保存服务器后，再次编辑即可从内置菜单勾选快捷入口。
                   </p>
                 </fieldset>
               )}
@@ -650,6 +603,14 @@ function ServerCard({
   onOpenShortcut: (shortcut: Sub2ApiShortcut) => void;
 }) {
   const hostname = new URL(server.baseUrl).hostname;
+  const sortedShortcuts = [...server.shortcuts].sort((left, right) => {
+    const leftMenu = sub2apiStandardMenuByPath(left.path);
+    const rightMenu = sub2apiStandardMenuByPath(right.path);
+    if (leftMenu && rightMenu) return leftMenu.order - rightMenu.order;
+    if (leftMenu) return -1;
+    if (rightMenu) return 1;
+    return 0;
+  });
   return (
     <article className="svr-target-card">
       <button type="button" className="svr-target-open" onClick={onOpen}>
@@ -688,9 +649,10 @@ function ServerCard({
           <Trash2 size={16} />
         </button>
       </div>
-      {server.shortcuts.length > 0 && (
+      {sortedShortcuts.length > 0 && (
         <div className="svr-card-shortcuts" aria-label="快捷入口">
-          {server.shortcuts.map((shortcut) => {
+          {sortedShortcuts.map((shortcut) => {
+            const Icon = shortcutIcon(shortcut.icon);
             return (
               <button
                 type="button"
@@ -698,7 +660,7 @@ function ServerCard({
                 title={shortcut.label}
                 onClick={() => onOpenShortcut(shortcut)}
               >
-                <Menu size={14} aria-hidden="true" />
+                <Icon size={14} aria-hidden="true" />
                 <span>{shortcut.label}</span>
               </button>
             );
@@ -710,108 +672,85 @@ function ServerCard({
 }
 
 function MenuEditor({
-  state,
   shortcuts,
-  onRefresh,
   onToggle,
   onRemoveUnavailable,
-  onOpenServer,
 }: {
-  state: MenuEditorState | undefined;
   shortcuts: ShortcutDraft[];
-  onRefresh: () => void;
-  onToggle: (menu: Sub2ApiMenu) => void;
+  onToggle: (menu: Sub2ApiStandardMenu) => void;
   onRemoveUnavailable: (path: string) => void;
-  onOpenServer: () => void;
 }) {
+  const [query, setQuery] = useState('');
   const selectedCount = shortcuts.length;
-  const ready = state?.status === 'ready';
-  const menus = state?.status === 'ready' ? state.menus : [];
   const selectedMenuKeys = new Set(shortcuts.map((shortcut) => sub2apiMenuPathKey(shortcut.path)));
-  const unavailable = ready
-    ? shortcuts.filter(
-        (shortcut) =>
-          !menus.some(
-            (menu) => sub2apiMenuPathKey(menu.path) === sub2apiMenuPathKey(shortcut.path),
-          ),
-      )
-    : [];
+  const unavailable = shortcuts.filter((shortcut) => !sub2apiStandardMenuByPath(shortcut.path));
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filtered = SUB2API_STANDARD_MENUS.filter(
+    (menu) =>
+      !normalizedQuery ||
+      menu.label.toLocaleLowerCase().includes(normalizedQuery) ||
+      menu.path.toLocaleLowerCase().includes(normalizedQuery),
+  );
+  const groups: Sub2ApiTemplateGroup[] = ['user', 'admin'];
   return (
     <fieldset className="svr-shortcut-editor">
       <div className="svr-menu-editor-heading">
         <legend>
           快捷入口（已选 {selectedCount}/{SUB2API_SERVER_SHORTCUT_LIMIT}）
         </legend>
-        <button
-          type="button"
-          className="svr-shortcut-add"
-          disabled={state?.status === 'loading'}
-          onClick={onRefresh}
-        >
-          {state?.status === 'loading' ? (
-            <LoaderCircle size={14} className="spin" />
-          ) : (
-            <RefreshCw size={14} />
-          )}
-          获取菜单
-        </button>
       </div>
-      {state?.status === 'loading' && (
-        <p className="svr-menu-state" role="status">
-          正在读取服务器菜单…
-        </p>
-      )}
-      {state?.status === 'login' && (
-        <div className="svr-menu-state is-login">
-          <p>{state.message}</p>
-          <button type="button" className="secondary-action" onClick={onOpenServer}>
-            <Server size={14} />
-            打开服务器登录
-          </button>
-        </div>
-      )}
-      {state?.status === 'error' && (
-        <div className="svr-menu-state is-error">
-          <p>{state.message}</p>
-          <button type="button" className="secondary-action" onClick={onRefresh}>
-            <RefreshCw size={14} />
-            重试
-          </button>
-        </div>
-      )}
-      {ready && menus.length === 0 && (
-        <p className="svr-menu-state">服务器菜单中暂未发现可用入口。</p>
-      )}
-      {ready && menus.length > 0 && (
-        <div className="svr-menu-list">
-          {menus.map((menu) => {
-            const pathKey = sub2apiMenuPathKey(menu.path);
-            const selected = selectedMenuKeys.has(pathKey);
-            const disabled = !selected && shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT;
-            return (
-              <label className={`svr-menu-option${selected ? ' is-selected' : ''}`} key={menu.id}>
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={disabled}
-                  onChange={() => onToggle(menu)}
-                />
-                <span className="svr-menu-option-copy">
-                  <strong>{menu.label}</strong>
-                  <small>
-                    {menu.parentLabel ? `${menu.parentLabel} · ` : ''}
-                    {menu.path}
-                  </small>
-                </span>
-                {selected && <span className="svr-menu-selected-mark">已选</span>}
-              </label>
-            );
-          })}
-        </div>
-      )}
-      {ready && unavailable.length > 0 && (
+      <label className="svr-menu-search">
+        <Search size={15} aria-hidden="true" />
+        <input
+          aria-label="搜索快捷入口"
+          placeholder="搜索快捷入口"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      {groups.map((group) => {
+        const menus = filtered.filter((menu) => menu.group === group);
+        if (menus.length === 0) return null;
+        return (
+          <section className="svr-menu-group" key={group}>
+            <h3>{sub2apiTemplateGroupLabel(group)}</h3>
+            <div className="svr-menu-list">
+              {menus.map((menu) => {
+                const Icon = shortcutIcon(menu.icon);
+                const pathKey = sub2apiMenuPathKey(menu.path);
+                const selected = selectedMenuKeys.has(pathKey);
+                const disabled = !selected && shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT;
+                return (
+                  <label
+                    className={`svr-menu-option${selected ? ' is-selected' : ''}`}
+                    key={menu.id}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`${menu.label} ${menu.path}`}
+                      checked={selected}
+                      disabled={disabled}
+                      onChange={() => onToggle(menu)}
+                    />
+                    <span className="svr-menu-option-icon" aria-hidden="true">
+                      <Icon size={16} />
+                    </span>
+                    <span className="svr-menu-option-copy">
+                      <strong>{menu.label}</strong>
+                      <small>{menu.path}</small>
+                    </span>
+                    {selected && <span className="svr-menu-selected-mark">已选</span>}
+                  </label>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+      {filtered.length === 0 && <p className="svr-menu-state">没有匹配的快捷入口。</p>}
+      {unavailable.length > 0 && (
         <div className="svr-menu-unavailable">
-          <strong>当前菜单不可用</strong>
+          <strong>历史快捷入口</strong>
           {unavailable.map((shortcut) => (
             <span className="svr-menu-unavailable-item" key={shortcut.id ?? shortcut.path}>
               {shortcut.label}
@@ -833,7 +772,7 @@ function MenuEditor({
 
 function toggleShortcut(
   current: ServerDraft | undefined,
-  menu: Sub2ApiMenu,
+  menu: Sub2ApiStandardMenu,
 ): ServerDraft | undefined {
   if (!current) return current;
   const pathKey = sub2apiMenuPathKey(menu.path);
@@ -845,9 +784,6 @@ function toggleShortcut(
     return { ...current, shortcuts };
   }
   if (current.shortcuts.length >= SUB2API_SERVER_SHORTCUT_LIMIT) return current;
-  const existing = current.shortcuts.find(
-    (shortcut) => shortcut.menuId === menu.id || sub2apiMenuPathKey(shortcut.path) === pathKey,
-  );
   return {
     ...current,
     shortcuts: [
@@ -855,11 +791,42 @@ function toggleShortcut(
       {
         label: menu.label,
         path: menu.path,
-        icon: existing?.icon,
+        icon: menu.icon,
         menuId: menu.id,
       },
     ],
   };
+}
+
+const shortcutIconByName: Record<string, LucideIcon> = {
+  Activity,
+  BadgePercent,
+  BarChart3,
+  Bell,
+  ClipboardList,
+  CreditCard,
+  Folder,
+  Gift,
+  Globe,
+  History,
+  Images,
+  KeyRound,
+  LayoutDashboard,
+  ListChecks,
+  PackageCheck,
+  ReceiptText,
+  ScrollText,
+  ServerCog,
+  Settings2,
+  ShieldCheck,
+  Ticket,
+  UserRound,
+  Users,
+  Wallet,
+};
+
+function shortcutIcon(name?: string): LucideIcon {
+  return name ? (shortcutIconByName[name] ?? Menu) : Menu;
 }
 
 function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement): void {

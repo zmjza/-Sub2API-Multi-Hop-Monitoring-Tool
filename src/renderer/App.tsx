@@ -1253,7 +1253,6 @@ export function App() {
       <Sub2ApiServersPage
         embedState={sub2apiServerEmbedState}
         onOpen={openEmbeddedSub2ApiServer}
-        onOpenServer={openEmbeddedSub2ApiServer}
         onOpenShortcut={openSub2ApiServerShortcut}
       />
     ),

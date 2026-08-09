@@ -185,20 +185,20 @@ describe('AppDatabase', () => {
     raw.close();
   });
 
-  it('persists and clears discovered sub2api server menus separately from servers', () => {
+  it('clears legacy sub2api menu caches per server without reading them', () => {
     const raw = new DatabaseSync(':memory:');
     const db = new AppDatabase(raw);
     db.migrate();
-    expect(db.getSub2ApiMenus('server-a')).toEqual([]);
-    db.setSub2ApiMenus('server-a', [
-      { id: 'm1', label: '账号管理', path: '/account', order: 0, discoveredAt: 123 },
-    ]);
-    expect(db.getSub2ApiMenus('server-a')).toEqual([
-      { id: 'm1', label: '账号管理', path: '/account', order: 0, discoveredAt: 123 },
-    ]);
-    expect(db.getSub2ApiMenus('server-b')).toEqual([]);
+    const insert = raw.prepare(
+      'INSERT INTO settings(key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json',
+    );
+    insert.run('sub2api-servers:menus:server-a', JSON.stringify([{ id: 'm1' }]));
+    insert.run('sub2api-servers:menus:server-b', JSON.stringify([{ id: 'm2' }]));
     db.clearSub2ApiMenus('server-a');
-    expect(db.getSub2ApiMenus('server-a')).toEqual([]);
+    const remaining = raw
+      .prepare("SELECT key FROM settings WHERE key LIKE 'sub2api-servers:menus:%' ORDER BY key")
+      .all() as Array<{ key: string }>;
+    expect(remaining.map((row) => row.key)).toEqual(['sub2api-servers:menus:server-b']);
     expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
       /password|access.?token|refresh.?token/i,
     );

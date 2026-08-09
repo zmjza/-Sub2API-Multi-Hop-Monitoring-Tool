@@ -1,5 +1,21 @@
 # 更新说明
 
+## 2.1.2 - 2026-08-10
+
+### Sub2API 快捷入口内置模板
+
+- 快捷入口不再从服务器网页自动获取菜单，改用软件内置 `Wei-Shaw/sub2api` 标准模板：普通用户 12 项、管理员 23 项，按“我的账户 / 后台管理”分组并提供本地搜索；勾选即加入，最多 5 个，卡片按模板顺序显示并使用对应 Lucide 图标。
+- 新增服务器仍不显示快捷入口，保存成功后再编辑即可直接选择，无需先登录；删除“获取菜单”、加载、登录、过期、失败、重试和无菜单状态。
+- 主进程、preload 和 IPC 不再暴露 `list-menus/discover-menus`，删除临时隐藏 `WebContentsView` 菜单提取链路；内嵌网页、独立 partition、同源白名单和登录态复用保持不变。
+- 旧快捷入口按规范化路径匹配模板时自动补齐标准 `menuId/icon/label/path`，匹配不到的进入“历史快捷入口”区域，可移除，未移除时继续保留；旧菜单发现缓存停止读取，删除服务器、清除会话或 origin 变更时仍按服务器清理。
+
+### 验证与发布
+
+- 新增模板契约、旧入口归一化和缓存清理单测；Electron E2E 覆盖保存后编辑、搜索分组、选择 5 项、上限禁用、取消、保存重启保留和历史入口兼容。
+- 格式检查、ESLint、TypeScript、全量 Vitest（49 文件、370 项）、生产构建、Electron E2E（9 项通过、2 项按配置跳过；真实站点用例单独 1/1 通过）与官方源 `npm audit` 0 漏洞通过。
+- macOS ARM64 打包目录应用与只读挂载 DMG 均在真实 `https://www.api-feng.online/` 完成保存后选择、5 项、重启保留、快捷入口直达、登录和重启登录态复用，真实站点用例各 1/1 通过；证据目录 `real-test-evidence/macos-2.1.2/` 与 `real-test-evidence/macos-2.1.2-dmg/`。
+- DMG `hdiutil verify` 为 `VALID`；DMG `fa5d84a78e56078ef82120f6027610b5bc8464cae285dfab1295f547cbfa46ee`，DMG blockmap `f550e9983df851dfe5eb649323dc5f1ef01bb15ac468cc3255875867fcc9ecd9`；EXE `61ac35709003a33d603884609263023d42c3cc7bb7ddded5b7839580869b8d3c`，EXE blockmap `88c86346317e203595a4d749c33858e6c2165530c010f956d500dd59d076c5c4`；Windows 仅记录 x64 交叉构建。
+
 ## 2.1.1 - 2026-08-09
 
 ### 悬浮窗可用率文案

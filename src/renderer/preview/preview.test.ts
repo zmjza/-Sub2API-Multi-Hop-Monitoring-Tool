@@ -80,6 +80,11 @@ describe('controlled UI shell preview', () => {
     expect(app).toContain('<Sub2ApiServersPage');
     expect(page).toContain('新增服务器');
     expect(page).toContain('快捷入口');
+    expect(page).toContain('搜索快捷入口');
+    expect(page).toContain('SUB2API_STANDARD_MENUS');
+    expect(page).toContain('sub2apiTemplateGroupLabel');
+    expect(page).not.toContain('获取菜单');
+    expect(page).not.toContain('正在读取服务器菜单');
     expect(app).toContain('登录过期，请去站点管理重新验证');
   });
 

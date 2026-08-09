@@ -33,8 +33,6 @@ const desktopBridge: DesktopBridge = {
     reload: () => ipcRenderer.send('sub2api-servers:reload'),
     home: () => ipcRenderer.send('sub2api-servers:home'),
     clearSession: (id) => ipcRenderer.invoke('sub2api-servers:clear-session', id),
-    listMenus: (id) => ipcRenderer.invoke('sub2api-servers:list-menus', id),
-    discoverMenus: (id) => ipcRenderer.invoke('sub2api-servers:discover-menus', id),
     onStateChange: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
         listener(value);

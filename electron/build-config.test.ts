@@ -127,16 +127,16 @@ describe('electron-builder manifest', () => {
     expect(bridgeTypes).toContain('onStateChange(listener: (state: RadarEmbedState) => void)');
   });
 
-  it('keeps Sub2API menu discovery wired through main and preload layers', () => {
+  it('does not expose remote Sub2API menu discovery through main or preload', () => {
     const mainSource = readFileSync('electron/main/index.ts', 'utf8');
     const bridgeSource = readFileSync('electron/preload/bridge.cts', 'utf8');
     const bridgeTypes = readFileSync('electron/preload/index.ts', 'utf8');
 
-    for (const channel of ['sub2api-servers:list-menus', 'sub2api-servers:discover-menus']) {
-      expect(mainSource).toContain(`ipcMain.handle('${channel}'`);
-      expect(bridgeSource).toContain(`ipcRenderer.invoke('${channel}'`);
-    }
-    expect(bridgeTypes).toContain('listMenus(id: string): Promise<Sub2ApiMenu[]>');
-    expect(bridgeTypes).toContain('discoverMenus(id: string): Promise<Sub2ApiMenuDiscoveryResult>');
+    expect(mainSource).not.toContain('sub2api-servers:list-menus');
+    expect(mainSource).not.toContain('sub2api-servers:discover-menus');
+    expect(bridgeSource).not.toContain('sub2api-servers:list-menus');
+    expect(bridgeSource).not.toContain('sub2api-servers:discover-menus');
+    expect(bridgeTypes).not.toContain('listMenus(id: string)');
+    expect(bridgeTypes).not.toContain('discoverMenus(id: string)');
   });
 });

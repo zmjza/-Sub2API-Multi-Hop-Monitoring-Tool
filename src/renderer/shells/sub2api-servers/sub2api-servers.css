@@ -108,7 +108,8 @@
 .svr-list-state button:focus-visible,
 .svr-dialog button:focus-visible,
 .svr-field input:focus-visible,
-.svr-field select:focus-visible {
+.svr-field select:focus-visible,
+.svr-menu-search input:focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.28);
   outline-offset: 2px;
 }
@@ -377,7 +378,7 @@
   width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 48px));
   overflow: auto;
-  padding: 24px;
+  padding: 24px 24px 40px;
   border: 1px solid #dce4f0;
   border-radius: 8px;
   background: #fff;
@@ -556,25 +557,48 @@
   gap: 12px;
 }
 
-.svr-shortcut-add {
-  width: fit-content;
-  min-height: 34px;
+.svr-menu-search {
+  min-width: 0;
+  height: 36px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 0 12px;
-  border: 1px solid #cddbf8;
+  gap: 8px;
+  padding: 0 10px;
+  border: 1px solid #d5ddeb;
   border-radius: 8px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
+  background: #fff;
+  color: #8793a8;
 }
 
-.svr-shortcut-add:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+.svr-menu-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #17213a;
+  font: inherit;
+  font-size: 13px;
+}
+
+.svr-menu-search:focus-within {
+  border-color: #9db9ef;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+}
+
+.svr-menu-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.svr-menu-group h3 {
+  margin: 0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
 }
 
 .svr-menu-state {
@@ -606,15 +630,15 @@
 .svr-menu-list {
   display: grid;
   gap: 8px;
-  max-height: 280px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 4px;
 }
 
 .svr-menu-option {
   min-width: 0;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 18px 24px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -648,6 +672,21 @@
   min-width: 0;
   display: grid;
   gap: 4px;
+}
+
+.svr-menu-option-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.svr-menu-option.is-selected .svr-menu-option-icon {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .svr-menu-option-copy strong {

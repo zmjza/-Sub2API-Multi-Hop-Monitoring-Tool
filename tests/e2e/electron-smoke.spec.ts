@@ -68,7 +68,8 @@ const seedSub2ApiServer = (userData: string) => {
           name: '旧服务器',
           baseUrl: 'https://example.invalid/',
           shortcuts: [
-            { id: 'legacy-shortcut', label: '账号管理', path: '/account', icon: 'Users' },
+            { id: 'legacy-shortcut', label: '旧账号', path: '/admin/accounts', icon: 'Users' },
+            { id: 'legacy-extra', label: '旧自定义', path: '/legacy', icon: 'Menu' },
           ],
         },
       ]),
@@ -292,7 +293,7 @@ test('manages persistent dynamic Radar entries', async () => {
   }
 });
 
-test('manages persistent Sub2API servers with menu-sourced shortcuts', async () => {
+test('manages persistent Sub2API servers with template-based shortcuts', async () => {
   type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
   const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-servers-e2e-'));
   const launch = () => launchApplication(userData);
@@ -319,15 +320,29 @@ test('manages persistent Sub2API servers with menu-sourced shortcuts', async () 
   await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toHaveCount(1);
   await expect(main.locator('.svr-target-card')).toContainText('旧服务器');
-  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
+  await expect(
+    main.locator('.svr-card-shortcuts').getByRole('button', { name: '旧账号', exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.locator('.svr-card-shortcuts').getByRole('button', { name: '旧自定义', exact: true }),
+  ).toBeVisible();
 
   await main.getByRole('button', { name: '编辑 旧服务器', exact: true }).click();
   let editor = main.locator('.svr-dialog');
-  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toBeVisible();
-  await expect(editor.getByText('当前菜单不可用')).toBeVisible();
+  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toHaveCount(0);
+  await expect(
+    editor.getByRole('checkbox', { name: '账号管理 /admin/accounts', exact: true }),
+  ).toBeChecked();
+  await expect(editor.getByText('历史快捷入口')).toBeVisible();
+  await expect(editor.getByText('旧自定义')).toBeVisible();
   await editor.getByRole('button', { name: '保存修改', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toHaveCount(1);
-  await expect(main.getByRole('button', { name: '账号管理', exact: true })).toBeVisible();
+  await expect(
+    main.locator('.svr-card-shortcuts').getByRole('button', { name: '账号管理', exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.locator('.svr-card-shortcuts').getByRole('button', { name: '旧自定义', exact: true }),
+  ).toBeVisible();
 
   await application.close();
   application = await launch();
@@ -336,6 +351,10 @@ test('manages persistent Sub2API servers with menu-sourced shortcuts', async () 
   await expect(main.locator('.svr-target-card')).toHaveCount(1);
   await main.getByRole('button', { name: '编辑 旧服务器', exact: true }).click();
   editor = main.locator('.svr-dialog');
+  await expect(
+    editor.getByRole('checkbox', { name: '账号管理 /admin/accounts', exact: true }),
+  ).toBeChecked();
+  await expect(editor.getByText('旧自定义')).toBeVisible();
   await editor.locator('input').nth(0).fill('测试服务器改');
   await editor.getByRole('button', { name: '保存修改', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
@@ -374,7 +393,9 @@ test('adds a Sub2API server without manual shortcut fields', async () => {
   let editor = main.locator('.svr-dialog');
   await editor.locator('input').nth(0).fill('测试服务器');
   await editor.locator('input').nth(1).fill('https://example.invalid');
-  await expect(editor.getByText('保存服务器后打开并登录')).toBeVisible();
+  await expect(
+    editor.getByText('保存服务器后，再次编辑即可从内置菜单勾选快捷入口。'),
+  ).toBeVisible();
   await editor.getByRole('button', { name: '添加服务器', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toHaveCount(1);
   await expect(main.locator('.svr-target-card')).toContainText('example.invalid');
@@ -387,9 +408,60 @@ test('adds a Sub2API server without manual shortcut fields', async () => {
   await main.getByRole('button', { name: '编辑 测试服务器', exact: true }).click();
   editor = main.locator('.svr-dialog');
   await editor.locator('input').nth(0).fill('测试服务器改');
-  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toBeVisible();
+  await expect(editor.getByRole('button', { name: '获取菜单', exact: true })).toHaveCount(0);
+  await expect(editor.getByRole('heading', { name: '我的账户', exact: true })).toBeVisible();
+  await expect(editor.getByRole('heading', { name: '后台管理', exact: true })).toBeVisible();
+  await editor.getByLabel('搜索快捷入口').fill('账号管理');
+  await expect(
+    editor.getByRole('checkbox', { name: '账号管理 /admin/accounts', exact: true }),
+  ).toBeVisible();
+  await expect(
+    editor.getByRole('checkbox', { name: '仪表盘 /dashboard', exact: true }),
+  ).toHaveCount(0);
+  await editor.getByLabel('搜索快捷入口').fill('');
+  for (const [label, path] of [
+    ['API 密钥', '/keys'],
+    ['使用记录', '/usage'],
+    ['渠道状态', '/monitor'],
+    ['个人资料', '/profile'],
+    ['账号管理', '/admin/accounts'],
+  ]) {
+    await editor.getByRole('checkbox', { name: `${label} ${path}`, exact: true }).check();
+  }
+  await expect(editor.getByText('快捷入口（已选 5/5）', { exact: true })).toBeVisible();
+  await expect(
+    editor.getByRole('checkbox', { name: '仪表盘 /dashboard', exact: true }),
+  ).toBeDisabled();
+  await editor.getByRole('checkbox', { name: '个人资料 /profile', exact: true }).uncheck();
+  await expect(editor.getByText('快捷入口（已选 4/5）', { exact: true })).toBeVisible();
+  await expect(
+    editor.getByRole('checkbox', { name: '仪表盘 /dashboard', exact: true }),
+  ).toBeEnabled();
+  await editor.getByRole('checkbox', { name: '个人资料 /profile', exact: true }).check();
   await editor.getByRole('button', { name: '保存修改', exact: true }).click();
   await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
+  for (const label of ['API 密钥', '使用记录', '渠道状态', '个人资料', '账号管理']) {
+    await expect(
+      main.locator('.svr-card-shortcuts').getByRole('button', { name: label, exact: true }),
+    ).toBeVisible();
+  }
+
+  await application.close();
+  application = await launch();
+  main = await findMain(application);
+  await main.getByRole('button', { name: 'Sub2API 服务器', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
+  await expect(main.locator('.svr-target-card')).toContainText('测试服务器改');
+  for (const label of ['API 密钥', '使用记录', '渠道状态', '个人资料', '账号管理']) {
+    await expect(
+      main.locator('.svr-card-shortcuts').getByRole('button', { name: label, exact: true }),
+    ).toBeVisible();
+  }
+  await main.getByRole('button', { name: '编辑 测试服务器改', exact: true }).click();
+  editor = main.locator('.svr-dialog');
+  await expect(editor.getByText('快捷入口（已选 5/5）', { exact: true })).toBeVisible();
+  await editor.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(main.locator('.svr-target-card')).toHaveCount(1);
   await main.getByRole('button', { name: '删除 测试服务器改', exact: true }).click();
   await expect(main.getByRole('heading', { name: '确认删除', exact: true })).toBeVisible();
   await main.getByRole('button', { name: '确认删除', exact: true }).click();

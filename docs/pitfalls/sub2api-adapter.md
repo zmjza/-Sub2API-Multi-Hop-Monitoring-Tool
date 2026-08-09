@@ -826,33 +826,35 @@ fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次
 
 所有需要 GeeTest、Cloudflare Turnstile 或类似交互式登录验证的 sub2api 二开站。
 
-## 菜单发现隐藏视图必须挂载到主窗口后才能可靠执行页面脚本
+## 菜单发现已废弃，快捷入口必须使用内置标准模板
 
 **现象**
 
-Sub2API 服务器菜单发现使用同 partition 的临时 `WebContentsView` 读取导航结构；未把视图加入主窗口内容层时，Electron 可能不触发完整页面布局与脚本，`executeJavaScript` 返回空菜单，导致“菜单获取失败”或误判未登录。
+2.1.0 使用同 partition 的临时 `WebContentsView` 从服务器网页读取导航结构；真实 `api-feng.online` 受 Turnstile、异步 SPA 挂载和前端鉴权守卫影响，自动发现无法稳定拿到完整菜单，用户还需要先登录、再刷新，体验不符合需求。
 
 **根因**
 
-`WebContentsView` 即使不显示，若没有挂载到 `BrowserWindow.contentView`，Chromium 可能不进行与可见页面一致的渲染管线；异步 SPA 菜单依赖布局后挂载的 DOM 节点，未渲染容器时导航链接收集为空。
+这些二开站都基于 `Wei-Shaw/sub2api`，菜单路径实际是固定模板，不需要也不应该依赖远程 DOM。按网页实时结构抓菜单会把登录态、验证码、异步渲染和二开差异全部引入快捷入口流程。
 
 **正确做法**
 
-菜单发现优先复用已打开的同服务器视图；必须新建临时视图时，先 `mainWindow.contentView.addChildView(view)` 并设置 `{ x: 0, y: 0, width: 0, height: 0 }`，再 `loadURL`；完成后先移除子视图再关闭 `webContents`。页面停止加载后仍要等待并重试 2–3 次，避免异步菜单晚于 `did-stop-loading` 挂载。
+快捷入口改用软件内置的 `SUB2API_STANDARD_MENUS` 标准模板，保存服务器后即可在编辑弹窗直接搜索、分组勾选；打开时只把相对路径解析到当前服务器 HTTPS origin。旧快捷入口按规范化路径匹配模板，匹配不到的进入“历史快捷入口”区域，未移除时继续保留。旧菜单发现缓存停止读取，只在删除服务器、清除会话或 origin 变更时按服务器清理。
 
 **验证方式**
 
-真实登录站点执行“获取菜单”，确认返回非空菜单且临时视图无可见闪屏；自动化覆盖共享净化、菜单缓存和 E2E 旧入口兼容。发现结果只保留最小非敏感字段，不读取 Cookie、Token、存储或完整 HTML。
+运行模板契约单测、存储缓存清理单测和 Electron E2E，确认无需登录即可选择、5 项上限、搜索分组、旧入口兼容、保存重启保留；再用真实 `api-feng.online` 验证域名替换、入口直达和登录态复用。
 
 **禁止事项**
 
-不要长期保留未挂载或挂载后的临时视图；不要在 `executeJavaScript` 失败或为空时直接覆盖已保存菜单；不要把页面脚本、HTML 或私有接口数据传回 Renderer。
+不要恢复远程 DOM/菜单发现 IPC；不要在快捷入口选择阶段要求用户先登录；不要读取 Cookie、Token、页面存储、完整 HTML 或私有接口；不要把 `/custom/:id` 或仅展开父菜单硬编码进模板。
 
 **相关文件或命令**
 
 - `electron/main/services/sub2api-server-manager.ts`
 - `electron/shared/sub2api-server.ts`
+- `electron/shared/sub2api-menu-template.ts`
+- `src/renderer/shells/sub2api-servers/Sub2ApiServersPage.tsx`
 
 **适用范围**
 
-所有需要从已登录持久化分区页面提取导航菜单的 Electron 嵌入场景。
+所有基于 `Wei-Shaw/sub2api` 二开的 Sub2API 服务器快捷入口功能。

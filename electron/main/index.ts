@@ -86,8 +86,6 @@ import {
   type RadarTarget,
 } from '../shared/radar.js';
 import {
-  sub2apiMenuDiscoveryResultSchema,
-  sub2apiMenusSchema,
   sub2apiServerIdSchema,
   sub2apiServerInputSchema,
   sub2apiServersSchema,
@@ -565,18 +563,6 @@ function registerIpc() {
       throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
     const id = sub2apiServerIdSchema.parse(input);
     await sub2apiServerManager.clearSession(id);
-  });
-  ipcMain.handle('sub2api-servers:list-menus', (event, input: unknown) => {
-    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
-      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
-    const id = sub2apiServerIdSchema.parse(input);
-    return sub2apiMenusSchema.parse(sub2apiServerManager.listMenus(id));
-  });
-  ipcMain.handle('sub2api-servers:discover-menus', async (event, input: unknown) => {
-    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
-      throw new Error('SUB2API_SERVER_IPC_FORBIDDEN');
-    const id = sub2apiServerIdSchema.parse(input);
-    return sub2apiMenuDiscoveryResultSchema.parse(await sub2apiServerManager.discoverMenus(id));
   });
   ipcMain.on('sub2api-servers:open', (event, input: unknown) => {
     if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
