@@ -201,7 +201,7 @@ export function FloatingWindow(props: FloatingProps) {
       ) : (
         <div className="floating-channel-card is-message" aria-label="当前渠道状态">
           <span>{channelSummary}</span>
-          <small>最近 12 次渠道状态</small>
+          <small>近期渠道状态</small>
         </div>
       )}
       <div className="floating-metrics">
@@ -319,7 +319,7 @@ export function FloatingWindow(props: FloatingProps) {
             <header>
               <div>
                 <strong id="floating-channel-dialog-title">关联渠道</strong>
-                <small>最近 12 次</small>
+                <small>近期可用率</small>
               </div>
               <button
                 type="button"
@@ -398,7 +398,7 @@ function ChannelTimeline({ health }: { health: RecentHealth }) {
           '暂无渠道记录'
         ) : (
           <>
-            近 12 次可用 <b>{health.availabilityPercent.toFixed(2)}%</b>
+            近期可用率 <b>{health.availabilityPercent.toFixed(2)}%</b>
           </>
         )}
       </small>

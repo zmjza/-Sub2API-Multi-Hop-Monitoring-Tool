@@ -2388,7 +2388,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       name: 'E2E 分组精准通道，查看全部关联渠道',
     });
     await expect(compactChannel).toBeVisible();
-    await expect(compactChannel).toContainText('近 12 次可用');
+    await expect(compactChannel).toContainText('近期可用率');
     await expect(compactChannel).not.toContainText('自动关联');
     await expect(compactChannel).not.toContainText('E2E 分组精准通道');
     const timelineCells = compactChannel.locator('.floating-channel-timeline i');
@@ -2428,7 +2428,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     const floatingChannelDialog = floating.getByRole('dialog', { name: '关联渠道' });
     await expect(floatingChannelDialog).toBeVisible();
     await expect(floatingChannelDialog.locator('.floating-channel-dialog-row')).toHaveCount(2);
-    await expect(floatingChannelDialog).toContainText('最近 12 次');
+    await expect(floatingChannelDialog).toContainText('近期可用率');
     await expect(floatingChannelDialog).not.toContainText('最近 1 分钟');
     await expect(
       floatingChannelDialog.locator('.floating-channel-dialog-row').first().locator('i'),

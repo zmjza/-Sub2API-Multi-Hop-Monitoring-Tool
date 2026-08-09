@@ -179,7 +179,7 @@ describe('floating window transparency', () => {
     );
 
     expect(html).toContain('class="floating-channel-card');
-    expect(html).toContain('近 12 次可用');
+    expect(html).toContain('近期可用率');
     expect(html).not.toContain('自动关联');
     expect(html).not.toContain('手动指定');
     expect(html).not.toContain('Plus【特惠通道009】很长很长的渠道名称</strong>');
