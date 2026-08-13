@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assetNames, parseArgs, validateVersion } from './publish-release.mjs';
+import { assetNames, assetsToReplace, parseArgs, validateVersion } from './publish-release.mjs';
 
 describe('publish release command', () => {
   it('requires notes and supports test-only releases', () => {
@@ -35,5 +35,15 @@ describe('publish release command', () => {
       'Sub2API-Multi-Hub-Monitor-1.4.7-win-x64.exe.blockmap',
       'update-manifest.json',
     ]);
+  });
+
+  it('replaces existing assets in fresh mode and keeps them when reusing artifacts', () => {
+    const names = assetNames('1.4.7');
+    expect(assetsToReplace(names, names, false)).toEqual(names);
+    expect(
+      assetsToReplace(['Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg'], names, false),
+    ).toEqual(['Sub2API-Multi-Hub-Monitor-1.4.7-mac-arm64.dmg']);
+    expect(assetsToReplace(names, names, true)).toEqual([]);
+    expect(assetsToReplace([], names, false)).toEqual([]);
   });
 });

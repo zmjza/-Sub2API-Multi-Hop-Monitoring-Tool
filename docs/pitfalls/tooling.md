@@ -525,3 +525,35 @@ GitHub `zmjza/-Sub2API-Multi-Hop-Monitoring-Tool` 是源码与 Release 主站，
 **适用范围**
 
 Electron 透明/圆角窗口内的模态遮罩、点击外部关闭与无障碍焦点回收测试。
+
+## 发布脚本跳过同名资产会导致 DMG 与 manifest 哈希不一致
+
+**现象**
+
+发布 2.2.0 时，第一次发布流程被中断前已上传 DMG 与 DMG blockmap；重跑发布命令重建了 DMG，但因资产名已存在被脚本跳过上传，manifest 却使用新构建的 SHA-256，线上 DMG 与 manifest 哈希不一致。客户端下载 DMG 后 SHA-256 校验失败，提示“更新下载失败，请稍后重试”。
+
+**根因**
+
+发布脚本对已存在的同名资产一律跳过上传，没有区分“复用已审计产物”和“重新构建后的替换”。中断后重跑、重复发布或资产被部分上传时，Release 会混入不同构建的产物，manifest 与安装包失去一致性。
+
+**正确做法**
+
+非复用模式下，发布前先删除同名已有资产再上传全部产物，保证 DMG、EXE、两个 blockmap 与 update-manifest.json 来自同一次构建；--reuse-artifacts 才允许跳过上传。发布完成后必须下载线上 DMG/EXE 并核对其 SHA-256 与远端 manifest 一致。
+
+**验证方式**
+
+运行 npm test -- --run scripts/publish-release.test.ts 覆盖 assetsToReplace 的替换/复用语义；发布后从 GitHub Release 下载安装包计算 SHA-256，与 update-manifest.json 中对应值比对一致，再用客户端完整走一次检查、下载与校验流程。
+
+**禁止事项**
+
+不要对已存在的同名资产直接跳过上传；不要用不同构建的安装包和 manifest 混发；不要在发布中断后直接重跑命令而不核对资产一致性；不要只验证资产数量而不验证哈希。
+
+**相关文件或命令**
+
+- scripts/publish-release.mjs
+- scripts/publish-release.test.ts
+- npm run release:publish -- --notes 更新说明
+
+**适用范围**
+
+GitHub Release 发布、发布中断后重跑、重复发布和客户端在线更新的资产一致性验证。

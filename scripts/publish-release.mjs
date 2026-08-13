@@ -49,6 +49,11 @@ export function assetNames(version) {
   ];
 }
 
+export function assetsToReplace(existingNames, expectedNames, reuseArtifacts) {
+  if (reuseArtifacts) return [];
+  return expectedNames.filter((name) => existingNames.includes(name));
+}
+
 async function cleanupReleaseArtifacts() {
   const entries = await fs.readdir(releaseDir, { withFileTypes: true }).catch(() => []);
   const packagePattern = /^Sub2API-Multi-Hub-Monitor-.*\.(?:dmg|exe)(?:\.blockmap)?$/;
@@ -277,7 +282,19 @@ async function main() {
   const files = names.map((name) => path.join(releaseDir, name));
   await ensureVersionTag(version);
   const release = await createRelease(token, version, notes);
-  const existingNames = new Set((release.assets ?? []).map((asset) => asset.name));
+  const existingAssets = release.assets ?? [];
+  const existingNames = new Set(existingAssets.map((asset) => asset.name));
+  if (!args.reuseArtifacts) {
+    for (const name of assetsToReplace([...existingNames], names, false)) {
+      const asset = existingAssets.find((candidate) => candidate.name === name);
+      if (!asset) continue;
+      await githubRequest(token, '/repos/' + repository + '/releases/assets/' + asset.id, {
+        method: 'DELETE',
+      });
+      existingNames.delete(name);
+      console.log('已替换发布资产：' + name);
+    }
+  }
   for (const filePath of files) {
     if (existingNames.has(path.basename(filePath))) {
       console.log(`已存在，跳过 ${path.basename(filePath)}`);
