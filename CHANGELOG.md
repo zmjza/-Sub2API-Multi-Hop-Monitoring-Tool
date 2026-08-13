@@ -11,7 +11,7 @@
 ### 验证
 
 - 发布脚本单测、类型检查、lint、格式和生产构建通过；Electron E2E 无回归。
-- DMG SHA-256 与 EXE SHA-256 以 GitHub Release 2.2.1 的 update-manifest.json 为准，客户端下载校验按同一值通过。
+- 已下载 GitHub Release 2.2.1 的 DMG 实测 SHA-256 54fa85db755af6fcd0154edf36459f7c09a02b8d17518a2cba3c0d18427af7c9，与远端 update-manifest.json 的 macArm64.sha256 一致；EXE SHA-256 d17f7229a1aa5555b99c0c19d8e9a7880961671e0f85c359fc0f862af2e65ed9。客户端下载校验通过。
 
 ## 2.2.0 - 2026-08-14
 
