@@ -14,6 +14,8 @@
 
 - 新增共享规则、政策应用、导航判断、数据库存取、IPC 边界和常用网站 E2E；全量 Vitest 51 个文件 389 项通过，ESLint、Prettier、TypeScript 和生产构建通过，完整 Electron E2E 通过。
 - 页面样式由真实 Electron 窗口截图检查：列表、规则编辑弹窗和内嵌工具栏无 P0/P1 重叠、溢出或截断。
+- 版本提交 05cb61a 已推送 GitHub 与 Gitee 当前分支及 2.2.0 标签；GitHub stable Release 为非草稿、非预发布，DMG、EXE、两个 blockmap 与 update-manifest.json 五项资产均为 uploaded。
+- DMG SHA-256 5da25e2ef43003c75795d4acaf3faaa17b32c2e2ba39f03c87074e32ad73d183；EXE SHA-256 049eb5a162fcc6a19d16848a9431be6cede78ed18cb92c75faa0d52e5bb870eb；Windows x64 仅记录交叉构建证据。
 
 ## 2.1.2 - 2026-08-10
 
