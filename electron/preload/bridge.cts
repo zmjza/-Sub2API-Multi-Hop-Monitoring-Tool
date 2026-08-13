@@ -40,6 +40,26 @@ const desktopBridge: DesktopBridge = {
       return () => ipcRenderer.removeListener('sub2api-servers:state', handler);
     },
   },
+  favoriteWebsites: {
+    list: () => ipcRenderer.invoke('favorite-websites:list'),
+    create: (input) => ipcRenderer.invoke('favorite-websites:create', input),
+    update: (input) => ipcRenderer.invoke('favorite-websites:update', input),
+    delete: (id) => ipcRenderer.invoke('favorite-websites:delete', id),
+    policy: () => ipcRenderer.invoke('favorite-websites:policy'),
+    savePolicy: (policy) => ipcRenderer.invoke('favorite-websites:policy:save', policy),
+    open: (id) => ipcRenderer.send('favorite-websites:open', id),
+    close: () => ipcRenderer.send('favorite-websites:close'),
+    back: () => ipcRenderer.send('favorite-websites:back'),
+    forward: () => ipcRenderer.send('favorite-websites:forward'),
+    reload: () => ipcRenderer.send('favorite-websites:reload'),
+    home: () => ipcRenderer.send('favorite-websites:home'),
+    onStateChange: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('favorite-websites:state', handler);
+      return () => ipcRenderer.removeListener('favorite-websites:state', handler);
+    },
+  },
   sites: {
     list: () => ipcRenderer.invoke('sites:list'),
     select: (siteId) => ipcRenderer.invoke('sites:select', siteId),

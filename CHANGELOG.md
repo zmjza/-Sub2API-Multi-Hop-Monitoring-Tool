@@ -1,5 +1,20 @@
 # 更新说明
 
+## 2.2.0 - 2026-08-14
+
+### 常用网站
+
+- 左侧导航新增“常用网站”，支持保存并打开在线网站、localhost、127.0.0.1 回环地址、局域网 IP 和非标准端口服务；配置写入本机 SQLite，不包含云端同步。
+- 网站支持新增、编辑、删除，名称与规范化地址不可重复，最多 50 条；删除时清理对应 persist 分区登录态和缓存，编辑导致 origin 变化时同样清理旧会话。
+- 右上角新增“编辑”入口，可维护 HTTP/HTTPS、localhost、回环、局域网 IP、公网域名和非标准端口开关，以及精确域名、通配子域名、IP、端口和路径前缀自定义允许规则；规则变化后已有网站保留但标记不可打开，恢复规则后恢复可用。
+- file、javascript、data、devtools、其他非 HTTP/HTTPS 协议、带用户名密码地址和无效地址永久禁止，不能通过用户规则解除；顶层导航同时覆盖 will-navigate 和 will-redirect，按当前规则重新校验。
+- 内嵌网页使用独立 persist 分区 WebContentsView，工具栏提供后退、前进、主页、刷新和关闭，支持 Escape 关闭；网页保持 sandbox、contextIsolation、nodeIntegration=false、webSecurity=true 并拒绝额外 webview 和任意 window.open。
+
+### 验证
+
+- 新增共享规则、政策应用、导航判断、数据库存取、IPC 边界和常用网站 E2E；全量 Vitest 51 个文件 389 项通过，ESLint、Prettier、TypeScript 和生产构建通过，完整 Electron E2E 通过。
+- 页面样式由真实 Electron 窗口截图检查：列表、规则编辑弹窗和内嵌工具栏无 P0/P1 重叠、溢出或截断。
+
 ## 2.1.2 - 2026-08-10
 
 ### Sub2API 快捷入口内置模板

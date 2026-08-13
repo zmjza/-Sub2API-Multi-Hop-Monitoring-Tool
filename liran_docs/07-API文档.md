@@ -1,5 +1,16 @@
 # sub2api API 文档
 
+## 2.2.0 常用网站 IPC 合同
+
+| 方法/通道                                                 | 用途                   | 安全与状态规则                                                                             |
+| --------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| IPC favorite-websites:list/create/update/delete           | 常用网站 CRUD          | 主窗口发送者校验；Zod 输入输出；重复项、50 条上限、危险协议和规则拦截                      |
+| IPC favorite-websites:policy / policy:save                | 读取和保存地址支持规则 | 主进程再次解析；永久禁止规则不可通过用户输入解除                                           |
+| IPC favorite-websites:open/close/back/forward/reload/home | 内嵌网页生命周期       | 打开只接受 ID，URL 从主进程读取；导航按当前规则校验，will-navigate 与 will-redirect 都覆盖 |
+| preload favoriteWebsites                                  | Renderer 固定桥        | 不暴露任意 URL、路径、Cookie、Token 或完整页面存储                                         |
+
+常用网站配置只保存在本机 SQLite settings，不包含云端同步接口。每个网站使用独立 persist 分区，删除或 origin 变更时清理 cookies、localstorage、indexdb、cachestorage、serviceworkers 和 shadercache。
+
 ## 1.9.0 IPC 与读取约束
 
 - 使用记录沿用 `usage:list` 的 `outputTokens`、`durationMs`，t/s 在 Renderer 纯函数派生，不新增上游接口，也不把输入/缓存 Token 纳入分子。

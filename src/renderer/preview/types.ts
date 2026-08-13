@@ -21,6 +21,7 @@ export type MainShell =
   | 'sites'
   | 'sub2api-servers'
   | 'radar'
+  | 'favorite-websites'
   | 'general-settings'
   | 'notification-rules';
 export interface PreviewContext {
@@ -131,6 +132,7 @@ export function parsePreviewLocation(search: string): PreviewLocation {
     'sites',
     'sub2api-servers',
     'radar',
+    'favorite-websites',
     'general-settings',
     'notification-rules',
   ].includes(shellValue ?? '')

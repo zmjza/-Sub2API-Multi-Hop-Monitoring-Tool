@@ -13,6 +13,15 @@ import {
   sub2apiServersSchema,
   type Sub2ApiServer,
 } from '../../shared/sub2api-server.js';
+import {
+  DEFAULT_FAVORITE_WEBSITES_POLICY,
+  FAVORITE_WEBSITES_KEY,
+  FAVORITE_WEBSITES_POLICY_KEY,
+  favoriteWebsitesSchema,
+  favoriteWebsitePolicySchema,
+  type FavoriteWebsite,
+  type FavoriteWebsitesPolicy,
+} from '../../shared/favorite-websites.js';
 
 export interface SiteRow {
   id: string;
@@ -411,6 +420,28 @@ export class AppDatabase {
 
   clearSub2ApiMenus(serverId: string): void {
     this.deleteSetting(sub2apiMenusKey(serverId));
+  }
+
+  getFavoriteWebsites(): FavoriteWebsite[] {
+    const stored = this.getSetting<unknown>(FAVORITE_WEBSITES_KEY, undefined);
+    if (stored === undefined) return [];
+    const parsed = favoriteWebsitesSchema.safeParse(stored);
+    return parsed.success ? parsed.data : [];
+  }
+
+  setFavoriteWebsites(websites: FavoriteWebsite[]): void {
+    this.setSetting(FAVORITE_WEBSITES_KEY, favoriteWebsitesSchema.parse(websites));
+  }
+
+  getFavoriteWebsitesPolicy(): FavoriteWebsitesPolicy {
+    const stored = this.getSetting<unknown>(FAVORITE_WEBSITES_POLICY_KEY, undefined);
+    if (stored === undefined) return DEFAULT_FAVORITE_WEBSITES_POLICY;
+    const parsed = favoriteWebsitePolicySchema.safeParse(stored);
+    return parsed.success ? parsed.data : DEFAULT_FAVORITE_WEBSITES_POLICY;
+  }
+
+  setFavoriteWebsitesPolicy(policy: FavoriteWebsitesPolicy): void {
+    this.setSetting(FAVORITE_WEBSITES_POLICY_KEY, favoriteWebsitePolicySchema.parse(policy));
   }
 
   getNotificationLastSent(siteId: string, fingerprint: string): number | undefined {

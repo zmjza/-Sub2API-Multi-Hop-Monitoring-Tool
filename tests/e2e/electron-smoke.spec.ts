@@ -1573,6 +1573,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     '站点管理',
     'Sub2API 服务器',
     '雷达',
+    '常用网站',
   ]);
   await main.getByRole('button', { name: 'API 密钥', exact: true }).click();
   await expect(main.getByRole('heading', { name: 'API 密钥', exact: true })).toBeVisible();

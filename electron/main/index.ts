@@ -60,6 +60,7 @@ import { CredentialVault } from './storage/credential-vault.js';
 import { FileSecretBackend } from './storage/file-secret-backend.js';
 import { InteractiveVerificationRequiredError, SiteService } from './services/site-service.js';
 import { Sub2ApiServerManager } from './services/sub2api-server-manager.js';
+import { FavoriteWebsitesManager } from './services/favorite-websites-manager.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
@@ -91,6 +92,13 @@ import {
   sub2apiServersSchema,
   sub2apiServerUpdateSchema,
 } from '../shared/sub2api-server.js';
+import {
+  favoriteWebsiteIdSchema,
+  favoriteWebsiteInputSchema,
+  favoriteWebsiteUpdateSchema,
+  favoriteWebsitesSchema,
+  favoriteWebsitePolicySchema,
+} from '../shared/favorite-websites.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.SUB2API_TEST_USER_DATA) app.setPath('userData', process.env.SUB2API_TEST_USER_DATA);
@@ -123,6 +131,7 @@ let notificationService: NotificationService;
 let updateService: UpdateService;
 let radarView: WebContentsView | undefined;
 let sub2apiServerManager: Sub2ApiServerManager;
+let favoriteWebsitesManager: FavoriteWebsitesManager;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
@@ -644,6 +653,67 @@ function registerIpc() {
     if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
     closeRadarView();
   });
+  ipcMain.handle('favorite-websites:list', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    return favoriteWebsitesSchema.parse(favoriteWebsitesManager.list());
+  });
+  ipcMain.handle('favorite-websites:create', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    const parsed = favoriteWebsiteInputSchema.parse(input);
+    return favoriteWebsitesSchema.parse(favoriteWebsitesManager.create(parsed));
+  });
+  ipcMain.handle('favorite-websites:update', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    const parsed = favoriteWebsiteUpdateSchema.parse(input);
+    return favoriteWebsitesSchema.parse(await favoriteWebsitesManager.update(parsed));
+  });
+  ipcMain.handle('favorite-websites:delete', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    const id = favoriteWebsiteIdSchema.parse(input);
+    return favoriteWebsitesSchema.parse(await favoriteWebsitesManager.delete(id));
+  });
+  ipcMain.handle('favorite-websites:policy', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    return favoriteWebsitePolicySchema.parse(favoriteWebsitesManager.policy());
+  });
+  ipcMain.handle('favorite-websites:policy:save', async (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow)
+      throw new Error('FAVORITE_WEBSITE_IPC_FORBIDDEN');
+    return favoriteWebsitePolicySchema.parse(
+      await favoriteWebsitesManager.savePolicy(favoriteWebsitePolicySchema.parse(input)),
+    );
+  });
+  ipcMain.on('favorite-websites:open', (event, input: unknown) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    const id = favoriteWebsiteIdSchema.safeParse(input);
+    if (!id.success) return;
+    void favoriteWebsitesManager.open(id.data).catch(() => undefined);
+  });
+  ipcMain.on('favorite-websites:close', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    favoriteWebsitesManager.close();
+  });
+  ipcMain.on('favorite-websites:back', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    favoriteWebsitesManager.navigateBack();
+  });
+  ipcMain.on('favorite-websites:forward', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    favoriteWebsitesManager.navigateForward();
+  });
+  ipcMain.on('favorite-websites:reload', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    favoriteWebsitesManager.reload();
+  });
+  ipcMain.on('favorite-websites:home', (event) => {
+    if (BrowserWindow.fromWebContents(event.sender) !== mainWindow) return;
+    favoriteWebsitesManager.home();
+  });
   ipcMain.on('window:open-main', showMainWindow);
   ipcMain.on('window:minimize-main', () => {
     if (appSettingsSchema.parse(appDatabase.getAppSettings()).floatingEnabled) {
@@ -811,6 +881,7 @@ async function createWindows() {
   mainWindow.on('close', (event) => {
     closeRadarView(false);
     sub2apiServerManager.closeView(false);
+    favoriteWebsitesManager.closeView(false);
     if (!isQuitting) {
       event.preventDefault();
       app.quit();
@@ -822,6 +893,7 @@ async function createWindows() {
   mainWindow.on('resize', () => {
     syncRadarViewBounds();
     sub2apiServerManager.syncBounds();
+    favoriteWebsitesManager.syncBounds();
     saveBounds('window:main', mainWindow);
   });
   mainWindow.on('move', () => saveBounds('window:main', mainWindow));
@@ -908,6 +980,14 @@ app.whenReady().then(async () => {
     (state) => {
       if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
         mainWindow.webContents.send('sub2api-servers:state', state);
+    },
+  );
+  favoriteWebsitesManager = new FavoriteWebsitesManager(
+    appDatabase,
+    () => mainWindow,
+    (state) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+        mainWindow.webContents.send('favorite-websites:state', state);
     },
   );
   updateService = new UpdateService(app.getVersion(), {
@@ -997,6 +1077,7 @@ app.on('before-quit', (event) => {
   isQuitting = true;
   closeRadarView(false);
   sub2apiServerManager.closeView(false);
+  favoriteWebsitesManager.closeView(false);
   scheduler?.stop();
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);

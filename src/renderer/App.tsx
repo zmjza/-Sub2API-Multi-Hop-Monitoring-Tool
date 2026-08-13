@@ -5,6 +5,7 @@ import {
   Bell,
   ChevronDown,
   Download,
+  Globe,
   History,
   House,
   KeyRound,
@@ -54,6 +55,7 @@ import {
 } from './shells/floating/latest-usage-site';
 import { RadarPage } from './shells/radar/RadarPage';
 import { Sub2ApiServersPage } from './shells/sub2api-servers/Sub2ApiServersPage';
+import { FavoriteWebsitesPage } from './shells/favorite-websites/FavoriteWebsitesPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
 import type {
@@ -70,6 +72,10 @@ import {
   type Sub2ApiServer,
   type Sub2ApiServerEmbedState,
 } from '../../electron/shared/sub2api-server';
+import {
+  type FavoriteWebsite,
+  type FavoriteWebsiteEmbedState,
+} from '../../electron/shared/favorite-websites';
 import { safeRendererError, useNotifications } from './notifications';
 import type {
   UpdateCheckResult,
@@ -131,6 +137,8 @@ export function App() {
   const [sub2apiServerEmbedState, setSub2ApiServerEmbedState] = useState<Sub2ApiServerEmbedState>({
     status: 'idle',
   });
+  const [favoriteWebsiteEmbedState, setFavoriteWebsiteEmbedState] =
+    useState<FavoriteWebsiteEmbedState>({ status: 'idle' });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
     position: 'top-right',
     opacity: 84,
@@ -258,7 +266,12 @@ export function App() {
     else setRadarEmbedState({ status: 'idle' });
   };
   const openEmbeddedRadar = (entry: RadarEntry) => {
-    if (radarEmbedState.status !== 'idle' || sub2apiServerEmbedState.status !== 'idle') return;
+    if (
+      radarEmbedState.status !== 'idle' ||
+      sub2apiServerEmbedState.status !== 'idle' ||
+      favoriteWebsiteEmbedState.status !== 'idle'
+    )
+      return;
     const radar = window.sub2apiDesktop?.radar;
     if (!radar) {
       setRadarEmbedState({
@@ -277,7 +290,12 @@ export function App() {
     else setSub2ApiServerEmbedState({ status: 'idle' });
   };
   const openEmbeddedSub2ApiServer = (server: Sub2ApiServer) => {
-    if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;
+    if (
+      sub2apiServerEmbedState.status !== 'idle' ||
+      radarEmbedState.status !== 'idle' ||
+      favoriteWebsiteEmbedState.status !== 'idle'
+    )
+      return;
     const servers = window.sub2apiDesktop?.sub2apiServers;
     if (!servers) {
       setSub2ApiServerEmbedState({
@@ -293,11 +311,43 @@ export function App() {
     });
     servers.open(server.id);
   };
+  const closeEmbeddedFavoriteWebsite = () => {
+    const favorites = window.sub2apiDesktop?.favoriteWebsites;
+    if (favorites) favorites.close();
+    else setFavoriteWebsiteEmbedState({ status: 'idle' });
+  };
+  const openEmbeddedFavoriteWebsite = (website: FavoriteWebsite) => {
+    if (
+      favoriteWebsiteEmbedState.status !== 'idle' ||
+      sub2apiServerEmbedState.status !== 'idle' ||
+      radarEmbedState.status !== 'idle'
+    )
+      return;
+    const favorites = window.sub2apiDesktop?.favoriteWebsites;
+    if (!favorites) {
+      setFavoriteWebsiteEmbedState({
+        status: 'error',
+        target: { id: website.id, label: website.name },
+        message: '当前 Electron 桥不可用，无法打开常用网站网页。',
+      });
+      return;
+    }
+    setFavoriteWebsiteEmbedState({
+      status: 'opening',
+      target: { id: website.id, label: website.name },
+    });
+    favorites.open(website.id);
+  };
   const openSub2ApiServerShortcut = (
     server: Sub2ApiServer,
     shortcut: import('../../electron/shared/sub2api-server').Sub2ApiShortcut,
   ) => {
-    if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;
+    if (
+      sub2apiServerEmbedState.status !== 'idle' ||
+      radarEmbedState.status !== 'idle' ||
+      favoriteWebsiteEmbedState.status !== 'idle'
+    )
+      return;
     const servers = window.sub2apiDesktop?.sub2apiServers;
     if (!servers) return;
     setSub2ApiServerEmbedState({
@@ -310,6 +360,8 @@ export function App() {
     if (radarEmbedState.status !== 'idle' && nextShell !== 'radar') closeEmbeddedRadar();
     if (sub2apiServerEmbedState.status !== 'idle' && nextShell !== 'sub2api-servers')
       closeEmbeddedSub2ApiServer();
+    if (favoriteWebsiteEmbedState.status !== 'idle' && nextShell !== 'favorite-websites')
+      closeEmbeddedFavoriteWebsite();
     setShell(nextShell);
   };
   useEffect(() => {
@@ -321,6 +373,12 @@ export function App() {
   useEffect(() => {
     const unsubscribe = window.sub2apiDesktop?.sub2apiServers.onStateChange((nextState) => {
       setSub2ApiServerEmbedState(nextState);
+    });
+    return () => unsubscribe?.();
+  }, []);
+  useEffect(() => {
+    const unsubscribe = window.sub2apiDesktop?.favoriteWebsites.onStateChange((nextState) => {
+      setFavoriteWebsiteEmbedState(nextState);
     });
     return () => unsubscribe?.();
   }, []);
@@ -344,6 +402,16 @@ export function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sub2apiServerEmbedState.status]);
+  useEffect(() => {
+    if (favoriteWebsiteEmbedState.status === 'idle') return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeEmbeddedFavoriteWebsite();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [favoriteWebsiteEmbedState.status]);
   const siteIdsKey = dashboard?.sites
     .map((site) => site.id)
     .sort((left, right) => left.localeCompare(right))
@@ -1257,6 +1325,12 @@ export function App() {
       />
     ),
     radar: <RadarPage embedState={radarEmbedState} onOpen={openEmbeddedRadar} />,
+    'favorite-websites': (
+      <FavoriteWebsitesPage
+        embedState={favoriteWebsiteEmbedState}
+        onOpen={openEmbeddedFavoriteWebsite}
+      />
+    ),
     'general-settings': (
       <GeneralSettingsPage updateChecking={updateChecking} onCheckForUpdate={checkForUpdate} />
     ),
@@ -1270,6 +1344,7 @@ export function App() {
     ['sites', '站点管理', SlidersHorizontal],
     ['sub2api-servers', 'Sub2API 服务器', Server],
     ['radar', '雷达', Radio],
+    ['favorite-websites', '常用网站', Globe],
   ] as const;
   return (
     <main
@@ -1278,6 +1353,7 @@ export function App() {
       data-state={effectiveState}
       data-radar-embedded={radarEmbedState.status !== 'idle'}
       data-server-embedded={sub2apiServerEmbedState.status !== 'idle'}
+      data-favorite-embedded={favoriteWebsiteEmbedState.status !== 'idle'}
     >
       <aside className="app-sidebar">
         <div className="brand-lockup">
@@ -1320,7 +1396,66 @@ export function App() {
       </aside>
       <section className="app-content">
         <header className="app-toolbar">
-          {sub2apiServerEmbedState.status !== 'idle' ? (
+          {favoriteWebsiteEmbedState.status !== 'idle' ? (
+            <>
+              <div className="fav-embed-toolbar-label">
+                <Globe size={16} aria-hidden="true" />
+                <span>{favoriteWebsiteEmbedState.target.label}</span>
+              </div>
+              <div className="fav-embed-nav">
+                <button
+                  className="icon-button"
+                  aria-label="后退"
+                  title="后退"
+                  disabled={
+                    favoriteWebsiteEmbedState.status !== 'open' ||
+                    !favoriteWebsiteEmbedState.canGoBack
+                  }
+                  onClick={() => window.sub2apiDesktop?.favoriteWebsites.back()}
+                >
+                  <ArrowLeft size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="前进"
+                  title="前进"
+                  disabled={
+                    favoriteWebsiteEmbedState.status !== 'open' ||
+                    !favoriteWebsiteEmbedState.canGoForward
+                  }
+                  onClick={() => window.sub2apiDesktop?.favoriteWebsites.forward()}
+                >
+                  <ArrowRight size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="返回网站主页"
+                  title="主页"
+                  disabled={favoriteWebsiteEmbedState.status !== 'open'}
+                  onClick={() => window.sub2apiDesktop?.favoriteWebsites.home()}
+                >
+                  <House size={17} />
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="刷新网站网页"
+                  title="刷新"
+                  disabled={favoriteWebsiteEmbedState.status !== 'open'}
+                  onClick={() => window.sub2apiDesktop?.favoriteWebsites.reload()}
+                >
+                  <RefreshCw size={17} />
+                </button>
+              </div>
+              <button
+                className="icon-button fav-embed-close"
+                aria-label="关闭常用网站网页"
+                title="关闭常用网站网页"
+                onClick={closeEmbeddedFavoriteWebsite}
+              >
+                <X size={18} />
+              </button>
+            </>
+          ) : sub2apiServerEmbedState.status !== 'idle' ? (
             <>
               <div className="svr-embed-toolbar-label">
                 <Server size={16} aria-hidden="true" />

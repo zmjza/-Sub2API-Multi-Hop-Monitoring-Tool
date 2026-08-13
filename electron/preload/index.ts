@@ -26,6 +26,13 @@ import type {
   Sub2ApiServerInput,
   Sub2ApiServerUpdateInput,
 } from '../shared/sub2api-server.js';
+import type {
+  FavoriteWebsite,
+  FavoriteWebsiteEmbedState,
+  FavoriteWebsiteInput,
+  FavoriteWebsiteUpdate,
+  FavoriteWebsitesPolicy,
+} from '../shared/favorite-websites.js';
 
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
@@ -52,6 +59,21 @@ export interface DesktopBridge {
     home(): void;
     clearSession(id: string): Promise<void>;
     onStateChange(listener: (state: Sub2ApiServerEmbedState) => void): () => void;
+  };
+  readonly favoriteWebsites: {
+    list(): Promise<FavoriteWebsite[]>;
+    create(input: FavoriteWebsiteInput): Promise<FavoriteWebsite[]>;
+    update(input: FavoriteWebsiteUpdate): Promise<FavoriteWebsite[]>;
+    delete(id: string): Promise<FavoriteWebsite[]>;
+    policy(): Promise<FavoriteWebsitesPolicy>;
+    savePolicy(policy: FavoriteWebsitesPolicy): Promise<FavoriteWebsitesPolicy>;
+    open(id: string): void;
+    close(): void;
+    back(): void;
+    forward(): void;
+    reload(): void;
+    home(): void;
+    onStateChange(listener: (state: FavoriteWebsiteEmbedState) => void): () => void;
   };
   readonly sites: {
     list(): Promise<DashboardSnapshot>;
