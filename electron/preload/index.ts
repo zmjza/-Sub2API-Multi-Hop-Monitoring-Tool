@@ -33,6 +33,7 @@ import type {
   FavoriteWebsiteUpdate,
   FavoriteWebsitesPolicy,
 } from '../shared/favorite-websites.js';
+import type { OpenCodexLogsPayload, OpenCodexLogsQuery } from '../shared/opencodex.js';
 
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
@@ -100,6 +101,7 @@ export interface DesktopBridge {
     usageGroups(siteId: string): Promise<unknown>;
     usageModels(siteId: string): Promise<unknown>;
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
+    opencodexLogs(query?: OpenCodexLogsQuery): Promise<OpenCodexLogsPayload>;
     channels(siteId: string): Promise<unknown>;
     channelStatus(siteId: string, channelId: string): Promise<unknown>;
     channelAssociations(siteId: string): Promise<ChannelAssociation[]>;

@@ -1,5 +1,14 @@
 # sub2api API 文档
 
+## 2.3.0 OpenCodex 日志 IPC 合同
+
+| 方法/通道           | 用途                       | 安全与状态规则                                                                                 |
+| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| IPC opencodex:logs  | 读取 OpenCodex 请求日志    | 输入/输出 Zod 校验；主进程读取 ~/.opencodex/admin-api-token 作 Bearer；仅固定 localhost:10100 |
+| preload opencodexLogs | Renderer 固定桥           | 不暴露令牌、Cookie 或任意 URL；查询只允许 provider/status/limit                                |
+
+OpenCodex 日志响应结构：顶层 timeZone/total/logs，每条含 timestamp、provider、model、firstOutputMs、inboundProtocol、requestedEffort/effectiveEffort、status、durationMs、usage（inputTokens/outputTokens/cachedInputTokens/reasoningOutputTokens）、totalTokens、displayMetrics（tokPerSecond/cost 估算）。字段缺失显示占位符，不伪造实际消费；令牌只从本机安全令牌文件读取，禁止写入仓库、日志或 Renderer。
+
 ## 2.2.0 常用网站 IPC 合同
 
 | 方法/通道                                                 | 用途                   | 安全与状态规则                                                                             |

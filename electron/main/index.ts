@@ -55,6 +55,8 @@ import {
   apiKeyManagementPayloadSchema,
   managedApiKeySchema,
 } from '../shared/contracts.js';
+import { opencodexLogsQuerySchema } from '../shared/opencodex.js';
+import { fetchOpenCodexLogs } from './services/opencodex-service.js';
 import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
 import { FileSecretBackend } from './storage/file-secret-backend.js';
@@ -419,6 +421,9 @@ function registerIpc() {
   });
   ipcMain.handle('usage:list', async (_event, input: unknown) =>
     usagePayloadSchema.parse(await siteService.usage(usageQuerySchema.parse(input))),
+  );
+  ipcMain.handle('opencodex:logs', async (_event, input: unknown) =>
+    fetchOpenCodexLogs(opencodexLogsQuerySchema.parse(input ?? {})),
   );
   ipcMain.handle('usage:stats', async (_event, input: unknown) =>
     usageStatsSchema.parse(await siteService.usageStats(usageQuerySchema.parse(input))),

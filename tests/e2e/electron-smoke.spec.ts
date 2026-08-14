@@ -205,6 +205,39 @@ test('opens the controlled renderer preview', async () => {
   await application.close();
 });
 
+test('switches usage records to the OpenCodex mode preview', async () => {
+  const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-opencodex-e2e-'));
+  const application = await launchApplication(userData);
+  await application.firstWindow();
+  await expect.poll(async () => (await application.windows()).length).toBe(2);
+  const windows = await application.windows();
+  let window = windows[0]!;
+  for (const candidate of windows) {
+    if ((await candidate.locator('.app-shell').count()) > 0) window = candidate;
+  }
+  await window.goto('file://' + process.cwd() + '/dist/index.html?surface=main&shell=usage');
+  await expect(window.locator('.usage-selected-site')).toContainText('当前选中中转站');
+  const toggle = window.getByRole('button', { name: '切换 opencodex 模式', exact: true });
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(window.locator('[data-opencodex-page]')).toBeVisible();
+  await expect(window.locator('.usage-selected-site')).toContainText('OpenCodex 本地日志');
+  await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
+  const rows = window.locator('[data-opencodex-page] tbody tr');
+  if ((await window.locator('[data-opencodex-error]').count()) > 0) {
+    await expect(window.locator('[data-opencodex-error]')).toContainText('OpenCodex 日志加载失败');
+    await expect(
+      window.locator('[data-opencodex-error]').getByRole('button', { name: '重试', exact: true }),
+    ).toBeVisible();
+  } else {
+    await expect(rows.first()).toBeVisible();
+  }
+  await window.screenshot({ path: 'test-results/usage-opencodex-preview.png' });
+  await toggle.click();
+  await expect(window.locator('.usage-selected-site')).toContainText('当前选中中转站');
+  await application.close();
+});
+
 test('manages persistent dynamic Radar entries', async () => {
   type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
   const userData = await mkdtemp(path.join(tmpdir(), 'sub2api-radar-manage-e2e-'));

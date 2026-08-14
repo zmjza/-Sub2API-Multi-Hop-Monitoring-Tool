@@ -18,8 +18,9 @@ import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { UsageQueryController } from './usage-query-controller';
 import { siteDisplayName } from '../../site-label';
 import { calculateTokensPerSecond, formatTokensPerSecond, usageSpeedTier } from './usage-speed';
+import { OpenCodexUsagePage } from './OpenCodexUsagePage';
 import './usage.css';
-export function UsagePage(props: UsageProps) {
+export function Sub2ApiUsagePage(props: UsageProps) {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'custom'>('today');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<'asc' | 'desc'>('desc');
@@ -143,8 +144,18 @@ export function UsagePage(props: UsageProps) {
         </article>
       </div>
       <section className="usage-panel">
-        <div className="usage-selected-site">
-          当前选中中转站：<strong>{siteDisplayName(props.selectedSite)}</strong>
+        <div className="usage-mode-header">
+          <div className="usage-selected-site">
+            当前选中中转站：<strong>{siteDisplayName(props.selectedSite)}</strong>
+          </div>
+          <button
+            className="usage-mode-toggle"
+            type="button"
+            aria-pressed="false"
+            onClick={props.onToggleUsageMode}
+          >
+            切换 opencodex 模式
+          </button>
         </div>
         <div className="usage-tabs">
           {(
@@ -501,6 +512,17 @@ export function UsagePage(props: UsageProps) {
       </section>
     </section>
   );
+}
+
+export function UsagePage(props: UsageProps) {
+  if (props.usageMode === 'opencodex') {
+    return (
+      <section className="usage-page">
+        <OpenCodexUsagePage onToggleUsageMode={props.onToggleUsageMode} />
+      </section>
+    );
+  }
+  return <Sub2ApiUsagePage {...props} />;
 }
 
 export function readUsageStats(value: unknown) {

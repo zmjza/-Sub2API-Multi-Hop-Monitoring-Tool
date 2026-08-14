@@ -24,6 +24,7 @@ export type MainShell =
   | 'favorite-websites'
   | 'general-settings'
   | 'notification-rules';
+export type UsageMode = 'sub2api' | 'opencodex';
 export interface PreviewContext {
   state: PreviewState;
   theme: ThemeMode;
@@ -39,6 +40,8 @@ export interface PreviewContext {
   selectedSite?: SiteSummary;
   usageData?: unknown;
   usageStats?: unknown;
+  usageMode?: UsageMode;
+  onToggleUsageMode?: () => void;
   latestUsageRecord?: { createdAt?: unknown; outputTokens?: unknown; durationMs?: unknown };
   channelsData?: unknown;
   channelAssociations?: ChannelAssociation[];

@@ -858,3 +858,41 @@ fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次
 **适用范围**
 
 所有基于 `Wei-Shaw/sub2api` 二开的 Sub2API 服务器快捷入口功能。
+## 自签名证书上游导致 Sub2API 模型同步为空、账号导入失败
+
+**现象**
+
+Sub2API 后台编辑账号时，上游地址与密钥本身可连通（curl -k 调 /v1/chat/completions 和 /v1/models 均返回 200 与完整模型列表），但“模型白名单”下拉始终显示“0 个模型”，账号无法完成模型配置或导入。部分版本空白名单可能被解释为放行全部模型；若保存成功但请求仍异常，应继续按证书方向排查并查看服务端日志。
+
+**根因**
+
+上游（如 nginx 反代）使用自签名 HTTPS 证书（openssl s_client 可见 issuer == subject，如 O=Antigravity、CN=<IP>，服务端更新后证书还可能重新签发）。Sub2API 同步上游模型按 GET {base_url}/v1/models 拉取，其 HTTP 客户端默认校验证书且官方没有通用“忽略 SSL 校验”开关（Wei-Shaw/sub2api issue #286）。实测 Node fetch 对同一地址直接报 self-signed certificate，Sub2API 后端拉取模型列表因此失败，前端显示 0 个模型。
+
+**正确做法**
+
+1. 优先让上游更换受信任证书（如 Let's Encrypt）或使用与访问域名匹配的证书。
+2. 若 Sub2API 运行环境可控，把上游自签 CA 加入其信任库：Docker 挂载 ca.crt 到 /usr/local/share/ca-certificates/ 并执行 update-ca-certificates（必要时设置 SSL_CERT_FILE）；宿主机执行 update-ca-certificates 后重启 Sub2API，再重新同步模型。
+3. 在本机前面加一层带合法证书的反代（caddy/nginx 信任该 CA 后转发到上游），账号 Base URL 指向该反代。
+
+**验证方式**
+
+· curl -sk https://<host>/v1/models（带 Authorization）返回列表：上游本身正常。
+· 不带 -k 的同一请求返回 HTTP 000 / SSL 错误：证书不受信任。
+· node -e 用 fetch 请求同一地址报 self-signed certificate：与 Sub2API 后端行为一致。
+· openssl s_client -connect <host>:<port> | openssl x509 -noout -subject -issuer -dates：issuer == subject 即自签。
+· TLS-only 端口对明文 HTTP 返回 400（The plain HTTP request was sent to HTTPS port），无明文兜底。
+
+**禁止事项**
+
+· 不要因为 curl -k 可用就认为 Sub2API 一定能导入成功。
+· 不要改 Sub2API 源码或依赖注入去跳过证书校验（官方无该开关，且有中间人风险）。
+· 不要用明文 HTTP 地址规避（TLS-only 端口直接返回 400）。
+
+**相关文件或命令**
+
+· curl -sk / curl（不带 -k）/ openssl s_client / Node fetch 实测
+· https://github.com/Wei-Shaw/sub2api/issues/286
+
+**适用范围**
+
+所有通过 Sub2API 接入自签名证书中转站或反代的账号导入与模型同步。

@@ -241,6 +241,87 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.usage-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.usage-mode-header .usage-selected-site {
+  margin-bottom: 0;
+}
+.usage-selected-site {
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #777587;
+}
+.usage-mode-toggle {
+  min-height: 36px;
+  padding: 8px 16px;
+  border: 1px solid rgba(199, 196, 216, 0.4);
+  border-radius: 8px;
+  background: #fff;
+  color: #1b1b24;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.usage-mode-toggle:hover {
+  border-color: #4f46e5;
+  color: #4f46e5;
+}
+.usage-mode-toggle.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.opencodex-source-hint {
+  margin-left: 8px;
+  color: #777587;
+  font-size: 12px;
+}
+.opencodex-provider-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.opencodex-provider-model > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+  white-space: nowrap;
+}
+.opencodex-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.opencodex-status.is-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+.opencodex-status.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.opencodex-status.is-neutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.opencodex-error .usage-action-button {
+  margin-top: 12px;
+}
 .table-tag {
   padding: 4px 8px;
   background: #e2dfff;

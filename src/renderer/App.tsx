@@ -88,6 +88,7 @@ const hasExplicitShell = new URLSearchParams(window.location.search).has('shell'
 export function App() {
   const { dismiss, notify } = useNotifications();
   const [shell, setShell] = useState<MainShell>(initialLocation.shell);
+  const [usageMode, setUsageMode] = useState<'sub2api' | 'opencodex'>('sub2api');
   const [state, setState] = useState<PreviewState>(initialLocation.state);
   const [queryPhase, setQueryPhase] = useState<string>();
   const [reducedTransparency, setReducedTransparency] = useState(
@@ -469,6 +470,9 @@ export function App() {
   context.selectedSite = selectedSite;
   context.usageData = usageData;
   context.usageStats = usageStats;
+  context.usageMode = usageMode;
+  context.onToggleUsageMode = () =>
+    setUsageMode((current) => (current === 'sub2api' ? 'opencodex' : 'sub2api'));
   context.latestUsageRecord = latestUsageRecord;
   context.channelsData = channelsData;
   context.channelAssociations = channelAssociations;
