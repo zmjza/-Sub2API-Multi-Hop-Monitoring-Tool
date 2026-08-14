@@ -14,6 +14,7 @@
 - 新增列顺序、t-s 分级、英文思考模式与按钮文案断言；全量 Vitest 53 文件 406 项通过，ESLint、Prettier、TypeScript 和生产构建通过。
 - Electron E2E 11 项通过、1 项按配置跳过；真实 OpenCodex 页面验证前三列顺序、英文思考模式、徽标分级类名与按钮文案，桌面/窄窗口几何与截图检查通过。
 - 已知限制：视觉模型代理本轮不可用（HTTP 400），样式以几何断言与截图为准；Windows x64 仅交叉构建证据。
+- 发布资产：GitHub Release 2.4.0 为非草稿、非预发布，Tag 与版本提交一致；DMG SHA-256 41f0dfc2dacf79bb789f416062a33a28ba61dfe07e835d7442eec2d4b2455b31，EXE SHA-256 9f457852529ac65a2afcb753fba10d0a9d838ecfafbe2ce12ec359ae1a9f44cd，两个 blockmap 与 update-manifest.json 同步上传；Gitee 镜像分支与标签一致。
 
 ## 2.3.0 - 2026-08-14
 
