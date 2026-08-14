@@ -3,6 +3,7 @@ import type { OpenCodexLogsPayload } from '../../../../electron/shared/opencodex
 import {
   filterOpenCodexRows,
   normalizeOpenCodexLogs,
+  OPENCODEX_COLUMNS,
   openCodexOptions,
   openCodexStatTotals,
   type OpenCodexFilters,
@@ -72,12 +73,13 @@ describe('normalizeOpenCodexLogs', () => {
     expect(rows[0]).toMatchObject({
       provider: 'opencode-go',
       model: 'deepseek-v4-flash',
-      reasoning: '最大',
+      reasoning: 'max',
       requestType: 'Responses',
       status: 200,
       statusLabel: '200',
       firstTokenLabel: '1.23s',
       tokensPerSecondLabel: '18.55 t/s',
+      speedTier: 'slow',
       costLabel: '$0.0006',
       totalTokens: '166.09K',
     });
@@ -86,6 +88,7 @@ describe('normalizeOpenCodexLogs', () => {
       requestType: 'Chat',
       firstTokenLabel: '—',
       tokensPerSecondLabel: '—',
+      speedTier: 'unavailable',
       costLabel: '—',
       status: 401,
     });
@@ -103,7 +106,7 @@ describe('filterOpenCodexRows', () => {
     expect(filterOpenCodexRows(rows, { ...filters, provider: 'opencode-go' })).toHaveLength(1);
     expect(filterOpenCodexRows(rows, { ...filters, status: '401' })).toHaveLength(1);
     expect(
-      filterOpenCodexRows(rows, { ...filters, reasoning: '最大' }).map((r) => r.provider),
+      filterOpenCodexRows(rows, { ...filters, reasoning: 'max' }).map((r) => r.provider),
     ).toEqual(['opencode-go']);
     expect(filterOpenCodexRows(rows, { ...filters, requestType: 'Chat' })).toHaveLength(1);
     expect(filterOpenCodexRows(rows, { ...filters, model: '不存在' })).toHaveLength(0);
@@ -156,8 +159,81 @@ describe('openCodexOptions', () => {
     const options = openCodexOptions(rows);
     expect(options.providers).toEqual(['openai', 'opencode-go']);
     expect(options.models).toEqual(['deepseek-v4-flash', 'gpt-5.2']);
-    expect(options.reasonings).toEqual(['—', '最大']);
+    expect(options.reasonings).toEqual(['—', 'max']);
     expect(options.requestTypes).toEqual(['Chat', 'Responses']);
     expect(options.statuses).toEqual(['200', '401']);
+  });
+});
+
+describe('OpenCodex column layout', () => {
+  it('keeps provider, provider-model and status as the first three columns', () => {
+    expect(OPENCODEX_COLUMNS).toEqual([
+      '时间',
+      '提供方',
+      '提供方模型',
+      '状态',
+      '思考模式',
+      '请求类型',
+      'Token',
+      '首字',
+      '耗时 / t/s',
+      '实际消费',
+    ]);
+  });
+});
+
+describe('speed tier mapping', () => {
+  it('derives is-slow, is-normal and is-fast tiers from tokPerSecond', () => {
+    const rows = normalizeOpenCodexLogs({
+      timeZone: 'UTC',
+      total: 3,
+      logs: [
+        {
+          timestamp: 1,
+          provider: 'p',
+          model: 'm1',
+          status: 200,
+          durationMs: 1000,
+          displayMetrics: { tokPerSecond: { kind: 'value', value: 18, estimated: false } },
+        },
+        {
+          timestamp: 2,
+          provider: 'p',
+          model: 'm2',
+          status: 200,
+          durationMs: 1000,
+          displayMetrics: { tokPerSecond: { kind: 'value', value: 30, estimated: false } },
+        },
+        {
+          timestamp: 3,
+          provider: 'p',
+          model: 'm3',
+          status: 200,
+          durationMs: 1000,
+          displayMetrics: { tokPerSecond: { kind: 'value', value: 60, estimated: false } },
+        },
+      ],
+    });
+    expect(rows.map((row) => row.speedTier)).toEqual(['slow', 'normal', 'fast']);
+  });
+
+  it('marks missing metrics as unavailable', () => {
+    const rows = normalizeOpenCodexLogs({
+      timeZone: 'UTC',
+      total: 1,
+      logs: [
+        {
+          timestamp: 1,
+          provider: 'p',
+          model: 'm',
+          status: 500,
+          durationMs: 100,
+          displayMetrics: {
+            tokPerSecond: { kind: 'unavailable', reason: 'output_missing' },
+          },
+        },
+      ],
+    });
+    expect(rows[0]?.speedTier).toBe('unavailable');
   });
 });

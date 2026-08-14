@@ -14,6 +14,7 @@ import { formatTokenCount } from '../../lib/format';
 import {
   filterOpenCodexRows,
   normalizeOpenCodexLogs,
+  OPENCODEX_COLUMNS,
   openCodexOptions,
   openCodexStatTotals,
   type OpenCodexFilters,
@@ -24,17 +25,6 @@ import { firstTokenClass } from './UsagePage';
 import './usage.css';
 
 const PAGE_SIZE = 20;
-const COLUMNS = [
-  '时间',
-  '提供方模型',
-  '思考模式',
-  '请求类型',
-  'Token',
-  '首字',
-  '耗时 / t/s',
-  '实际消费',
-  '状态',
-] as const;
 
 type OpenCodexLoadState =
   | { status: 'idle' | 'loading' }
@@ -59,7 +49,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
   const [filters, setFilters] = useState<OpenCodexFilters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [showColumns, setShowColumns] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState(() => new Set(COLUMNS));
+  const [visibleColumns, setVisibleColumns] = useState(() => new Set(OPENCODEX_COLUMNS));
   const requestSeqRef = useRef(0);
 
   const load = () => {
@@ -159,7 +149,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
           aria-pressed="true"
           onClick={propsOnToggle}
         >
-          切换 opencodex 模式
+          切回中转站模式
         </button>
       </div>
       <div className="usage-summary">
@@ -299,7 +289,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
         </div>
         {showColumns && (
           <div className="column-settings" role="group" aria-label="列设置">
-            {COLUMNS.map((column) => (
+            {OPENCODEX_COLUMNS.map((column) => (
               <label key={column}>
                 <input
                   type="checkbox"
@@ -356,35 +346,49 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
               <table>
                 <thead>
                   <tr>
-                    {COLUMNS.filter((column) => visibleColumns.has(column)).map((column) => (
-                      <th key={column}>
-                        {column === '时间' ? (
-                          <button
-                            className="time-sort"
-                            onClick={() => {
-                              const next = filters.sort === 'desc' ? 'asc' : 'desc';
-                              changeFilters({ sort: next });
-                            }}
-                          >
-                            时间 {filters.sort === 'desc' ? '↓' : '↑'}
-                          </button>
-                        ) : (
-                          column
-                        )}
-                      </th>
-                    ))}
+                    {OPENCODEX_COLUMNS.filter((column) => visibleColumns.has(column)).map(
+                      (column) => (
+                        <th key={column}>
+                          {column === '时间' ? (
+                            <button
+                              className="time-sort"
+                              onClick={() => {
+                                const next = filters.sort === 'desc' ? 'asc' : 'desc';
+                                changeFilters({ sort: next });
+                              }}
+                            >
+                              时间 {filters.sort === 'desc' ? '↓' : '↑'}
+                            </button>
+                          ) : (
+                            column
+                          )}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map((row, index) => (
                     <tr key={row.time + '-' + row.provider + '-' + row.model + '-' + index}>
                       {visibleColumns.has('时间') && <td>{row.time}</td>}
+                      {visibleColumns.has('提供方') && (
+                        <td>
+                          <span className="table-tag">{row.provider}</span>
+                        </td>
+                      )}
                       {visibleColumns.has('提供方模型') && (
                         <td>
-                          <div className="opencodex-provider-model">
-                            <span className="table-tag">{row.provider}</span>
-                            <span>{row.model}</span>
-                          </div>
+                          <span className="opencodex-provider-model">{row.model}</span>
+                        </td>
+                      )}
+                      {visibleColumns.has('状态') && (
+                        <td>
+                          <span
+                            className={'opencodex-status is-' + openCodexStatusTone(row.status)}
+                            title={row.errorCode ?? ''}
+                          >
+                            {row.statusLabel}
+                          </span>
                         </td>
                       )}
                       {visibleColumns.has('思考模式') && <td>{row.reasoning}</td>}
@@ -431,23 +435,16 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
                         <td>
                           <div className="usage-speed-cell">
                             <span>{row.durationLabel}</span>
-                            <span className="usage-speed-badge" title={row.tokensPerSecondLabel}>
+                            <span
+                              className={'usage-speed-badge is-' + (row.speedTier ?? 'unavailable')}
+                              title={row.tokensPerSecondLabel}
+                            >
                               {row.tokensPerSecondLabel}
                             </span>
                           </div>
                         </td>
                       )}
                       {visibleColumns.has('实际消费') && <td className="cost">{row.costLabel}</td>}
-                      {visibleColumns.has('状态') && (
-                        <td>
-                          <span
-                            className={'opencodex-status is-' + openCodexStatusTone(row.status)}
-                            title={row.errorCode ?? ''}
-                          >
-                            {row.statusLabel}
-                          </span>
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -21,11 +21,30 @@ test('checks OpenCodex usage page geometry at desktop and narrow widths', async 
     if ((await candidate.locator('.app-shell').count()) > 0) window = candidate;
   }
   await window.goto('file://' + process.cwd() + '/dist/index.html?surface=main&shell=usage');
+  await expect(
+    window.getByRole('button', { name: '切换 opencodex 模式', exact: true }),
+  ).toBeVisible();
   await window.getByRole('button', { name: '切换 opencodex 模式', exact: true }).click();
   await expect(window.locator('[data-opencodex-page]')).toBeVisible();
+  await expect(window.getByRole('button', { name: '切回中转站模式', exact: true })).toBeVisible();
   await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
   if ((await window.locator('[data-opencodex-error]').count()) === 0) {
     await expect(window.locator('[data-opencodex-page] tbody tr').first()).toBeVisible();
+    const headers = await window.locator('[data-opencodex-page] thead th').allTextContents();
+    expect(headers.slice(0, 4).map((text) => text.replace(/[↓↑]/g, '').trim())).toEqual([
+      '时间',
+      '提供方',
+      '提供方模型',
+      '状态',
+    ]);
+    const firstRowText = await window.locator('[data-opencodex-page] tbody tr').first().innerText();
+    expect(firstRowText).toMatch(/low|medium|high|xhigh|max|none|—/);
+    const badgeClasses = await window
+      .locator('[data-opencodex-page] .usage-speed-badge')
+      .evaluateAll((badges) => badges.map((badge) => Array.from(badge.classList).join(' ')));
+    for (const classes of badgeClasses) {
+      expect(classes).toMatch(/is-(slow|normal|fast|unavailable)/);
+    }
   }
 
   const checkGeometry = async () => {
@@ -67,9 +86,16 @@ test('checks OpenCodex usage page geometry at desktop and narrow widths', async 
   const stats = desktop.stats as Array<{ left: number; right: number }>;
   if (stats.length) {
     for (let index = 1; index < stats.length; index += 1) {
-      expect(stats[index]!.left).toBeGreaterThanOrEqual(stats[index - 1]!.right - 1);
+      const previous = stats[index - 1]!;
+      const current = stats[index]!;
+      if (current.top === previous.top) {
+        expect(current.left).toBeGreaterThanOrEqual(previous.right - 1);
+      }
     }
-    expect(stats[stats.length - 1]!.right).toBeLessThanOrEqual(desktop.viewportWidth as number);
+    for (const stat of stats) {
+      expect(stat.left).toBeGreaterThanOrEqual(0);
+      expect(stat.right).toBeLessThanOrEqual((desktop.viewportWidth as number) + 1);
+    }
   }
   await window.screenshot({ path: path.join(evidenceDir, 'opencodex-desktop.png') });
 

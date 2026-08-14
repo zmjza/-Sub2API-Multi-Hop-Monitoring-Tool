@@ -3,8 +3,22 @@ import type {
   OpenCodexLogsPayload,
 } from '../../../../electron/shared/opencodex';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
+import { usageSpeedTier, type UsageSpeedTier } from './usage-speed';
 
-export type OpenCodexReasoningLabel = '低' | '中' | '高' | '极高' | '最大' | '无' | '—';
+export type OpenCodexReasoningLabel = string;
+
+export const OPENCODEX_COLUMNS = [
+  '时间',
+  '提供方',
+  '提供方模型',
+  '状态',
+  '思考模式',
+  '请求类型',
+  'Token',
+  '首字',
+  '耗时 / t/s',
+  '实际消费',
+] as const;
 
 export interface OpenCodexRow {
   time: string;
@@ -28,6 +42,7 @@ export interface OpenCodexRow {
   firstTokenMs?: number;
   durationLabel: string;
   tokensPerSecondLabel: string;
+  speedTier: UsageSpeedTier;
   costLabel: string;
   status: number;
   statusLabel: string;
@@ -38,17 +53,17 @@ export interface OpenCodexRow {
 function reasoningLabel(value: string | undefined): OpenCodexReasoningLabel {
   switch (value) {
     case 'low':
-      return '低';
+      return 'low';
     case 'medium':
-      return '中';
+      return 'medium';
     case 'high':
-      return '高';
+      return 'high';
     case 'xhigh':
-      return '极高';
+      return 'xhigh';
     case 'max':
-      return '最大';
+      return 'max';
     case 'none':
-      return '无';
+      return 'none';
     default:
       return '—';
   }
@@ -100,6 +115,12 @@ function formatTokensPerSecond(entry: OpenCodexLogEntry): string {
   return metric.value.toFixed(2) + ' t/s';
 }
 
+function speedTierFor(entry: OpenCodexLogEntry): UsageSpeedTier {
+  const metric = entry.displayMetrics?.tokPerSecond;
+  if (metric?.kind !== 'value') return 'unavailable';
+  return usageSpeedTier(metric.value);
+}
+
 export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodexRow[] {
   return payload.logs.map((entry) => ({
     time: formatLocalTimestamp(entry.timestamp),
@@ -122,6 +143,7 @@ export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodex
     firstTokenMs: entry.firstOutputMs,
     durationLabel: formatDuration(entry.durationMs),
     tokensPerSecondLabel: formatTokensPerSecond(entry),
+    speedTier: speedTierFor(entry),
     costLabel: formatCost(entry),
     status: entry.status,
     statusLabel: statusLabel(entry.status),

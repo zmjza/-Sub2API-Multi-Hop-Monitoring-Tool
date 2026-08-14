@@ -222,6 +222,7 @@ test('switches usage records to the OpenCodex mode preview', async () => {
   await toggle.click();
   await expect(window.locator('[data-opencodex-page]')).toBeVisible();
   await expect(window.locator('.usage-selected-site')).toContainText('OpenCodex 本地日志');
+  await expect(window.getByRole('button', { name: '切回中转站模式', exact: true })).toBeVisible();
   await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
   const rows = window.locator('[data-opencodex-page] tbody tr');
   if ((await window.locator('[data-opencodex-error]').count()) > 0) {
@@ -233,8 +234,11 @@ test('switches usage records to the OpenCodex mode preview', async () => {
     await expect(rows.first()).toBeVisible();
   }
   await window.screenshot({ path: 'test-results/usage-opencodex-preview.png' });
-  await toggle.click();
+  await window.getByRole('button', { name: '切回中转站模式', exact: true }).click();
   await expect(window.locator('.usage-selected-site')).toContainText('当前选中中转站');
+  await expect(
+    window.getByRole('button', { name: '切换 opencodex 模式', exact: true }),
+  ).toBeVisible();
   await application.close();
 });
 
@@ -2341,7 +2345,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.getByLabel('模型').locator('option')).toContainText(['全部', 'test-model'], {
     timeout: 15_000,
   });
-  await expect(main.locator('.usage-table-panel').getByText('高', { exact: true })).toBeVisible();
+  await expect(main.locator('.usage-table-panel').getByText('high', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel').getByText('首字', { exact: true })).toBeVisible();
   await expect(main.locator('.usage-table-panel')).not.toContainText('缓存 Token');
   await expect(main.locator('.usage-table-panel')).toContainText('耗时 / t/s');

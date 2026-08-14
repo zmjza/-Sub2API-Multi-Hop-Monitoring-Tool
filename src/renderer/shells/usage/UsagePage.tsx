@@ -680,11 +680,11 @@ export function firstTokenClass(value: number | undefined): string {
 function reasoningLabel(value: string | undefined) {
   return (
     {
-      low: '低',
-      medium: '中',
-      high: '高',
-      xhigh: '极高',
-      max: '最大',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: 'xhigh',
+      max: 'max',
     }[value ?? ''] ?? '—'
   );
 }
