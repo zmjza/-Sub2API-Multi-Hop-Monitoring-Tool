@@ -17,6 +17,7 @@
 - Electron E2E：OpenCodex 模式切换用例通过，完整套件 10 项通过、1 项按配置跳过（并行时窗口高度取整误差为已知 macOS 平台问题，单 worker 复测通过）。
 - 真实 OpenCodex 服务（localhost:10100）成功加载 771 条日志，字段、筛选、统计与表格正常；页面几何检查确认统计卡无重叠、表格横向滚动、窄窗口布局稳定，截图存于 test-results/opencodex-visual/。
 - 已知限制：视觉模型代理本轮不可用（HTTP 400），页面样式以程序化几何断言与截图为准；Windows x64 仅交叉构建证据。
+- 发布资产：GitHub Release 2.3.0 为非草稿、非预发布，Tag 与版本提交一致；DMG SHA-256 4b65d788378a9c54b5dff58ae81d9c169ac054ed3cc626ff5108f7de62244910，EXE SHA-256 241d288f5276b209b7bbb4a511e90e061b22a4c97affda904fefd9e83b30fe18，两个 blockmap 与 update-manifest.json 同步上传；Gitee 镜像分支与标签一致。
 
 ## 2.2.1 - 2026-08-14
 
