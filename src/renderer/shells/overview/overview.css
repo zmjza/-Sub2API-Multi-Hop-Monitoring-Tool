@@ -1268,7 +1268,7 @@
   grid-column: 1 / -1;
   min-height: 86px;
   margin-top: 12px;
-  padding: 10px;
+  padding: 9px 10px;
   border: 1px solid rgba(16, 185, 129, 0.18);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.58);
@@ -1317,8 +1317,10 @@
   display: flex;
   flex-wrap: nowrap;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  max-height: 24px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
 }
 .rate-inline-channel-associated::-webkit-scrollbar {
@@ -1326,11 +1328,12 @@
 }
 .rate-inline-channel-associated span {
   flex: 0 0 auto;
-  padding: 3px 7px;
+  padding: 2px 6px;
   border: 1px solid #d9d6e4;
   border-radius: 6px;
   color: #4c495b;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 14px;
 }
 .rate-platform-secondary {
   display: grid;
@@ -1385,7 +1388,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 2px;
   color: #64748b;
   font-size: 9px;
 }
@@ -1440,7 +1443,15 @@
   font-size: 9px;
 }
 .rate-inline-channel-error {
-  display: block;
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #b45309;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .rate-inline-channel.is-loading,
 .rate-inline-channel.is-message {

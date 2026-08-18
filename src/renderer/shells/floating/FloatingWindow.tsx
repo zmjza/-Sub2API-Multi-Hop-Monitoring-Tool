@@ -75,6 +75,7 @@ export function FloatingWindow(props: FloatingProps) {
         keyGroup.groupId,
         manualChannelIds,
         channelView.availableChannelsState,
+        true,
       )
     : undefined;
   const associatedChannels = channelPresentation?.association;
@@ -91,7 +92,7 @@ export function FloatingWindow(props: FloatingProps) {
             ? '渠道查询失败'
             : associatedChannels?.status === 'matched'
               ? `${associatedChannels.channels.length} 个关联渠道`
-              : '当前 Key 无关联渠道';
+              : '暂未关联渠道';
   const canOpenChannelDialog = associatedChannels?.status === 'matched' && Boolean(primaryChannel);
   const primaryChannelHealth = summarizeLatestChannelChecks(primaryChannel?.timeline ?? []);
   const estimate = props.selectedSite?.estimatedDurationMs ?? [3000, 5000];

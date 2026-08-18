@@ -62,6 +62,8 @@ OpenCodex 日志响应结构：顶层 timeZone/total/logs，每条含 timestamp�
 
 推荐规则：1.9.0 起最近 1 分钟内仅 `failed/error/down/unavailable` 排除；其他状态和空状态按稳定处理。无关联渠道状态的候选进入独立价格池，不与有状态候选混合归一化。
 
+展示口径（2.5.0）：站点卡片、渠道状态弹层与悬浮窗只显示手动保存的 `channelIds`；无手动关联显示“暂未关联渠道”，不自动补渠道、不展示历史自动关联。倍率推荐继续使用“手动优先、自动候选兜底”的带状态候选池，推荐结果不作为最终展示来源。`/channels/available` 关系、分组名、平台、模型与 monitor ID 均不得重新成为展示联接受源。
+
 ## 2026-07-24 普通用户接口核对与验证
 
 证据版本：GitHub `Wei-Shaw/sub2api` main 提交 `cb24522dd53f8f363d008e3afdc8e4baf9788cab`。公共前缀为 `/api/v1`，所有接口使用当前站点已有 Bearer Token。下列路径均为普通用户路由，不得替换为 `/admin/*`。

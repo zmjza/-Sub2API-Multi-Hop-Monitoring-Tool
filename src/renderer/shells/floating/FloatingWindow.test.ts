@@ -146,6 +146,9 @@ describe('floating window transparency', () => {
         keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
         keyPreference: { mode: 'manual', keyId: 'key-1' },
         usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelAssociations: [
+          { siteId: 'site-1', groupId: 'group-1', channelIds: ['channel-1'], source: 'manual' },
+        ],
         channelsData: {
           state: 'supported',
           channels: [
@@ -223,6 +226,9 @@ describe('floating window transparency', () => {
         keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
         keyPreference: { mode: 'manual', keyId: 'key-1' },
         usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelAssociations: [
+          { siteId: 'site-1', groupId: 'group-1', channelIds: ['channel-1'], source: 'manual' },
+        ],
         channelsData: {
           state: 'supported',
           channels: [{ id: 'channel-1', name: 'Plus 渠道', status: 'normal', timeline: [] }],
@@ -300,6 +306,60 @@ describe('floating window transparency', () => {
 
     expect(html).toContain('class="floating-channel-card is-message"');
     expect(html).toContain('渠道查询失败');
+    expect(html).not.toContain('aria-label="查看全部关联渠道"');
+  });
+});
+
+describe('floating manual-only channel association', () => {
+  it('shows a manual-only empty state instead of automatic channels', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        keyOptions: [{ id: 'key-1', maskedLabel: 'sk-***', status: 'active', groupId: 'group-1' }],
+        keyPreference: { mode: 'manual', keyId: 'key-1' },
+        usageFilterOptions: { models: [], groups: [{ id: 'group-1', name: 'Plus 分组' }] },
+        channelsData: {
+          state: 'supported',
+          channels: [
+            {
+              id: 'channel-1',
+              name: '自动匹配到的渠道',
+              status: 'normal',
+              timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
+            },
+          ],
+          availableChannels: [
+            {
+              name: '自动匹配到的渠道',
+              platforms: [
+                {
+                  platform: 'openai',
+                  groupIds: ['group-1'],
+                  groupNames: ['Plus 分组'],
+                  modelNames: [],
+                },
+              ],
+            },
+          ],
+          availableChannelsState: 'complete',
+        },
+      }),
+    );
+    expect(html).toContain('class="floating-channel-card is-message"');
+    expect(html).toContain('暂未关联渠道');
+    expect(html).not.toContain('自动匹配到的渠道');
     expect(html).not.toContain('aria-label="查看全部关联渠道"');
   });
 });

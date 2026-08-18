@@ -200,7 +200,7 @@ export function matchGroupToChannels<T extends RankableChannel>(
   return { status: 'unmatched', basis: 'none' };
 }
 
-/** Resolves the final channels used by every surface. Partial automatic data never replaces a manual mapping. */
+/** Resolves manual associations first, falling back to an automatic candidate pool for internal scoring. */
 export function resolveFinalChannelAssociation<T extends RankableChannel & { id: string }>(
   channels: T[],
   groupName: string | undefined,
@@ -209,13 +209,13 @@ export function resolveFinalChannelAssociation<T extends RankableChannel & { id:
   manualChannelIds: string[] = [],
   automaticState: AutomaticRelationshipState = relationships.length ? 'complete' : 'empty',
 ): FinalChannelAssociation<T> {
-  const automatic = matchGroupToChannels(channels, groupName, relationships, groupId);
-  if (automaticState === 'complete' && automatic.status === 'matched')
-    return { ...automatic, source: 'auto' };
-
   const manual = channels.filter((channel) => manualChannelIds.includes(String(channel.id)));
   if (manual.length)
     return { status: 'matched', channels: manual, basis: 'group-id', source: 'manual' };
+
+  const automatic = matchGroupToChannels(channels, groupName, relationships, groupId);
+  if (automaticState === 'complete' && automatic.status === 'matched')
+    return { ...automatic, source: 'auto' };
 
   return { status: 'unmatched', basis: 'none', source: 'unmatched' };
 }
@@ -228,6 +228,7 @@ export function resolveChannelPresentation<T extends RankableChannel & { id: str
   groupId?: string,
   manualChannelIds: string[] = [],
   automaticState: AutomaticRelationshipState = relationships.length ? 'complete' : 'empty',
+  strictManualOnly = false,
 ): {
   association: FinalChannelAssociation<T>;
   match: ChannelMatchResult<T>;
@@ -239,7 +240,7 @@ export function resolveChannelPresentation<T extends RankableChannel & { id: str
     relationships,
     groupId,
     manualChannelIds,
-    automaticState,
+    strictManualOnly ? 'empty' : automaticState,
   );
   const stableAssociation: FinalChannelAssociation<T> =
     association.status === 'matched'

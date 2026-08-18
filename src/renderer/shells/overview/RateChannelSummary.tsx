@@ -20,7 +20,6 @@ export function RateChannelSummary(props: {
   matchState: InlineChannelMatchState;
   channel?: Channel;
   channels?: Channel[];
-  associationSource?: 'auto' | 'manual' | 'unmatched';
   detailState?: InlineChannelDetailState;
   onRetry: () => void;
   onListRetry?: () => void;
@@ -49,7 +48,7 @@ export function RateChannelSummary(props: {
     );
   if (props.matchState === 'ambiguous') return <InlineMessage text="当前分组匹配到多个渠道" />;
   if (props.matchState === 'unmatched' || !props.channel)
-    return <InlineMessage text="当前分组未关联到具体渠道" />;
+    return <InlineMessage text="暂未关联渠道" />;
 
   const detail =
     props.detailState?.state === 'success' && props.detailState.payload.state === 'supported'
@@ -93,7 +92,11 @@ export function RateChannelSummary(props: {
         </small>
       )}
       {(props.channels ?? [props.channel]).length > 1 && (
-        <div className="rate-inline-channel-associated" aria-label="全部关联渠道">
+        <div
+          className="rate-inline-channel-associated"
+          aria-label="全部关联渠道"
+          data-count={(props.channels ?? [props.channel]).length}
+        >
           {(props.channels ?? [props.channel]).map((item) => (
             <span key={item.id}>
               {item.name} · {statusLabel(item.status)}
@@ -102,7 +105,7 @@ export function RateChannelSummary(props: {
         </div>
       )}
       <div className="rate-inline-channel-heading">
-        <span>{props.associationSource === 'manual' ? '手动指定' : '自动关联'}</span>
+        <span>手动指定</span>
         <b title={detail?.name ?? props.channel.name}>{detail?.name ?? props.channel.name}</b>
         <em className={`rate-channel-status ${status}`}>{statusLabel(status)}</em>
       </div>
@@ -133,7 +136,7 @@ export function RateChannelSummary(props: {
       </div>
       {detailFailed && (
         <small className="rate-inline-channel-error" role="alert">
-          详情加载失败，可单独重试
+          详情加载失败
         </small>
       )}
     </div>

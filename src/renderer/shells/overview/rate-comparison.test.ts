@@ -176,6 +176,9 @@ describe('rate comparison rules', () => {
         ],
         channelState: 'supported' as const,
         relationships: relationship('live', '正常渠道'),
+        channelAssociations: [
+          { groupId: 'live', channelIds: ['live-channel'], source: 'manual' as const },
+        ],
       },
     ]);
     expect(result[0]?.sites.map((site) => site.siteId)).toEqual(['live']);
@@ -220,6 +223,9 @@ describe('rate comparison rules', () => {
       ],
       channelState: 'supported' as const,
       relationships: relationship(id, `${id} 分组`),
+      channelAssociations: [
+        { groupId: id, channelIds: [`${id}-channel`], source: 'manual' as const },
+      ],
     });
     const result = comparePlatformRates([
       stableSite('cheap', 0.1),
@@ -535,6 +541,9 @@ describe('rate comparison rules', () => {
         ],
         channelState: 'supported',
         relationships: relationship('cheap', '分组 cheap'),
+        channelAssociations: [
+          { groupId: 'cheap', channelIds: ['cheap-channel'], source: 'manual' as const },
+        ],
       },
       {
         siteId: 'stable',
@@ -552,6 +561,9 @@ describe('rate comparison rules', () => {
         ],
         channelState: 'supported',
         relationships: relationship('stable', '分组 stable'),
+        channelAssociations: [
+          { groupId: 'stable', channelIds: ['stable-channel'], source: 'manual' as const },
+        ],
       },
     ]);
     expect(result[0]).toMatchObject({ platformKey: 'openai', priceScore: 10 });
@@ -583,6 +595,7 @@ describe('rate comparison rules', () => {
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelAssociations: [{ groupId: 'z-group', channelIds: ['z'], source: 'manual' as const }],
       },
       {
         siteId: 'a-site',
@@ -599,6 +612,7 @@ describe('rate comparison rules', () => {
             timeline: [{ status: 'normal', checkedAt: new Date().toISOString() }],
           },
         ],
+        channelAssociations: [{ groupId: 'a-group', channelIds: ['a'], source: 'manual' as const }],
       },
     ]);
 
@@ -630,6 +644,9 @@ describe('rate comparison rules', () => {
         ],
         channelState: 'supported',
         relationships: relationship('shared', '共享分组'),
+        channelAssociations: [
+          { groupId: 'shared', channelIds: ['one', 'two'], source: 'manual' as const },
+        ],
       },
     ]);
 
@@ -666,6 +683,10 @@ describe('rate comparison rules', () => {
         ],
         channelState: 'supported',
         relationships: [...relationship('fast', '高速分组'), ...relationship('stable', '稳定分组')],
+        channelAssociations: [
+          { groupId: 'fast', channelIds: ['fast-channel'], source: 'manual' as const },
+          { groupId: 'stable', channelIds: ['stable-channel'], source: 'manual' as const },
+        ],
       },
     ]);
 

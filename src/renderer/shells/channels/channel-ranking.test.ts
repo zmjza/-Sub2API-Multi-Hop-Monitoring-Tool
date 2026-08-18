@@ -191,7 +191,7 @@ describe('resolveChannelPresentation', () => {
     { id: 'manual', name: '手动渠道', status: 'failed' as const },
   ];
 
-  it('returns the same primary result for complete automatic associations', () => {
+  it('shows only manual channels for display surfaces (strict mode without automatic fallback)', () => {
     const presentation = resolveChannelPresentation(
       channels,
       '当前分组',
@@ -199,11 +199,11 @@ describe('resolveChannelPresentation', () => {
       'group-1',
       [],
       'complete',
+      true,
     );
-    expect(presentation.association).toMatchObject({ status: 'matched', source: 'auto' });
-    expect(presentation.primary?.id).toBe('a');
+    expect(presentation.association).toMatchObject({ status: 'unmatched', source: 'unmatched' });
+    expect(presentation.primary).toBeUndefined();
   });
-
   it('keeps the same primary channel when the API reverses a manual multi-select list', () => {
     expect(
       resolveChannelPresentation(channels, '当前分组', [], 'group-1', ['manual', 'b'], 'partial')
@@ -221,32 +221,16 @@ describe('resolveChannelPresentation', () => {
     ).toBe('b');
   });
 
-  it('keeps the same primary channel when the API reverses an automatic association list', () => {
-    expect(
-      resolveChannelPresentation(channels, '当前分组', relationships, 'group-1', [], 'complete')
-        .primary?.id,
-    ).toBe('a');
-    expect(
-      resolveChannelPresentation(
-        [...channels].reverse(),
-        '当前分组',
-        [...relationships].reverse(),
-        'group-1',
-        [],
-        'complete',
-      ).primary?.id,
-    ).toBe('a');
-  });
-
-  it('handles one channel and no association without inventing a primary', () => {
+  it('handles a single manual channel and no association without inventing a primary', () => {
     expect(
       resolveChannelPresentation(
         [channels[0]!],
         '当前分组',
         [relationships[0]!],
         'group-1',
-        [],
+        ['a'],
         'complete',
+        true,
       ).primary?.id,
     ).toBe('a');
     expect(resolveChannelPresentation(channels, '当前分组', [], 'group-1').primary).toBeUndefined();
@@ -337,7 +321,7 @@ describe('rankChannels', () => {
     });
   });
 
-  it('lets a complete automatic relationship take over a stale manual mapping', () => {
+  it('never lets a complete automatic relationship take over a manual mapping', () => {
     const result = resolveFinalChannelAssociation(
       [
         { id: 'auto', name: 'codex-pro' },
@@ -354,8 +338,13 @@ describe('rankChannels', () => {
       ['manual'],
       'complete',
     );
-    expect(result).toMatchObject({ status: 'matched', source: 'auto', channels: [{ id: 'auto' }] });
+    expect(result).toMatchObject({
+      status: 'matched',
+      source: 'manual',
+      channels: [{ id: 'manual' }],
+    });
   });
+
   it('normalizes monitor identities without weakening full-name equality', () => {
     expect(normalizeChannelIdentity('  ChatGPT.Plus【高并发_特惠-通道】 ')).toBe(
       normalizeChannelIdentity('chatgpt plus（高并发特惠通道）'),

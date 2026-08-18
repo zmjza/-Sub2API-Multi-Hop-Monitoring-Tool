@@ -238,6 +238,7 @@ export function OverviewPage(props: OverviewProps) {
             currentKey?.groupId,
             manual?.channelIds ?? [],
             channelStatusCacheBySite[site.id]?.channels?.availableChannelsState,
+            true,
           )
         : undefined;
       return [
@@ -1022,7 +1023,6 @@ export function OverviewPage(props: OverviewProps) {
                       matchState={matchState}
                       channel={matchedChannel}
                       channels={matchedChannels}
-                      associationSource={channelContext?.allMatches?.source}
                       detailState={detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined}
                       onRetry={() =>
                         matchedChannel

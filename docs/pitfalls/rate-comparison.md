@@ -1,5 +1,37 @@
 # 倍率比较与渠道稳定性避坑
 
+## 多渠道手动关联摘要必须维持固定槽位高度
+
+**现象**
+
+站点卡片展示多条手动指定渠道（“全部关联渠道”胶囊行）同时渠道详情失败时，渠道摘要内容高度超过固定 102px 槽位，导致槽位垂直溢出（scrollHeight 100+ 对 clientHeight 100），E2E 的 `allControlsValid`/`summaryNoOverflow` 断言失败。
+
+**根因**
+
+原摘要以单渠道（heading+metrics+timeline）高度设计；新增“全部关联渠道”行加“详情加载失败”整行后，叠加 padding/margin 超出容器高度。
+
+**正确做法**
+
+展示面只显示手动指定渠道且无手动关联显示“暂未关联渠道”；多渠道行保持单行胶囊（max-height+overflow-y hidden），详情失败提示不占用正常流高度（在 `position: relative` 容器内绝对定位到底部），并把 associated 行 margin、metrics margin-top、容器 padding 收紧，内容保持在固定 100px 可视高度内。
+
+**验证方式**
+
+运行 `tests/e2e/electron-smoke.spec.ts` 的“connects site entry…”用例，观察总览卡片几何断言（`summaryNoOverflow` 必须为 true）与全量 Vitest。
+
+**禁止事项**
+
+不要把多渠道行做成可撑高容器且依赖 overflow hidden 静默裁切；不要让详情失败提示在正常流里新增一行；不要因为单条卡片内容多就把所有卡片摘要槽位改成自动高度（会破坏站点卡片视觉对齐）。
+
+**相关文件或命令**
+
+- `src/renderer/shells/overview/RateChannelSummary.tsx`
+- `src/renderer/shells/overview/overview.css`
+- `tests/e2e/electron-smoke.spec.ts`
+
+**适用范围**
+
+涉及站点卡片当前渠道摘要、多渠道手动关联、悬浮窗与渠道弹层的展示。
+
 ## 官网品牌图标要验证来源、打包形态和最终清晰度
 
 **现象**

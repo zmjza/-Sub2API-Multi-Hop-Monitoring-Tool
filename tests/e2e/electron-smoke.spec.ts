@@ -1742,7 +1742,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   channelDelayMs = 0;
   await expect(main.locator('.site-card > .rate-inline-channel.is-error')).toHaveCount(1);
   await expect(
-    main.locator('.site-card > .rate-inline-channel').filter({ hasText: '自动关联' }),
+    main.locator('.site-card > .rate-inline-channel').filter({ hasText: '暂未关联渠道' }),
   ).toHaveCount(4);
   await expect(main.locator('.site-card').getByText('本地集成站点', { exact: true })).toBeVisible();
   await main.locator('.site-card').filter({ hasText: '本地集成站点' }).dblclick();
@@ -1768,9 +1768,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   const firstSiteCard = main.locator('.site-card').filter({ hasText: '本地集成备注' });
   await main.getByLabel('本地集成站点 默认 Key').selectOption('key-e2e-manual');
   await expect(firstSiteCard.locator('.quota-summary')).toContainText('总额 $20.00');
-  await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText(
-    '当前分组未关联到具体渠道',
-  );
+  await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText('暂未关联渠道');
   expect(
     await firstSiteCard.locator('.rate-inline-channel').evaluate((summary) => {
       const sibling = Array.from(
@@ -1820,8 +1818,14 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     .toBeGreaterThan(0);
   await expect(firstSiteCard).not.toContainText('当前分组匹配到多个渠道');
   expect(channelDetailRequestCountById.get('channel-e2e-2') ?? 0).toBe(0);
+  await firstSiteCard.getByRole('button', { name: '查看 本地集成站点 渠道状态' }).click();
+  const inlineAssociationPopover = main.getByRole('dialog', { name: /渠道状态/ });
+  await inlineAssociationPopover.getByRole('button', { name: /关联 E2E 分组精准通道/ }).click();
+  await inlineAssociationPopover.getByRole('button', { name: /关联 OpenAI 便宜 A/ }).click();
+  await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText('手动指定');
+  await inlineAssociationPopover.getByRole('button', { name: '关闭渠道状态弹窗' }).click();
   await expect(firstSiteCard.locator('.rate-inline-channel')).toContainText('E2E 分组');
-  await expect(firstSiteCard).toContainText('详情加载失败，可单独重试');
+  await expect(firstSiteCard).toContainText('详情加载失败');
   const currentDetailRequestsBeforeRetry = channelDetailRequestCountById.get('channel-e2e-1') ?? 0;
   failingChannelDetails.delete('channel-e2e-1');
   await firstSiteCard.getByTitle('重试渠道详情').click();
@@ -1834,12 +1838,17 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     '用于验证超长渠道名称不会撑高当前渠道摘要固定槽位的渠道',
   );
   expect(
-    await firstSiteCard.locator('.rate-inline-channel-heading > b').evaluate((name) => ({
-      whiteSpace: getComputedStyle(name).whiteSpace,
-      contained: name.scrollWidth > name.clientWidth,
-      summaryHeight: name.closest('.rate-inline-channel')?.getBoundingClientRect().height,
-    })),
-  ).toEqual({ whiteSpace: 'nowrap', contained: true, summaryHeight: 102 });
+    await firstSiteCard.locator('.rate-inline-channel-heading > b').evaluate((name) => {
+      const summary = name.closest<HTMLElement>('.rate-inline-channel');
+      return {
+        whiteSpace: getComputedStyle(name).whiteSpace,
+        contained: name.scrollWidth > name.clientWidth,
+        fixedSlotHeight: Boolean(
+          summary && Math.abs(summary.getBoundingClientRect().height - 102) <= 1,
+        ),
+      };
+    }),
+  ).toEqual({ whiteSpace: 'nowrap', contained: true, fixedSlotHeight: true });
   await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
   await expect(main.getByRole('heading', { name: '倍率对比', exact: true })).toHaveCount(0);
   await expect(main.getByText('按充值比例折算后，比较各平台最低分组', { exact: true })).toHaveCount(
@@ -2371,6 +2380,13 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     const sites = (await desktop?.list())?.sites ?? [];
     if (!desktop || !sites.length) throw new Error('Sites unavailable');
     for (const site of sites) await desktop.setKeyPreference(site.id, { mode: 'auto' });
+  });
+  await main.evaluate(async () => {
+    const desktop = window.sub2apiDesktop?.sites;
+    const sites = (await desktop?.list())?.sites ?? [];
+    if (!desktop) throw new Error('Sites unavailable');
+    for (const site of sites)
+      await desktop.clearChannelAssociation({ siteId: site.id, groupId: 'g1' });
   });
   await main.getByRole('button', { name: '渠道状态', exact: true }).click();
   await expect(main.locator('.channel-card')).toHaveCount(7);
