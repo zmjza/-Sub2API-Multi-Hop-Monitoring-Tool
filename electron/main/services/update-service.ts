@@ -3,6 +3,7 @@ import { createWriteStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 
@@ -27,6 +28,15 @@ export type UpdateCheckResult =
   | { status: 'error'; code: string; message: string };
 
 export const REMIND_LATER_DELAY_MS = 24 * 60 * 60 * 1000;
+const DOWNLOAD_ATTEMPTS = 3;
+const DOWNLOAD_RETRY_DELAY_MS = 250;
+
+function isRetryableDownloadError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|UND_ERR|aborted|terminated|CONNECTION_RESET)/i.test(
+    message,
+  ) || /^DOWNLOAD_HTTP_5\d\d$/.test(message);
+}
 
 export function compareSemver(a: string, b: string): number {
   const parse = (value: string) => {
@@ -177,26 +187,40 @@ export class UpdateService {
     const filePath = path.join(os.tmpdir(), `sub2api-update-${manifest.version}${suffix}`);
     this.tempFile = filePath;
     let received = 0;
-    const response = await this.fetchWithTimeout(asset.url);
-    if (!response.ok || !response.body) throw new Error(`DOWNLOAD_HTTP_${response.status}`);
-    const total = Number(response.headers.get('content-length') ?? 0) || undefined;
-    const stream = new (await import('node:stream')).Transform({
-      transform(chunk, _encoding, callback) {
-        received += chunk.length;
-        onProgress?.({ received, total });
-        callback(null, chunk);
-      },
-    });
-    await pipeline(
-      response.body as unknown as NodeJS.ReadableStream,
-      stream,
-      createWriteStream(filePath),
-    );
-    if ((await sha256File(filePath)).toLowerCase() !== asset.sha256.toLowerCase()) {
+    try {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
+        await fs.rm(filePath, { force: true });
+        received = 0;
+        try {
+          const response = await this.fetchWithTimeout(asset.url);
+          if (!response.ok || !response.body) throw new Error(`DOWNLOAD_HTTP_${response.status}`);
+          const total = Number(response.headers.get('content-length') ?? 0) || undefined;
+          const stream = new Transform({
+            transform(chunk, _encoding, callback) {
+              received += chunk.length;
+              onProgress?.({ received, total });
+              callback(null, chunk);
+            },
+          });
+          await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), stream, createWriteStream(filePath));
+          if ((await sha256File(filePath)).toLowerCase() !== asset.sha256.toLowerCase()) {
+            throw new Error('SHA256_MISMATCH');
+          }
+          return { filePath, platform: this.platform };
+        } catch (error) {
+          lastError = error;
+          await fs.rm(filePath, { force: true });
+          if (attempt < DOWNLOAD_ATTEMPTS && isRetryableDownloadError(error))
+            await new Promise((resolve) => setTimeout(resolve, DOWNLOAD_RETRY_DELAY_MS * attempt));
+          else break;
+        }
+      }
+      throw lastError instanceof Error ? lastError : new Error('DOWNLOAD_FAILED');
+    } catch (error) {
       await this.cleanup();
-      throw new Error('SHA256_MISMATCH');
+      throw error;
     }
-    return { filePath, platform: this.platform };
   }
 
   async cleanup() {

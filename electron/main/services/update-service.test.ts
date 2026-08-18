@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import {
   compareSemver,
   REMIND_LATER_DELAY_MS,
@@ -192,5 +193,53 @@ describe('update service', () => {
     const result = await service.download(downloadManifest);
     expect(result.filePath).toMatch(/sub2api-update-1\.4\.6\.dmg$/);
     await service.cleanup();
+  });
+
+  it('cleans up a partial file when the download stream fails', async () => {
+    const fetchImpl = async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial'));
+            queueMicrotask(() => controller.error(new Error('CONNECTION_RESET')));
+          },
+        }),
+        { status: 200 },
+      );
+    const service = new UpdateService(
+      '1.4.5',
+      { get: (_key, fallback) => fallback, set: () => undefined },
+      fetchImpl,
+      'darwin',
+      'arm64',
+    );
+    const filePath = `/tmp/sub2api-update-${manifest.version}.dmg`;
+    await expect(service.download(manifest)).rejects.toThrow('CONNECTION_RESET');
+    await expect(fs.access(filePath)).rejects.toThrow();
+  });
+
+  it('retries a transient download failure before returning an error', async () => {
+    const payload = new TextEncoder().encode('retry-success');
+    const digest = createHash('sha256').update(payload).digest('hex');
+    let attempts = 0;
+    const fetchImpl = async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('ECONNRESET');
+      return new Response(payload, { status: 200 });
+    };
+    const service = new UpdateService(
+      '1.4.5',
+      { get: (_key, fallback) => fallback, set: () => undefined },
+      fetchImpl,
+      'darwin',
+      'arm64',
+    );
+    const result = await service.download({
+      ...manifest,
+      macArm64: { ...manifest.macArm64, sha256: digest },
+    });
+    expect(attempts).toBe(2);
+    await service.cleanup();
+    expect(result.filePath).toMatch(/sub2api-update-1\.4\.6\.dmg$/);
   });
 });

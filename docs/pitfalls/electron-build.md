@@ -1156,6 +1156,38 @@ Radar 从固定枚举改为持久化站点列表后，`https://example.com` 与 
 
 所有需要保存并重新打开外部 HTTPS 地址的本地列表功能。
 
+## 在线更新下载必须对瞬时网络失败重试并清理残留包
+
+**现象**
+
+GitHub Release 安装包较大，下载过程中遇到 CDN 瞬时断连或连接重置时，界面显示“更新下载失败，请稍后重试”；用户再次点击可能继续受损坏临时文件影响。
+
+**根因**
+
+下载请求原先只执行一次，且异常路径没有统一覆盖所有流中断场景。90MB 以上的 DMG/EXE 在普通网络抖动下容易触发一次性失败。
+
+**正确做法**
+
+下载每次从干净临时文件开始，对连接重置、超时、请求中止和 5xx 响应做有限次数重试；所有失败路径清理临时包，成功后仍必须校验 manifest 中的 SHA-256。
+
+**验证方式**
+
+更新服务测试注入第一次抛出 ECONNRESET、第二次返回有效流，断言最终成功且请求次数为 2；另注入断流并断言临时文件被删除。运行 npm run test -- electron/main/services/update-service.test.ts 和 npm run typecheck。
+
+**禁止事项**
+
+不要无限重试；不要重试 SHA-256 不匹配等确定性错误；不要保留未完成安装包；不要跳过最终哈希校验。
+
+**相关文件或命令**
+
+- electron/main/services/update-service.ts
+- electron/main/services/update-service.test.ts
+- npm run test -- electron/main/services/update-service.test.ts
+
+**适用范围**
+
+所有 GitHub Release 在线更新下载、临时安装包和平台安装入口。
+
 ## 固定尺寸悬浮窗必须按真实盒模型预留页脚
 
 **现象**
