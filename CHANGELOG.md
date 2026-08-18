@@ -14,6 +14,11 @@
 - 新增/更新 channel-ranking、悬浮窗与倍率推荐测试：无手动关联不显示自动渠道、手动单选/多选、清除后空态、自动关系不得接管手动映射、总览与悬浮窗一致；全量 Vitest 406 项通过，ESLint、Prettier、TypeScript 和生产构建通过。
 - Electron E2E 断言同步为“暂未关联渠道”与手动关联流程；macOS 真机与页面样式检查记录于 liran_docs/09-真机实测.md。
 
+### 发布资产
+
+- GitHub Release 2.5.0 为非草稿、非预发布，Tag 与版本提交一致；源码与 Tag 已同步推送 GitHub（github）与 Gitee（origin）当前发布分支 `codex/geetest-notifications-channel-refresh`。
+- DMG SHA-256 `7a62cc7d1ddd25a7f82bf00f58a15020631641769b8e7a27fd3e1efdacca7e1b`；EXE SHA-256 `1bc964ecd3b2da182b51cc67feb62a33b0dd792df8a4fa4470d2d8a8bde18580`；mac/win 两个 blockmap 与 update-manifest.json 同步上传，五项资产均已验证为 uploaded。
+
 ## 2.4.0 - 2026-08-14
 
 ### 使用记录交互优化
