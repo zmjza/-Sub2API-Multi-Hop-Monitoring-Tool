@@ -25,16 +25,16 @@ describe('Radar dynamic target configuration', () => {
     expect(isSafeRadarUrl('https://user:pass@example.com')).toBe(false);
   });
 
-  it('allows only the current entry origin for top-level navigation', () => {
+  it('allows safe HTTPS top-level navigation across pages', () => {
     expect(
       isAllowedRadarNavigation('https://codexradar.com/anything', 'https://codexradar.com'),
     ).toBe(true);
     expect(isAllowedRadarNavigation('https://www.codexradar.com/', 'https://codexradar.com')).toBe(
-      false,
+      true,
     );
     expect(
       isAllowedRadarNavigation('https://codexradar.com.evil.example/', 'https://codexradar.com'),
-    ).toBe(false);
+    ).toBe(true);
     expect(isAllowedRadarNavigation('file:///tmp/radar.html', 'https://codexradar.com')).toBe(
       false,
     );

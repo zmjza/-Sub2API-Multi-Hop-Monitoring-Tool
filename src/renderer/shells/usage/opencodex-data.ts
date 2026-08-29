@@ -4,6 +4,7 @@ import type {
 } from '../../../../electron/shared/opencodex';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { usageSpeedTier, type UsageSpeedTier } from './usage-speed';
+import { cacheRateTone, calculateCacheRate, formatCacheRate } from './cache-rate';
 
 export type OpenCodexReasoningLabel = string;
 
@@ -35,6 +36,9 @@ export interface OpenCodexRow {
   outputTokensValue?: number;
   cacheReadTokensValue?: number;
   cacheWriteTokensValue?: number;
+  cacheRate?: number;
+  cacheRateLabel: string;
+  cacheRateTone: ReturnType<typeof cacheRateTone>;
   totalTokensValue?: number;
   costValue?: number;
   durationMsValue?: number;
@@ -122,34 +126,45 @@ function speedTierFor(entry: OpenCodexLogEntry): UsageSpeedTier {
 }
 
 export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodexRow[] {
-  return payload.logs.map((entry) => ({
-    time: formatLocalTimestamp(entry.timestamp),
-    provider: entry.provider,
-    model: entry.model,
-    reasoning: reasoningLabel(entry.effectiveEffort ?? entry.requestedEffort),
-    requestType: requestTypeLabel(entry.inboundProtocol),
-    inputTokens: formatToken(entry.usage?.inputTokens),
-    outputTokens: formatToken(entry.usage?.outputTokens),
-    cacheReadTokens: formatToken(entry.usage?.cachedInputTokens),
-    cacheWriteTokens: '—',
-    totalTokens: formatToken(entry.totalTokens),
-    inputTokensValue: numericOrUndefined(entry.usage?.inputTokens),
-    outputTokensValue: numericOrUndefined(entry.usage?.outputTokens),
-    cacheReadTokensValue: numericOrUndefined(entry.usage?.cachedInputTokens),
-    totalTokensValue: numericOrUndefined(entry.totalTokens),
-    costValue: openCodexCostValue(entry),
-    durationMsValue: numericOrUndefined(entry.durationMs),
-    firstTokenLabel: entry.firstOutputMs === undefined ? '—' : formatDuration(entry.firstOutputMs),
-    firstTokenMs: entry.firstOutputMs,
-    durationLabel: formatDuration(entry.durationMs),
-    tokensPerSecondLabel: formatTokensPerSecond(entry),
-    speedTier: speedTierFor(entry),
-    costLabel: formatCost(entry),
-    status: entry.status,
-    statusLabel: statusLabel(entry.status),
-    errorCode: entry.errorCode,
-    timestamp: entry.timestamp,
-  }));
+  return payload.logs.map((entry) => {
+    const cacheRate = calculateCacheRate(
+      numericOrUndefined(entry.usage?.inputTokens),
+      numericOrUndefined(entry.usage?.cachedInputTokens),
+      undefined,
+    );
+    return {
+      time: formatLocalTimestamp(entry.timestamp),
+      provider: entry.provider,
+      model: entry.model,
+      reasoning: reasoningLabel(entry.effectiveEffort ?? entry.requestedEffort),
+      requestType: requestTypeLabel(entry.inboundProtocol),
+      inputTokens: formatToken(entry.usage?.inputTokens),
+      outputTokens: formatToken(entry.usage?.outputTokens),
+      cacheReadTokens: formatToken(entry.usage?.cachedInputTokens),
+      cacheWriteTokens: '—',
+      totalTokens: formatToken(entry.totalTokens),
+      inputTokensValue: numericOrUndefined(entry.usage?.inputTokens),
+      outputTokensValue: numericOrUndefined(entry.usage?.outputTokens),
+      cacheReadTokensValue: numericOrUndefined(entry.usage?.cachedInputTokens),
+      cacheRate,
+      cacheRateLabel: formatCacheRate(cacheRate),
+      cacheRateTone: cacheRateTone(cacheRate),
+      totalTokensValue: numericOrUndefined(entry.totalTokens),
+      costValue: openCodexCostValue(entry),
+      durationMsValue: numericOrUndefined(entry.durationMs),
+      firstTokenLabel:
+        entry.firstOutputMs === undefined ? '—' : formatDuration(entry.firstOutputMs),
+      firstTokenMs: entry.firstOutputMs,
+      durationLabel: formatDuration(entry.durationMs),
+      tokensPerSecondLabel: formatTokensPerSecond(entry),
+      speedTier: speedTierFor(entry),
+      costLabel: formatCost(entry),
+      status: entry.status,
+      statusLabel: statusLabel(entry.status),
+      errorCode: entry.errorCode,
+      timestamp: entry.timestamp,
+    };
+  });
 }
 
 function openCodexCostValue(entry: OpenCodexLogEntry): number | undefined {

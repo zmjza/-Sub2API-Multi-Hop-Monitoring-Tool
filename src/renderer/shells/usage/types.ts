@@ -8,6 +8,10 @@ export interface UsageRecord {
   inputTokens: string;
   outputTokens: string;
   cacheReadTokens: string;
+  inputTokensValue?: number;
+  cacheReadTokensValue?: number;
+  cacheCreationTokensValue?: number;
+  cacheRate?: number;
   actualCost: string;
   keyLabel: string;
   reasoningEffort?: string;

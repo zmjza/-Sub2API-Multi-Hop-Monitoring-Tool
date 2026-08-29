@@ -6,6 +6,7 @@ import type {
   SiteInput,
   InteractiveVerificationProvider,
   SiteSummary,
+  ChannelViewPayload,
   SiteAddResult,
   SiteKeyContexts,
   UsageQuery,
@@ -103,7 +104,12 @@ export interface DesktopBridge {
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
     opencodexLogs(query?: OpenCodexLogsQuery): Promise<OpenCodexLogsPayload>;
     channels(siteId: string): Promise<unknown>;
+    refreshChannels(siteId: string): Promise<ChannelViewPayload>;
     channelStatus(siteId: string, channelId: string): Promise<unknown>;
+    onChannelChanged(
+      listener: (value: { siteId: string; data: ChannelViewPayload }) => void,
+    ): () => void;
+    onRateChanged(listener: (value: RateContexts) => void): () => void;
     channelAssociations(siteId: string): Promise<ChannelAssociation[]>;
     setChannelAssociation(input: {
       siteId: string;

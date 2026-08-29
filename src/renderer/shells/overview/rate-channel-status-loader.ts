@@ -5,7 +5,7 @@ import type {
 import { channelPollingDelay, retryAfterSecondsFromError } from '../../channel-polling';
 
 interface ChannelStatusApi {
-  readChannels(siteId: string): Promise<ChannelViewPayload>;
+  readChannels(siteId: string, force?: boolean): Promise<ChannelViewPayload>;
   readDetail(siteId: string, channelId: string): Promise<ChannelDetailPayload>;
 }
 
@@ -81,7 +81,7 @@ export class RateChannelStatusLoader {
     }
     const revisionKey = `channels:${siteId}`;
     const revision = this.bumpRevision(revisionKey);
-    const request = this.queue.run(() => this.api.readChannels(siteId));
+    const request = this.queue.run(() => this.api.readChannels(siteId, force));
     this.channelRequests.set(siteId, request);
     try {
       const value = await request;
@@ -155,8 +155,10 @@ let desktopLoader: RateChannelStatusLoader | undefined;
 export function desktopRateChannelStatusLoader(): RateChannelStatusLoader {
   desktopLoader ??= new RateChannelStatusLoader(
     {
-      readChannels: async (siteId) => {
-        const value = await window.sub2apiDesktop?.sites.channels(siteId);
+      readChannels: async (siteId, force) => {
+        const value = await (force
+          ? window.sub2apiDesktop?.sites.refreshChannels(siteId)
+          : window.sub2apiDesktop?.sites.channels(siteId));
         if (!value || typeof value !== 'object' || !('state' in value))
           throw new Error('Invalid channel list response');
         return value as ChannelViewPayload;

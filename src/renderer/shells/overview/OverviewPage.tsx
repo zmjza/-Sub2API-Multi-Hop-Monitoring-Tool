@@ -41,8 +41,6 @@ import {
 import {
   comparePlatformRates,
   formatRateMultiplier,
-  rateRefreshIntervalMs,
-  type RateRefreshMinutes,
   type RateChannelSnapshot,
 } from './rate-comparison';
 import {
@@ -51,7 +49,6 @@ import {
   resolveEffectiveKey,
   type CurrentKeyStatsState,
 } from './current-key-stats';
-import { randomPollingDelayMs } from '../../channel-polling';
 import './overview.css';
 
 const ratePlatformLogos: Record<string, string> = {
@@ -148,15 +145,10 @@ export function OverviewPage(props: OverviewProps) {
   const [inlineChannelDetailStateByKey, setInlineChannelDetailStateByKey] = useState<
     Record<string, InlineChannelDetailState>
   >({});
-  const [rateRefreshMinutes, setRateRefreshMinutes] = useState<RateRefreshMinutes>(5);
   const inlineChannelRequestBySiteRef = useRef(new Map<string, number>());
   const inlineDetailRequestByKeyRef = useRef(new Map<string, number>());
   const inlineRequestIdRef = useRef(0);
   const channelStatusLoaderRef = useRef<RateChannelStatusLoader | null>(null);
-  const comparisonRefreshPromiseRef = useRef<Promise<void> | undefined>(undefined);
-  const channelPollingLastRunRef = useRef(Date.now());
-  const refreshAllRatesRef = useRef(props.onRefreshAllRates);
-  refreshAllRatesRef.current = props.onRefreshAllRates;
   if (!channelStatusLoaderRef.current)
     channelStatusLoaderRef.current = desktopRateChannelStatusLoader();
   const runtime = Boolean(window.sub2apiDesktop);
@@ -403,85 +395,6 @@ export function OverviewPage(props: OverviewProps) {
     }
   }, [currentChannelDetailKeys, loadInlineDetail]);
 
-  useEffect(() => {
-    if (!window.sub2apiDesktop) return;
-    let active = true;
-    const run = async () => {
-      if (!active || document.visibilityState === 'hidden') return;
-      channelPollingLastRunRef.current = Date.now();
-      const siteIds = JSON.parse(channelSiteIdsKey) as string[];
-      await Promise.allSettled(
-        siteIds.map(
-          (siteId, index) =>
-            new Promise<void>((resolve) => {
-              window.setTimeout(
-                () => {
-                  if (!active || document.visibilityState === 'hidden') {
-                    resolve();
-                    return;
-                  }
-                  void loadInlineChannels(siteId, true).finally(resolve);
-                },
-                index * 250 + Math.floor(Math.random() * 201),
-              );
-            }),
-        ),
-      );
-      if (!active) return;
-      const detailKeys = JSON.parse(currentChannelDetailKeys) as string[];
-      await Promise.allSettled(
-        detailKeys.map((key) => {
-          const separator = key.indexOf(':');
-          return loadInlineDetail(key.slice(0, separator), key.slice(separator + 1), true);
-        }),
-      );
-    };
-    let timer: number | undefined;
-    const schedule = () => {
-      if (!active) return;
-      timer = window.setTimeout(async () => {
-        await run();
-        schedule();
-      }, randomPollingDelayMs());
-    };
-    schedule();
-    const onVisibilityChange = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        Date.now() - channelPollingLastRunRef.current >= 30_000
-      )
-        void run();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [channelSiteIdsKey, currentChannelDetailKeys, loadInlineChannels, loadInlineDetail]);
-
-  const refreshRateComparison = useCallback(() => {
-    if (comparisonRefreshPromiseRef.current) return comparisonRefreshPromiseRef.current;
-    const siteIds = JSON.parse(comparableSiteIdsKey) as string[];
-    const request = (async () => {
-      await refreshAllRatesRef.current?.();
-      await Promise.all(siteIds.map((siteId) => loadInlineChannels(siteId, true)));
-    })().finally(() => {
-      if (comparisonRefreshPromiseRef.current === request)
-        comparisonRefreshPromiseRef.current = undefined;
-    });
-    comparisonRefreshPromiseRef.current = request;
-    return request;
-  }, [comparableSiteIdsKey, loadInlineChannels]);
-
-  useEffect(() => {
-    if (!window.sub2apiDesktop || liveSites.length === 0) return;
-    const interval = window.setInterval(
-      () => void refreshRateComparison(),
-      rateRefreshIntervalMs(rateRefreshMinutes),
-    );
-    return () => window.clearInterval(interval);
-  }, [liveSites.length, rateRefreshMinutes, refreshRateComparison]);
   return (
     <section className="overview-page">
       <div className="overview-metrics">
@@ -536,31 +449,7 @@ export function OverviewPage(props: OverviewProps) {
       </div>
       <section className="rate-comparison-band" aria-label="跨站倍率对比">
         <div className="rate-comparison-heading">
-          <div className="rate-comparison-controls">
-            <label>
-              <select
-                aria-label="倍率对比自动刷新周期"
-                value={rateRefreshMinutes}
-                onChange={(event) =>
-                  setRateRefreshMinutes(Number(event.target.value) as RateRefreshMinutes)
-                }
-              >
-                <option value={1}>1 分钟</option>
-                <option value={3}>3 分钟</option>
-                <option value={5}>5 分钟</option>
-                <option value={10}>10 分钟</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              aria-label="刷新全部站点倍率"
-              title="刷新全部站点倍率"
-              onClick={() => void refreshRateComparison()}
-              disabled={props.isRefreshingRates || liveSites.length === 0}
-            >
-              <RefreshCw size={16} className={props.isRefreshingRates ? 'spin' : ''} />
-            </button>
-          </div>
+          <span className="rate-comparison-sync-label">随渠道状态全局同步刷新（10–20 秒）</span>
         </div>
         {rateComparisons.length > 0 ? (
           <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">

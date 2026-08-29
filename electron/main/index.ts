@@ -400,7 +400,27 @@ function registerIpc() {
     return siteSummarySchema.parse(result);
   });
   ipcMain.handle('sites:refresh-all', async () => {
-    await scheduler.manualRefreshAll();
+    await Promise.all([
+      scheduler.manualRefreshAll(),
+      (async () => {
+        const siteIds = siteService.listSites().sites.map((site) => site.id);
+        await Promise.all(
+          siteIds.map(async (siteId) => {
+            try {
+              const data = await siteService.refreshChannels(siteId);
+              for (const window of BrowserWindow.getAllWindows())
+                window.webContents.send('channels:changed', { siteId, data });
+            } catch {
+              /* isolate channel failures */
+            }
+          }),
+        );
+      })(),
+      siteService.refreshAllRateGroups(),
+    ]);
+    const rates = rateContextsSchema.parse(siteService.rateContexts());
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send('rates:changed', rates);
     return dashboardSnapshotSchema.parse(siteService.listSites());
   });
   ipcMain.handle('sites:note:set', (_event, input: unknown) => {
@@ -453,6 +473,8 @@ function registerIpc() {
   });
   ipcMain.handle('channels:list', async (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    const cached = siteService.cachedChannels(siteId);
+    if (cached) return channelViewSchema.parse(cached);
     let result;
     try {
       result = channelViewSchema.parse(await siteService.channels(siteId));
@@ -482,6 +504,13 @@ function registerIpc() {
       settings.cooldownMs,
       settings.recoveryNotifications,
     );
+    return result;
+  });
+  ipcMain.handle('channels:refresh', async (_event, input: unknown) => {
+    const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    const result = channelViewSchema.parse(await siteService.refreshChannels(siteId));
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send('channels:changed', { siteId, data: result });
     return result;
   });
   ipcMain.handle('channels:status', async (_event, input: unknown) => {
@@ -809,8 +838,7 @@ function safeErrorCode(error: unknown): string | undefined {
 function scheduleRefreshLoops() {
   let firstCurrent = true;
   const scheduleCurrent = () => {
-    const configuredMs = appDatabase.getAppSettings().refreshIntervalMinutes * 60_000;
-    const delay = firstCurrent ? intervalInRange(2_000, 30_000) : configuredMs;
+    const delay = firstCurrent ? intervalInRange(2_000, 30_000) : intervalInRange(30_000, 60_000);
     firstCurrent = false;
     const timer = setTimeout(async () => {
       const current = siteService.listSites().currentSiteId;
@@ -825,15 +853,47 @@ function scheduleRefreshLoops() {
     scheduledTimers.push(timer);
   };
   const scheduleBackground = () => {
-    const configuredMs = appDatabase.getAppSettings().refreshIntervalMinutes * 60_000;
-    const timer = setTimeout(async () => {
-      await scheduler.refreshAll();
-      if (!isQuitting) scheduleBackground();
-    }, configuredMs);
+    const timer = setTimeout(
+      async () => {
+        await scheduler.refreshAll();
+        if (!isQuitting) scheduleBackground();
+      },
+      intervalInRange(30_000, 60_000),
+    );
     scheduledTimers.push(timer);
   };
   scheduleCurrent();
   scheduleBackground();
+  const scheduleChannels = () => {
+    const timer = setTimeout(
+      async () => {
+        const siteIds = siteService.listSites().sites.map((site) => site.id);
+        let cursor = 0;
+        const worker = async () => {
+          while (cursor < siteIds.length) {
+            const siteId = siteIds[cursor++];
+            if (!siteId) continue;
+            try {
+              const data = await siteService.refreshChannels(siteId);
+              for (const window of BrowserWindow.getAllWindows())
+                window.webContents.send('channels:changed', { siteId, data });
+              await siteService.refreshRateGroups(siteId);
+            } catch {
+              /* one site must not block the channel batch */
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, siteIds.length) }, worker));
+        const rates = rateContextsSchema.parse(siteService.rateContexts());
+        for (const window of BrowserWindow.getAllWindows())
+          window.webContents.send('rates:changed', rates);
+        if (!isQuitting) scheduleChannels();
+      },
+      intervalInRange(10_000, 20_000),
+    );
+    scheduledTimers.push(timer);
+  };
+  if (process.env.SUB2API_DISABLE_AUTOMATIC_REFRESH !== '1') scheduleChannels();
   const scheduleCleanup = () => {
     const timer = setTimeout(
       () => {

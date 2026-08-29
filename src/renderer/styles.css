@@ -196,6 +196,37 @@ input {
   display: inline-flex;
   gap: 4px;
 }
+.svr-server-switcher {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: min(42vw, 520px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  margin-right: 8px;
+}
+.svr-server-switcher button {
+  flex: 0 0 auto;
+  border: 1px solid #d9def1;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.svr-server-switcher button.active,
+.svr-server-switcher button[aria-current='page'] {
+  border-color: #4f46e5;
+  background: #eef2ff;
+  color: #4338ca;
+}
+.svr-server-switcher button:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 2px;
+}
 .svr-toolbar-login {
   flex: 0 0 auto;
   padding: 3px 8px;

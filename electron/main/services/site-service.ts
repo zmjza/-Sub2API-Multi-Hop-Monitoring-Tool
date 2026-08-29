@@ -81,6 +81,10 @@ export class SiteService {
   private readonly inflightRefresh = new Map<string, Promise<SiteSummary>>();
   private readonly rateStates = new Map<string, RateSiteContext>();
   private readonly inflightRateRefresh = new Map<string, Promise<RateSiteContext>>();
+  private readonly channelCache = new Map<
+    string,
+    import('../../shared/contracts.js').ChannelViewPayload
+  >();
   private readonly apiKeyWrites = new Map<string, Promise<ManagedApiKey>>();
   private readonly apiKeyUsageCache = new Map<
     string,
@@ -344,6 +348,7 @@ export class SiteService {
     this.automaticRuntime.delete(siteId);
     this.keys.delete(siteId);
     this.rateStates.delete(siteId);
+    this.channelCache.delete(siteId);
     this.inflightRefresh.delete(siteId);
     this.inflightRateRefresh.delete(siteId);
     this.apiKeyWrites.delete(siteId);
@@ -984,11 +989,31 @@ export class SiteService {
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const result = await new Sub2ApiAdapter(client).readOptionalChannels(credential.accessToken);
+    const next = { ...result, fetchedAt: Date.now(), stale: false };
+    this.channelCache.set(siteId, next);
     this.db.setCapabilities(siteId, {
       ...(site.capabilities ?? {}),
       channelMonitors: result.state,
     });
-    return result;
+    return next;
+  }
+
+  cachedChannels(siteId: string) {
+    return this.channelCache.get(siteId);
+  }
+
+  async refreshChannels(siteId: string) {
+    try {
+      return await this.channels(siteId);
+    } catch (error) {
+      const cached = this.channelCache.get(siteId);
+      if (cached) {
+        const stale = { ...cached, stale: true, error: safeMessage(error) };
+        this.channelCache.set(siteId, stale);
+        return stale;
+      }
+      throw error;
+    }
   }
 
   async channelStatus(siteId: string, channelId: string) {

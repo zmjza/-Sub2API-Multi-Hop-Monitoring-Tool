@@ -83,8 +83,21 @@ const desktopBridge: DesktopBridge = {
     usageCsv: (query) => ipcRenderer.invoke('usage:csv', query),
     opencodexLogs: (query) => ipcRenderer.invoke('opencodex:logs', query),
     channels: (siteId) => ipcRenderer.invoke('channels:list', siteId),
+    refreshChannels: (siteId) => ipcRenderer.invoke('channels:refresh', siteId),
     channelStatus: (siteId, channelId) =>
       ipcRenderer.invoke('channels:status', { siteId, channelId }),
+    onChannelChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('channels:changed', handler);
+      return () => ipcRenderer.removeListener('channels:changed', handler);
+    },
+    onRateChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('rates:changed', handler);
+      return () => ipcRenderer.removeListener('rates:changed', handler);
+    },
     channelAssociations: (siteId) => ipcRenderer.invoke('channels:associations:get', siteId),
     setChannelAssociation: (input) => ipcRenderer.invoke('channels:associations:set', input),
     clearChannelAssociation: (input) => ipcRenderer.invoke('channels:associations:clear', input),

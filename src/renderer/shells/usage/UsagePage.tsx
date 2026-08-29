@@ -18,6 +18,7 @@ import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { UsageQueryController } from './usage-query-controller';
 import { siteDisplayName } from '../../site-label';
 import { calculateTokensPerSecond, formatTokensPerSecond, usageSpeedTier } from './usage-speed';
+import { cacheRateTone, calculateCacheRate, formatCacheRate } from './cache-rate';
 import { OpenCodexUsagePage } from './OpenCodexUsagePage';
 import './usage.css';
 export function Sub2ApiUsagePage(props: UsageProps) {
@@ -439,6 +440,13 @@ export function Sub2ApiUsagePage(props: UsageProps) {
                             <Archive size={15} aria-hidden />
                             <b>{row.cacheReadTokens}</b>
                           </span>
+                          <span
+                            className={`usage-cache-rate-badge is-${cacheRateTone(row.cacheRate)}`}
+                            aria-label={`缓存率 ${formatCacheRate(row.cacheRate)}`}
+                            title="缓存率"
+                          >
+                            {formatCacheRate(row.cacheRate)}
+                          </span>
                         </div>
                       </td>
                     )}
@@ -634,6 +642,14 @@ export function readUsageRecords(value: unknown): typeof usageRecords {
           inputTokens: formatUsageToken(item.inputTokens),
           outputTokens: formatUsageToken(item.outputTokens),
           cacheReadTokens: formatUsageToken(item.cacheReadTokens),
+          inputTokensValue: numericValue(item.inputTokens),
+          cacheReadTokensValue: numericValue(item.cacheReadTokens),
+          cacheCreationTokensValue: numericValue(item.cacheCreationTokens),
+          cacheRate: calculateCacheRate(
+            numericValue(item.inputTokens),
+            numericValue(item.cacheReadTokens),
+            numericValue(item.cacheCreationTokens),
+          ),
           actualCost: formatOptionalCost(item.actualCost),
           keyLabel: String(item.apiKeyLabel ?? 'Key · 已脱敏'),
           reasoningEffort:

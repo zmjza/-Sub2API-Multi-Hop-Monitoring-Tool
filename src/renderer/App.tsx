@@ -138,6 +138,7 @@ export function App() {
   const [sub2apiServerEmbedState, setSub2ApiServerEmbedState] = useState<Sub2ApiServerEmbedState>({
     status: 'idle',
   });
+  const [sub2apiServers, setSub2apiServers] = useState<Sub2ApiServer[]>([]);
   const [favoriteWebsiteEmbedState, setFavoriteWebsiteEmbedState] =
     useState<FavoriteWebsiteEmbedState>({ status: 'idle' });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
@@ -375,6 +376,10 @@ export function App() {
     const unsubscribe = window.sub2apiDesktop?.sub2apiServers.onStateChange((nextState) => {
       setSub2ApiServerEmbedState(nextState);
     });
+    void window.sub2apiDesktop?.sub2apiServers
+      .list()
+      .then(setSub2apiServers)
+      .catch(() => undefined);
     return () => unsubscribe?.();
   }, []);
   useEffect(() => {
@@ -629,8 +634,10 @@ export function App() {
     setRefreshingSiteIds(new Set(dashboard.sites.map((site) => site.id)));
     void window.sub2apiDesktop?.sites
       .refreshAll()
-      .then((value) => {
+      .then(async (value) => {
         if (value) setDashboard(value);
+        const refreshedRates = await window.sub2apiDesktop?.sites.rateContexts();
+        if (refreshedRates) setRateContexts(refreshedRates);
       })
       .catch((error) =>
         notify({
@@ -904,6 +911,15 @@ export function App() {
     const unsubscribeKeyContext = window.sub2apiDesktop?.sites.onKeyContextChanged((siteId) => {
       void loadKeyContext(siteId);
     });
+    const unsubscribeChannel = window.sub2apiDesktop?.sites.onChannelChanged((value) => {
+      if (value.siteId !== currentSiteRef.current) return;
+      channelStatusLoaderRef.current?.seed(value.siteId, { channels: value.data, details: {} });
+      setChannelsData(value.data);
+      setState(value.data.stale ? 'error' : 'success');
+    });
+    const unsubscribeRate = window.sub2apiDesktop?.sites.onRateChanged((value) => {
+      setRateContexts(value);
+    });
     const unsubscribeState = window.sub2apiDesktop?.sites.onRefreshState((value) => {
       setRefreshingSiteIds((current) => {
         const next = new Set(current);
@@ -928,6 +944,8 @@ export function App() {
       window.removeEventListener('sub2api:refresh', refresh);
       unsubscribe?.();
       unsubscribeKeyContext?.();
+      unsubscribeChannel?.();
+      unsubscribeRate?.();
       unsubscribeState?.();
     };
   }, []);
@@ -1102,6 +1120,7 @@ export function App() {
       const value = await channelStatusLoaderRef.current.loadChannels(siteId, force);
       if (!isCurrent()) return { ok: false };
       setChannelsData(value);
+      const staleChannelData = value.stale === true;
       const storedAssociations = await window.sub2apiDesktop?.sites.channelAssociations(siteId);
       if (isCurrent() && storedAssociations) {
         setChannelAssociations(storedAssociations);
@@ -1130,15 +1149,15 @@ export function App() {
       setSelectedChannelId(id);
       if (!id) {
         setChannelDetail(undefined);
-        setState('success');
-        return { ok: true };
+        setState(staleChannelData ? 'error' : 'success');
+        return { ok: !staleChannelData };
       }
       const detailRequestId = ++channelDetailRequestRef.current;
       const detail = await channelStatusLoaderRef.current.loadDetail(siteId, id, force);
       if (isCurrent() && channelDetailRequestRef.current === detailRequestId)
         setChannelDetail(detail);
-      if (isCurrent()) setState('success');
-      return { ok: true };
+      if (isCurrent()) setState(staleChannelData ? 'error' : 'success');
+      return { ok: !staleChannelData };
     } catch (error) {
       if (!isCurrent()) return { ok: false };
       setChannelsData((current: unknown) => current ?? { state: 'error', channels: [] });
@@ -1470,6 +1489,24 @@ export function App() {
                   </em>
                 )}
               </div>
+              <nav className="svr-server-switcher" aria-label="切换 Sub2API 服务器">
+                {sub2apiServers.map((server) => {
+                  const active = server.id === sub2apiServerEmbedState.target.id;
+                  return (
+                    <button
+                      key={server.id}
+                      type="button"
+                      className={active ? 'active' : ''}
+                      aria-current={active ? 'page' : undefined}
+                      aria-label={`切换到 ${server.name}`}
+                      disabled={active || sub2apiServerEmbedState.status === 'opening'}
+                      onClick={() => openEmbeddedSub2ApiServer(server)}
+                    >
+                      {server.name}
+                    </button>
+                  );
+                })}
+              </nav>
               <div className="svr-embed-nav">
                 <button
                   className="icon-button"

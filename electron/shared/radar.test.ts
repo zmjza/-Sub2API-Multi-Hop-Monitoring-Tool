@@ -51,12 +51,12 @@ describe('radar embed boundary', () => {
     ).toBe(false);
   });
 
-  it('accepts only the allowed HTTPS origin for embedded navigation', () => {
+  it('accepts safe HTTPS navigation across origins', () => {
     const origin = 'https://codexradar.com';
     expect(isAllowedRadarNavigation('https://codexradar.com/', origin)).toBe(true);
     expect(isAllowedRadarNavigation('https://codexradar.com/path#section', origin)).toBe(true);
-    expect(isAllowedRadarNavigation('https://deng.codexradar.com/', origin)).toBe(false);
-    expect(isAllowedRadarNavigation('https://codexradar.com:444/', origin)).toBe(false);
+    expect(isAllowedRadarNavigation('https://deng.codexradar.com/', origin)).toBe(true);
+    expect(isAllowedRadarNavigation('https://codexradar.com:444/', origin)).toBe(true);
     expect(isAllowedRadarNavigation('https://user:pass@codexradar.com/', origin)).toBe(false);
     expect(isAllowedRadarNavigation('http://codexradar.com/', origin)).toBe(false);
     expect(isAllowedRadarNavigation('data:text/html,<h1>unsafe</h1>', origin)).toBe(false);

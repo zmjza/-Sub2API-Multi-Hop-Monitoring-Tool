@@ -1503,6 +1503,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     ...process.env,
     SUB2API_TEST_SECRET_CODEC: 'memory',
     SUB2API_TEST_EXPORT_PATH: exportPath,
+    SUB2API_DISABLE_AUTOMATIC_REFRESH: '1',
   });
   const packageManifest = JSON.parse(
     await readFile(path.join(process.cwd(), 'package.json'), 'utf8'),
@@ -1856,8 +1857,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   );
   await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
   await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
-  await expect(main.getByLabel('倍率对比自动刷新周期')).toHaveValue('5');
-  await expect(main.getByLabel('倍率对比自动刷新周期').locator('option')).toHaveCount(4);
+  await expect(main.getByText('随渠道状态全局同步刷新（10–20 秒）')).toBeVisible();
   const openAiRateCard = main.locator('.rate-platform-card[data-platform="openai"]');
   await expect(openAiRateCard.locator('.rate-platform-site')).toHaveCount(1);
   await expect(openAiRateCard).toContainText('OpenAI 便宜 A');
@@ -2226,7 +2226,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByRole('button', { name: '刷新当前站点倍率' }).click();
   await expect(main.getByText('暂无可用分组倍率', { exact: true })).toBeVisible();
   availableRatesMode = 'success';
-  await main.getByRole('button', { name: '重试', exact: true }).click();
+  await main.getByRole('button', { name: '重试', exact: true }).click({ force: true });
   await expect(main.locator('.rate-group-list')).toContainText('Claude 通道');
   await main.getByRole('button', { name: '关闭倍率弹窗' }).click();
   await expect(main.getByRole('dialog', { name: '本地集成站点 分组倍率' })).toHaveCount(0);

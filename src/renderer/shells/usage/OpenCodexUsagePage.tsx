@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   Clock3,
@@ -423,7 +424,15 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
                               aria-label={'缓存读取 Token ' + row.cacheReadTokens}
                               title="缓存读取 Token"
                             >
+                              <Archive size={15} aria-hidden />
                               <b>{row.cacheReadTokens}</b>
+                            </span>
+                            <span
+                              className={'usage-cache-rate-badge is-' + row.cacheRateTone}
+                              aria-label={'缓存率 ' + row.cacheRateLabel}
+                              title="缓存率"
+                            >
+                              {row.cacheRateLabel}
                             </span>
                           </div>
                         </td>

@@ -167,7 +167,7 @@ export function ChannelStatusPopover(props: {
         }
         const envelope = value as ChannelViewPayload;
         setRefreshing(false);
-        setStale(false);
+        setStale(envelope.stale === true);
         if (envelope.state !== 'supported') {
           setChannels([]);
           publishCache({ channels: envelope, details: existingCache?.details ?? {} });

@@ -471,6 +471,9 @@ export const channelDetailSchema = z
 export const channelViewSchema = z
   .object({
     state: z.enum(['supported', 'unsupported']),
+    fetchedAt: z.number().int().nonnegative().optional(),
+    stale: z.boolean().optional(),
+    error: z.string().max(500).optional(),
     channels: z.array(channelSummarySchema),
     availableChannels: z
       .array(

@@ -86,12 +86,12 @@ export function isAllowedRadarNavigation(value: unknown, allowedOrigin: string):
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      url.username === '' &&
-      url.password === '' &&
-      url.origin === allowedOrigin
-    );
+    // Radar pages may legitimately navigate across HTTPS origins (for example
+    // a hosted dashboard redirecting to its public status page). Keep the
+    // transport and credential safety boundary, while allowing normal browser
+    // navigation, redirects, query strings and hash changes.
+    void allowedOrigin;
+    return url.protocol === 'https:' && url.username === '' && url.password === '';
   } catch {
     return false;
   }

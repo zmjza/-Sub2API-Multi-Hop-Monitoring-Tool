@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -14,11 +14,6 @@ import type {
 } from '../../../../electron/shared/contracts';
 import type { ChannelsProps } from './types';
 import {
-  channelPollingDelay,
-  normalizeChannelPollingSeconds,
-  type ChannelPollingSeconds,
-} from '../../channel-polling';
-import {
   channelSyncPresentation,
   channelTimelineForDisplay,
   currentKeyGroup,
@@ -31,68 +26,19 @@ import './channels.css';
 export function ChannelsPage(props: ChannelsProps) {
   const runtime = Boolean(window.sub2apiDesktop);
   const [period, setPeriod] = useState<7 | 15 | 30>(7);
-  const [pollingSeconds, setPollingSeconds] = useState<ChannelPollingSeconds>(60);
-  const [countdown, setCountdown] = useState(60);
-  const [pollingPaused, setPollingPaused] = useState(false);
   const refreshListenerRef = useRef(props.onRefreshChannels);
-  const lastRefreshAtRef = useRef(Date.now());
-  const nextRefreshAtRef = useRef(Date.now() + 60_000);
-  const pollingFailuresRef = useRef(0);
   const pollingRunningRef = useRef(false);
   refreshListenerRef.current = props.onRefreshChannels;
   const performRefresh = async () => {
     if (pollingRunningRef.current) return;
     pollingRunningRef.current = true;
-    lastRefreshAtRef.current = Date.now();
     try {
       const result = await refreshListenerRef.current?.();
-      if (result?.ok) {
-        setPollingPaused(false);
-        pollingFailuresRef.current = 0;
-        nextRefreshAtRef.current = Date.now() + pollingSeconds * 1_000;
-      } else if (result?.terminal) {
-        setPollingPaused(true);
-        nextRefreshAtRef.current = Number.POSITIVE_INFINITY;
-      } else {
-        const delay = channelPollingDelay(pollingFailuresRef.current, result?.retryAfterSeconds);
-        pollingFailuresRef.current += 1;
-        nextRefreshAtRef.current = Date.now() + delay;
-      }
+      void result;
     } finally {
       pollingRunningRef.current = false;
-      setCountdown(
-        Number.isFinite(nextRefreshAtRef.current)
-          ? Math.max(0, Math.ceil((nextRefreshAtRef.current - Date.now()) / 1_000))
-          : 0,
-      );
     }
   };
-  useEffect(() => {
-    const refreshIfDue = (minimumAgeSeconds: number) => {
-      if (document.visibilityState === 'hidden') return;
-      const ageSeconds = Math.floor((Date.now() - lastRefreshAtRef.current) / 1_000);
-      const remainingSeconds = Math.ceil((nextRefreshAtRef.current - Date.now()) / 1_000);
-      if (ageSeconds < minimumAgeSeconds || remainingSeconds > 0) {
-        setCountdown(Math.max(0, remainingSeconds));
-        return;
-      }
-      void performRefresh();
-    };
-    const timer = window.setInterval(() => refreshIfDue(pollingSeconds), 1_000);
-    const onVisibilityChange = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        pollingFailuresRef.current === 0 &&
-        Date.now() - lastRefreshAtRef.current >= 30_000
-      )
-        void performRefresh();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [pollingSeconds]);
   const liveChannels = readChannelEnvelope(props.channelsData);
   const unsupported = props.state === 'unsupported' || liveChannels?.state === 'unsupported';
   const channelItems = liveChannels
@@ -156,29 +102,7 @@ export function ChannelsPage(props: ChannelsProps) {
         >
           <RefreshCw size={16} />
         </button>
-        <label className="channel-polling-select">
-          <span>自动刷新</span>
-          <select
-            aria-label="渠道自动刷新间隔"
-            value={pollingSeconds}
-            onChange={(event) => {
-              const next = normalizeChannelPollingSeconds(Number(event.target.value));
-              lastRefreshAtRef.current = Date.now();
-              nextRefreshAtRef.current = Date.now() + next * 1_000;
-              pollingFailuresRef.current = 0;
-              setPollingPaused(false);
-              setPollingSeconds(next);
-              setCountdown(next);
-            }}
-          >
-            <option value={30}>30 秒</option>
-            <option value={60}>60 秒</option>
-            <option value={120}>120 秒</option>
-          </select>
-        </label>
-        <span className="channel-polling-countdown">
-          {pollingPaused ? '自动刷新已暂停' : `${countdown}s 后刷新`}
-        </span>
+        <span className="channel-polling-countdown">全局自动刷新：10–20 秒</span>
         {(stale ||
           ['failed', 'loading', 'stale', 'partial', 'unsupported'].includes(sync.kind)) && (
           <span className="channel-sync-state">

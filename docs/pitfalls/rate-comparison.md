@@ -1,5 +1,36 @@
 # 倍率比较与渠道稳定性避坑
 
+## 缓存率必须区分缓存读取和缓存创建
+
+**现象**
+
+使用记录容易把缓存创建和缓存读取合并，导致缓存率偏高或无法解释。
+
+**根因**
+
+缓存率分母是输入、缓存读取、缓存创建三项之和，输出和费用不参与；5 分钟/1 小时创建字段不能重复累计。
+
+**正确做法**
+
+复用共享函数 `cache-read / (input + cache-read + cache-creation) * 100`，分母为零显示占位符，并统一四档颜色边界。
+
+**验证方式**
+
+运行 `src/renderer/shells/usage/cache-rate.test.ts`，检查 30/31、60/61、85/86 边界及零分母。
+
+**禁止事项**
+
+不要把 output token、缓存费用或两个 creation 时间窗重复计入。
+
+**相关文件或命令**
+
+- `src/renderer/shells/usage/cache-rate.ts`
+- `src/renderer/shells/usage/cache-rate.test.ts`
+
+**适用范围**
+
+中转站和 OpenCodex 使用记录。
+
 ## 多渠道手动关联摘要必须维持固定槽位高度
 
 **现象**
