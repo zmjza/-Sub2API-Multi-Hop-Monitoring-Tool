@@ -381,6 +381,35 @@ export function OverviewPage(props: OverviewProps) {
   }, []);
 
   useEffect(() => {
+    for (const [siteId, channels] of Object.entries(props.channelStatusBySite ?? {})) {
+      const existing = channelStatusLoaderRef.current?.cacheForSite(siteId);
+      const cache = { channels, details: existing?.details ?? {} };
+      channelStatusLoaderRef.current?.seed(siteId, cache);
+      setChannelStatusCacheBySite((current) => ({ ...current, [siteId]: cache }));
+      setRateChannelsBySite((current) => ({
+        ...current,
+        [siteId]: channels.state === 'supported' ? channels.channels : [],
+      }));
+      setRateChannelRelationshipsBySite((current) => ({
+        ...current,
+        [siteId]: channels.availableChannels ?? [],
+      }));
+      setRateChannelStateBySite((current) => ({
+        ...current,
+        [siteId]: channels.state === 'supported' ? 'supported' : 'unsupported',
+      }));
+      setInlineChannelListStateBySite((current) => ({
+        ...current,
+        [siteId]: reduceInlineChannelRefreshState(current[siteId], {
+          type: 'refresh-succeeded',
+          now: Date.now(),
+          state: channels.state === 'supported' && channels.channels.length ? 'success' : 'no-data',
+        }),
+      }));
+    }
+  }, [props.channelStatusBySite]);
+
+  useEffect(() => {
     if (!window.sub2apiDesktop) return;
     const siteIds = JSON.parse(channelSiteIdsKey) as string[];
     for (const siteId of siteIds) void loadInlineChannels(siteId);
@@ -448,9 +477,7 @@ export function OverviewPage(props: OverviewProps) {
         ))}
       </div>
       <section className="rate-comparison-band" aria-label="跨站倍率对比">
-        <div className="rate-comparison-heading">
-          <span className="rate-comparison-sync-label">随渠道状态全局同步刷新（10–20 秒）</span>
-        </div>
+        <div className="rate-comparison-heading"></div>
         {rateComparisons.length > 0 ? (
           <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">
             {rateComparisons.map((comparison) => {
@@ -913,6 +940,7 @@ export function OverviewPage(props: OverviewProps) {
                       channel={matchedChannel}
                       channels={matchedChannels}
                       detailState={detailKey ? inlineChannelDetailStateByKey[detailKey] : undefined}
+                      fetchedAt={channelStatusCacheBySite[site.id]?.channels?.fetchedAt}
                       onRetry={() =>
                         matchedChannel
                           ? void loadInlineDetail(site.id, matchedChannel.id, true)

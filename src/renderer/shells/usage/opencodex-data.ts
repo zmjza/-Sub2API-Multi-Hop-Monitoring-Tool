@@ -4,7 +4,6 @@ import type {
 } from '../../../../electron/shared/opencodex';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { usageSpeedTier, type UsageSpeedTier } from './usage-speed';
-import { cacheRateTone, calculateCacheRate, formatCacheRate } from './cache-rate';
 
 export type OpenCodexReasoningLabel = string;
 
@@ -36,9 +35,6 @@ export interface OpenCodexRow {
   outputTokensValue?: number;
   cacheReadTokensValue?: number;
   cacheWriteTokensValue?: number;
-  cacheRate?: number;
-  cacheRateLabel: string;
-  cacheRateTone: ReturnType<typeof cacheRateTone>;
   totalTokensValue?: number;
   costValue?: number;
   durationMsValue?: number;
@@ -127,11 +123,6 @@ function speedTierFor(entry: OpenCodexLogEntry): UsageSpeedTier {
 
 export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodexRow[] {
   return payload.logs.map((entry) => {
-    const cacheRate = calculateCacheRate(
-      numericOrUndefined(entry.usage?.inputTokens),
-      numericOrUndefined(entry.usage?.cachedInputTokens),
-      undefined,
-    );
     return {
       time: formatLocalTimestamp(entry.timestamp),
       provider: entry.provider,
@@ -146,9 +137,6 @@ export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodex
       inputTokensValue: numericOrUndefined(entry.usage?.inputTokens),
       outputTokensValue: numericOrUndefined(entry.usage?.outputTokens),
       cacheReadTokensValue: numericOrUndefined(entry.usage?.cachedInputTokens),
-      cacheRate,
-      cacheRateLabel: formatCacheRate(cacheRate),
-      cacheRateTone: cacheRateTone(cacheRate),
       totalTokensValue: numericOrUndefined(entry.totalTokens),
       costValue: openCodexCostValue(entry),
       durationMsValue: numericOrUndefined(entry.durationMs),

@@ -24,6 +24,7 @@ import {
   summarizeLatestChannelChecks,
 } from '../channels/channel-ranking';
 import './floating.css';
+import { formatChannelFetchedAt } from '../overview/channel-time';
 
 export function FloatingWindow(props: FloatingProps) {
   const [channelDialogOpen, setChannelDialogOpen] = useState(false);
@@ -198,11 +199,19 @@ export function FloatingWindow(props: FloatingProps) {
           onClick={() => setChannelDialogOpen(true)}
         >
           <ChannelTimeline health={primaryChannelHealth} />
+          <time
+            className="floating-channel-updated-at"
+            dateTime={
+              channelView.fetchedAt ? new Date(channelView.fetchedAt).toISOString() : undefined
+            }
+          >
+            更新于 {formatChannelFetchedAt(channelView.fetchedAt)}
+          </time>
         </button>
       ) : (
         <div className="floating-channel-card is-message" aria-label="当前渠道状态">
           <span>{channelSummary}</span>
-          <small>近期渠道状态</small>
+          <small>更新于 {formatChannelFetchedAt(channelView.fetchedAt)}</small>
         </div>
       )}
       <div className="floating-metrics">
@@ -443,6 +452,7 @@ function speedTierLabel(tier: ReturnType<typeof usageSpeedTier>): string {
 
 function readFloatingChannels(value: unknown): {
   state: 'loading' | 'supported' | 'unsupported' | 'error';
+  fetchedAt?: number;
   channels: Array<{
     id: string;
     name: string;
@@ -471,6 +481,10 @@ function readFloatingChannels(value: unknown): {
   if (record.state === 'error') return { state: 'error', channels: [], availableChannels: [] };
   return {
     state: 'supported',
+    fetchedAt:
+      typeof record.fetchedAt === 'number' && Number.isFinite(record.fetchedAt)
+        ? record.fetchedAt
+        : undefined,
     channels: Array.isArray(record.channels) ? (record.channels as never[]) : [],
     availableChannels: Array.isArray(record.availableChannels)
       ? (record.availableChannels as never[])

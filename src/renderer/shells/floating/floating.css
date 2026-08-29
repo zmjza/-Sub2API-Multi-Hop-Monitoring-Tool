@@ -218,6 +218,15 @@ body:has(.floating-window) {
   color: #94a3b8;
   font-size: 9px;
 }
+.floating-channel-updated-at {
+  color: #94a3b8;
+  font-size: 8px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.floating-channel-card:not(.is-message) .floating-channel-updated-at {
+  justify-self: end;
+}
 .floating-metrics {
   position: absolute;
   right: 20px;

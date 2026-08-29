@@ -3,6 +3,7 @@ import type { ChannelDetailPayload } from '../../../../electron/shared/contracts
 import type { RateChannelSnapshot } from './rate-comparison';
 import type { InlineChannelRefreshState } from './OverviewPage';
 import { channelTimelineForDisplay } from '../channels/channel-ranking';
+import { formatChannelFetchedAt } from './channel-time';
 
 type Channel = RateChannelSnapshot;
 
@@ -21,6 +22,7 @@ export function RateChannelSummary(props: {
   channel?: Channel;
   channels?: Channel[];
   detailState?: InlineChannelDetailState;
+  fetchedAt?: number;
   onRetry: () => void;
   onListRetry?: () => void;
 }) {
@@ -109,6 +111,9 @@ export function RateChannelSummary(props: {
         <b title={detail?.name ?? props.channel.name}>{detail?.name ?? props.channel.name}</b>
         <em className={`rate-channel-status ${status}`}>{statusLabel(status)}</em>
       </div>
+      <time dateTime={props.fetchedAt ? new Date(props.fetchedAt).toISOString() : undefined}>
+        更新于 {formatChannelFetchedAt(props.fetchedAt)}
+      </time>
       <div className="rate-inline-channel-metrics">
         <span>
           7 天可用 <b>{formatAvailability(availability)}</b>

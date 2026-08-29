@@ -21,6 +21,21 @@ import { calculateTokensPerSecond, formatTokensPerSecond, usageSpeedTier } from 
 import { cacheRateTone, calculateCacheRate, formatCacheRate } from './cache-rate';
 import { OpenCodexUsagePage } from './OpenCodexUsagePage';
 import './usage.css';
+
+export const USAGE_COLUMNS = [
+  '时间',
+  'API Key',
+  '模型',
+  '思考等级',
+  '分组',
+  '请求类型',
+  'Token',
+  '缓存率',
+  '首字',
+  '耗时',
+  '实际消费',
+] as const;
+
 export function Sub2ApiUsagePage(props: UsageProps) {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | 'custom'>('today');
   const [page, setPage] = useState(1);
@@ -52,6 +67,7 @@ export function Sub2ApiUsagePage(props: UsageProps) {
         '分组',
         '请求类型',
         'Token',
+        '缓存率',
         '首字',
         '耗时',
         '实际消费',
@@ -312,18 +328,7 @@ export function Sub2ApiUsagePage(props: UsageProps) {
         </div>
         {showColumns && (
           <div className="column-settings" role="group" aria-label="列设置">
-            {[
-              '时间',
-              'API Key',
-              '模型',
-              '思考等级',
-              '分组',
-              '请求类型',
-              'Token',
-              '首字',
-              '耗时',
-              '实际消费',
-            ].map((column) => (
+            {USAGE_COLUMNS.map((column) => (
               <label key={column}>
                 <input
                   type="checkbox"
@@ -361,39 +366,26 @@ export function Sub2ApiUsagePage(props: UsageProps) {
             <table>
               <thead>
                 <tr>
-                  {[
-                    '时间',
-                    'API Key',
-                    '模型',
-                    '思考等级',
-                    '分组',
-                    '请求类型',
-                    'Token',
-                    '首字',
-                    '耗时',
-                    '实际消费',
-                  ]
-                    .filter((column) => visibleColumns.has(column))
-                    .map((x) => (
-                      <th key={x}>
-                        {x === '时间' ? (
-                          <button
-                            className="time-sort"
-                            onClick={() => {
-                              const next = sort === 'desc' ? 'asc' : 'desc';
-                              setSort(next);
-                              setPage(1);
-                            }}
-                          >
-                            时间 {sort === 'desc' ? '↓' : '↑'}
-                          </button>
-                        ) : x === '耗时' ? (
-                          '耗时 / t/s'
-                        ) : (
-                          x
-                        )}
-                      </th>
-                    ))}
+                  {USAGE_COLUMNS.filter((column) => visibleColumns.has(column)).map((x) => (
+                    <th key={x}>
+                      {x === '时间' ? (
+                        <button
+                          className="time-sort"
+                          onClick={() => {
+                            const next = sort === 'desc' ? 'asc' : 'desc';
+                            setSort(next);
+                            setPage(1);
+                          }}
+                        >
+                          时间 {sort === 'desc' ? '↓' : '↑'}
+                        </button>
+                      ) : x === '耗时' ? (
+                        '耗时 / t/s'
+                      ) : (
+                        x
+                      )}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -440,14 +432,18 @@ export function Sub2ApiUsagePage(props: UsageProps) {
                             <Archive size={15} aria-hidden />
                             <b>{row.cacheReadTokens}</b>
                           </span>
-                          <span
-                            className={`usage-cache-rate-badge is-${cacheRateTone(row.cacheRate)}`}
-                            aria-label={`缓存率 ${formatCacheRate(row.cacheRate)}`}
-                            title="缓存率"
-                          >
-                            {formatCacheRate(row.cacheRate)}
-                          </span>
                         </div>
+                      </td>
+                    )}
+                    {visibleColumns.has('缓存率') && (
+                      <td>
+                        <span
+                          className={`usage-cache-rate-badge is-${cacheRateTone(row.cacheRate)}`}
+                          aria-label={`缓存率 ${formatCacheRate(row.cacheRate)}`}
+                          title="缓存率"
+                        >
+                          {formatCacheRate(row.cacheRate)}
+                        </span>
                       </td>
                     )}
                     {visibleColumns.has('首字') && (

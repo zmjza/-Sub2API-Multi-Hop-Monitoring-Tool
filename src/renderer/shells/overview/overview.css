@@ -1383,6 +1383,14 @@
   padding: 3px 6px;
   font-size: 9px;
 }
+.rate-inline-channel > time {
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  color: #94a3b8;
+  font-size: 9px;
+  white-space: nowrap;
+}
 .rate-inline-channel-metrics {
   min-height: 22px;
   display: flex;
@@ -1451,6 +1459,7 @@
   text-overflow: ellipsis;
   color: #b45309;
   font-weight: 600;
+  pointer-events: none;
   white-space: nowrap;
 }
 .rate-inline-channel.is-loading,

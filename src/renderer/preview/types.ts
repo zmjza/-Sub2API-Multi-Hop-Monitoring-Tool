@@ -1,3 +1,5 @@
+import type { ChannelViewPayload } from '../../../electron/shared/contracts';
+
 export const previewStates = [
   'success',
   'loading',
@@ -44,6 +46,7 @@ export interface PreviewContext {
   onToggleUsageMode?: () => void;
   latestUsageRecord?: { createdAt?: unknown; outputTokens?: unknown; durationMs?: unknown };
   channelsData?: unknown;
+  channelStatusBySite?: Record<string, ChannelViewPayload>;
   channelAssociations?: ChannelAssociation[];
   channelAssociationsBySite?: Record<string, ChannelAssociation[]>;
   channelDetail?: unknown;

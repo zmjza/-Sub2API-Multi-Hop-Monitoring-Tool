@@ -180,6 +180,13 @@ describe('OpenCodex column layout', () => {
       '实际消费',
     ]);
   });
+
+  it('does not include a cache-rate display field in OpenCodex rows', () => {
+    const [row] = normalizeOpenCodexLogs(payload);
+    expect(row).not.toHaveProperty('cacheRate');
+    expect(row).not.toHaveProperty('cacheRateLabel');
+    expect(row).not.toHaveProperty('cacheRateTone');
+  });
 });
 
 describe('speed tier mapping', () => {

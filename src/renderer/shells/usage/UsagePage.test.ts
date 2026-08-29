@@ -3,8 +3,15 @@ import {
   firstTokenClass,
   readUsagePagination,
   readUsageRecords,
+  USAGE_COLUMNS,
   usageResetQuery,
 } from './UsagePage';
+
+describe('usage columns', () => {
+  it('keeps cache rate in a dedicated column after Token', () => {
+    expect(USAGE_COLUMNS.indexOf('缓存率')).toBe(USAGE_COLUMNS.indexOf('Token') + 1);
+  });
+});
 
 describe('readUsagePagination', () => {
   it('restores the documented default query when filters are reset', () => {
@@ -72,6 +79,7 @@ describe('readUsageRecords', () => {
       inputTokens: '2,008',
       outputTokens: '1,879',
       cacheReadTokens: '65.3K',
+      cacheRate: expect.closeTo((65300 / (2008 + 65300)) * 100, 5),
     });
   });
 

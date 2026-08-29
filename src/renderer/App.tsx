@@ -58,6 +58,7 @@ import { Sub2ApiServersPage } from './shells/sub2api-servers/Sub2ApiServersPage'
 import { FavoriteWebsitesPage } from './shells/favorite-websites/FavoriteWebsitesPage';
 import sub2ApiLogo from './assets/sub2api-logo.png';
 import './styles.css';
+import { canSwitchSub2ApiServer } from './app-navigation';
 import type {
   SiteKeyContext,
   SiteKeyContexts,
@@ -139,6 +140,9 @@ export function App() {
     status: 'idle',
   });
   const [sub2apiServers, setSub2apiServers] = useState<Sub2ApiServer[]>([]);
+  const [channelStatusBySite, setChannelStatusBySite] = useState<
+    Record<string, import('../../electron/shared/contracts').ChannelViewPayload>
+  >({});
   const [favoriteWebsiteEmbedState, setFavoriteWebsiteEmbedState] =
     useState<FavoriteWebsiteEmbedState>({ status: 'idle' });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
@@ -292,10 +296,11 @@ export function App() {
     else setSub2ApiServerEmbedState({ status: 'idle' });
   };
   const openEmbeddedSub2ApiServer = (server: Sub2ApiServer) => {
+    const switching = sub2apiServerEmbedState.status !== 'idle';
     if (
-      sub2apiServerEmbedState.status !== 'idle' ||
-      radarEmbedState.status !== 'idle' ||
-      favoriteWebsiteEmbedState.status !== 'idle'
+      (switching && !canSwitchSub2ApiServer(sub2apiServerEmbedState, server.id)) ||
+      (!switching &&
+        (radarEmbedState.status !== 'idle' || favoriteWebsiteEmbedState.status !== 'idle'))
     )
       return;
     const servers = window.sub2apiDesktop?.sub2apiServers;
@@ -307,6 +312,7 @@ export function App() {
       });
       return;
     }
+    if (!switching) setShell('sub2api-servers');
     setSub2ApiServerEmbedState({
       status: 'opening',
       target: { id: server.id, label: server.name },
@@ -480,6 +486,7 @@ export function App() {
     setUsageMode((current) => (current === 'sub2api' ? 'opencodex' : 'sub2api'));
   context.latestUsageRecord = latestUsageRecord;
   context.channelsData = channelsData;
+  context.channelStatusBySite = channelStatusBySite;
   context.channelAssociations = channelAssociations;
   context.channelAssociationsBySite = channelAssociationsBySite;
   context.channelDetail = channelDetail;
@@ -912,6 +919,7 @@ export function App() {
       void loadKeyContext(siteId);
     });
     const unsubscribeChannel = window.sub2apiDesktop?.sites.onChannelChanged((value) => {
+      setChannelStatusBySite((current) => ({ ...current, [value.siteId]: value.data }));
       if (value.siteId !== currentSiteRef.current) return;
       channelStatusLoaderRef.current?.seed(value.siteId, { channels: value.data, details: {} });
       setChannelsData(value.data);

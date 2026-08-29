@@ -125,7 +125,15 @@ export class Sub2ApiServerManager {
     const url = targetUrl ?? normalizeSub2ApiServerUrl(server.baseUrl);
     if (!isAllowedSub2ApiServerNavigation(url, new URL(server.baseUrl).origin))
       throw new Error('SUB2API_SERVER_NAVIGATION_BLOCKED');
-    this.closeView(false);
+    const previous =
+      this.view && this.target && this.currentServer
+        ? {
+            view: this.view,
+            target: this.target,
+            server: this.currentServer,
+            cleanup: this.cleanup,
+          }
+        : undefined;
     const target: Sub2ApiServerTarget = { id: server.id, label: server.name };
     this.emit({ status: 'opening', target });
 
@@ -142,6 +150,11 @@ export class Sub2ApiServerManager {
     this.view = view;
     this.target = target;
     this.currentServer = server;
+    const fail = () => {
+      if (previous && !previous.view.webContents.isDestroyed())
+        this.restorePreviousView(view, previous);
+      else this.failView(view, target);
+    };
 
     const allowedOrigin = new URL(server.baseUrl).origin;
     const rejectExternalNavigation = (
@@ -149,7 +162,7 @@ export class Sub2ApiServerManager {
     ) => {
       if (!event.isMainFrame || isAllowedSub2ApiServerNavigation(event.url, allowedOrigin)) return;
       event.preventDefault();
-      this.failView(view, target);
+      fail();
     };
     const onBeforeInput = (event: Electron.Event, input: Electron.Input) => {
       if (input.type !== 'keyDown' || input.key !== 'Escape') return;
@@ -163,7 +176,7 @@ export class Sub2ApiServerManager {
       _validatedURL: string,
       isMainFrame: boolean,
     ) => {
-      if (isMainFrame) this.failView(view, target);
+      if (isMainFrame) fail();
     };
     const onWillAttachWebview = (event: Electron.Event) => event.preventDefault();
     const onDestroyed = () => {
@@ -179,7 +192,7 @@ export class Sub2ApiServerManager {
     const syncState = () => this.emitCurrentState(view, target, server);
     const onDidNavigate = (_event: Electron.Event, url: string, httpResponseCode: number) => {
       if (!isAllowedSub2ApiServerNavigation(url, allowedOrigin)) {
-        this.failView(view, target);
+        fail();
         return;
       }
       this.updateLoginState(server, url, httpResponseCode);
@@ -218,11 +231,17 @@ export class Sub2ApiServerManager {
     try {
       await this.loadServerPage(view.webContents, url);
       if (this.view === view) {
+        if (previous?.view) {
+          previous.cleanup?.();
+          if (!previous.view.webContents.isDestroyed())
+            previous.view.webContents.close({ waitForBeforeUnload: false });
+          if (!mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(previous.view);
+        }
         await this.waitForDomReady();
         syncState();
       }
     } catch {
-      this.failView(view, target);
+      fail();
     }
   }
 
@@ -324,6 +343,28 @@ export class Sub2ApiServerManager {
     if (this.view !== view || !this.target) return;
     this.closeView(false);
     this.emit({ status: 'error', target, message: SUB2API_SERVER_LOAD_ERROR });
+  }
+
+  private restorePreviousView(
+    view: WebContentsView,
+    previous: {
+      view: WebContentsView;
+      target: Sub2ApiServerTarget;
+      server: Sub2ApiServer;
+      cleanup: (() => void) | undefined;
+    },
+  ): void {
+    if (this.view !== view) return;
+    this.cleanup?.();
+    this.view = previous.view;
+    this.target = previous.target;
+    this.currentServer = previous.server;
+    this.cleanup = previous.cleanup;
+    const mainWindow = this.getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
+    this.syncBounds();
+    this.emitCurrentState(previous.view, previous.target, previous.server);
   }
 
   private emitCurrentState(

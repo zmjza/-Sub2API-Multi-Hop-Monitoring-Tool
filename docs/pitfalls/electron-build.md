@@ -218,6 +218,28 @@ macOS 本地内部目录构建和真机验收准备。
 
 不要用 `BrowserWindow.minimize()` 的调用成功代替可见性结果验证；不要混淆最小化与关闭；不要让停用悬浮窗的设置失效。
 
+## 原生 WebContentsView 打开时必须同步切换 Renderer Shell
+
+**现象**
+
+打开 Sub2API 服务器后，原生网页覆盖在全部站点内容上方，看起来像遮挡了左侧菜单或其他菜单。
+
+**根因**
+
+WebContentsView 与 Renderer Shell 是两套独立层；只显示原生视图而不切换 Shell 时，底层仍保留全部站点页面，造成视觉叠加。
+
+**正确做法**
+
+首次打开服务器时同步切换到 `sub2api-servers` Shell；从其他菜单切换时关闭原生视图。服务器之间切换只替换原生视图，失败时恢复旧视图。
+
+**验证方式**
+
+Electron E2E 断言打开服务器后的 Shell、服务器切换和返回其他菜单时原生视图生命周期；macOS 真机需截图确认左侧菜单未被遮挡。
+
+**禁止事项**
+
+不要通过修改远程 Sub2API DOM、提高 z-index 或扩大/缩小 WebContentsView 几何范围掩盖 Shell 状态错误。
+
 **相关文件或命令**
 
 - `electron/main/index.ts`

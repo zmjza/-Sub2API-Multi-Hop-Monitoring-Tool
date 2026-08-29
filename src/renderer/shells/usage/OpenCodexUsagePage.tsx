@@ -427,13 +427,6 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
                               <Archive size={15} aria-hidden />
                               <b>{row.cacheReadTokens}</b>
                             </span>
-                            <span
-                              className={'usage-cache-rate-badge is-' + row.cacheRateTone}
-                              aria-label={'缓存率 ' + row.cacheRateLabel}
-                              title="缓存率"
-                            >
-                              {row.cacheRateLabel}
-                            </span>
                           </div>
                         </td>
                       )}

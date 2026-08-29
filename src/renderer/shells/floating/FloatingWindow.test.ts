@@ -207,6 +207,34 @@ describe('floating window transparency', () => {
     expect(html.indexOf('floating-speed')).toBeGreaterThan(html.indexOf('<footer'));
   });
 
+  it('shows the channel fetch time with seconds in the floating card', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+        channelsData: {
+          state: 'supported',
+          fetchedAt: Date.UTC(2026, 7, 29, 11, 22, 33),
+          channels: [],
+          availableChannels: [],
+        },
+      }),
+    );
+    expect(html).toContain('更新于');
+    expect(html).toMatch(/更新于 \d{2}:\d{2}:\d{2}/);
+  });
+
   it('shows a semantic empty state instead of a fabricated zero percentage', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingWindow, {
