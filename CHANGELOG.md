@@ -18,6 +18,7 @@
 - `npm test -- --run`：56 个测试文件、418 项通过；`npm run typecheck`、`npm run lint`、`npm run build` 通过。
 - Electron E2E 首次完整运行 12 项通过、2 项跳过、1 项因窗口启动抖动失败；单独重跑该用例后 1/1 通过。
 - macOS Computer Use 真机读取连续两次因 `timeoutReached` 受阻，不能替代真实窗口截图验收；Windows 仍只做 x64 交叉构建。
+- 已发布 GitHub Release `2.6.0`，Tag、五项资产和非草稿状态已通过 GitHub API 核验；源码已同步推送 GitHub 与 Gitee。
 - Windows 仍只做 x64 交叉构建，不代表 Windows 真机通过。
 
 ## 2.5.2 - 2026-08-29
