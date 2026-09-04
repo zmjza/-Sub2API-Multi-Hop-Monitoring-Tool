@@ -9,7 +9,7 @@
 
 ## 2.3.0 OpenCodex 模式增量
 
-- 顶部"当前选中中转站"行旁新增"切换 opencodex 模式"按钮（选中态紫色实心、未选中描边），切换后同页面展示 OpenCodex 本地日志，来源标签显示"OpenCodex 本地日志 · localhost:10100 · 最近 4000 条"。
+- 顶部"当前选中中转站"行旁新增"切换 opencodex 模式"按钮（选中态紫色实心、未选中描边），切换后同页面展示 OpenCodex 本地日志，来源标签显示"OpenCodex 本地日志 · localhost:10100 · 当前范围全部记录"；数据通过 request-history cursor 分页拉取。
 - 新增 src/renderer/shells/usage/OpenCodexUsagePage.tsx（独立组件，与中转站页面同布局体系）、opencodex-data.ts（归一化/筛选/统计纯函数）和 electron/main/services/opencodex-service.ts（令牌读取与固定端点请求）。
 - 表格列：时间、提供方模型、思考模式、请求类型、Token（输入/输出/缓存）、首字、耗时/t-s、实际消费、状态（2xx 绿 / 4xx+ 红 / 其他灰）。
 - 统计卡：请求数、总 Token（输入/输出/缓存）、总消费（OpenCodex 估算）、平均耗时，均为筛选后结果。

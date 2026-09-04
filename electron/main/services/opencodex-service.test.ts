@@ -56,14 +56,66 @@ const samplePayload = {
 };
 
 describe('fetchOpenCodexLogs', () => {
+  it('paginates request history until every matching entry is loaded', async () => {
+    process.env.OPENCODEX_ADMIN_AUTH_TOKEN = 'ocx_admin_testtoken1234567890abcdefghijklmnop';
+    let calls = 0;
+    await withServer(
+      (req, res) => {
+        const url = new URL(req.url ?? '', 'http://localhost');
+        calls += 1;
+        expect(url.pathname).toBe('/api/request-history');
+        expect(url.searchParams.get('from')).toBe('100');
+        expect(url.searchParams.get('to')).toBe('200');
+        res.setHeader('Content-Type', 'application/json');
+        if (calls === 1) {
+          res.end(
+            JSON.stringify({
+              entries: [{ timestamp: 150, provider: 'p', model: 'm', status: 200 }],
+              nextCursor: 'next-page',
+              hasMore: true,
+            }),
+          );
+        } else {
+          expect(url.searchParams.get('cursor')).toBe('next-page');
+          res.end(
+            JSON.stringify({
+              entries: [{ timestamp: 120, provider: 'p', model: 'm', status: 200 }],
+              hasMore: false,
+            }),
+          );
+        }
+      },
+      async (baseUrl) => {
+        const result = await fetchOpenCodexLogs({ from: 100, to: 200 }, { baseUrl });
+        expect(calls).toBe(2);
+        expect(result.total).toBe(2);
+        expect(result.logs.map((entry) => entry.timestamp)).toEqual([150, 120]);
+      },
+    );
+  });
+
+  it('rejects a repeated pagination cursor instead of looping forever', async () => {
+    process.env.OPENCODEX_ADMIN_AUTH_TOKEN = 'ocx_admin_testtoken1234567890abcdefghijklmnop';
+    await withServer(
+      (_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ entries: [], nextCursor: 'same', hasMore: true }));
+      },
+      async (baseUrl) => {
+        await expect(fetchOpenCodexLogs({}, { baseUrl })).rejects.toThrow('分页游标重复');
+      },
+    );
+  });
+
   it('defaults to the 4000-record window', async () => {
     process.env.OPENCODEX_ADMIN_AUTH_TOKEN = 'ocx_admin_testtoken1234567890abcdefghijklmnop';
     await withServer(
       (req, res) => {
         const url = new URL(req.url ?? '', 'http://localhost');
-        expect(url.searchParams.get('limit')).toBe('4000');
+        expect(url.pathname).toBe('/api/request-history');
+        expect(url.searchParams.get('limit')).toBe('100');
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ timeZone: 'UTC', total: 0, logs: [] }));
+        res.end(JSON.stringify({ entries: [], hasMore: false }));
       },
       async (baseUrl) => {
         await expect(fetchOpenCodexLogs({}, { baseUrl })).resolves.toMatchObject({ total: 0 });
@@ -79,7 +131,7 @@ describe('fetchOpenCodexLogs', () => {
           'Bearer ocx_admin_testtoken1234567890abcdefghijklmnop',
         );
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(samplePayload));
+        res.end(JSON.stringify({ entries: samplePayload.logs, hasMore: false }));
       },
       async (baseUrl) => {
         const result = await fetchOpenCodexLogs({ limit: 2000 }, { baseUrl });
@@ -96,9 +148,10 @@ describe('fetchOpenCodexLogs', () => {
         const url = new URL(req.url ?? '', 'http://localhost');
         expect(url.searchParams.get('provider')).toBe('opencode-go');
         expect(url.searchParams.get('status')).toBe('200');
-        expect(url.searchParams.get('limit')).toBe('2000');
+        expect(url.pathname).toBe('/api/request-history');
+        expect(url.searchParams.get('limit')).toBe('100');
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ timeZone: 'UTC', total: 0, logs: [] }));
+        res.end(JSON.stringify({ entries: [], hasMore: false }));
       },
       async (baseUrl) => {
         const result = await fetchOpenCodexLogs(
@@ -148,7 +201,7 @@ describe('fetchOpenCodexLogs', () => {
     await withServer(
       (_req, res) => {
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ total: 1, logs: [{ timestamp: 'bad', model: 42 }] }));
+        res.end(JSON.stringify({ entries: [{ timestamp: 'bad', model: 42 }], hasMore: false }));
       },
       async (baseUrl) => {
         await expect(fetchOpenCodexLogs({}, { baseUrl })).rejects.toThrow(

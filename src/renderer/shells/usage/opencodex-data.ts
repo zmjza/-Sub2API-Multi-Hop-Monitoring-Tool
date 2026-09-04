@@ -199,8 +199,12 @@ export interface OpenCodexFilters {
   sort: 'asc' | 'desc';
 }
 
-function dayRange(period: OpenCodexPeriod, startDate: string, endDate: string): [number, number] {
-  const now = Date.now();
+export function openCodexTimeRange(
+  period: OpenCodexPeriod,
+  startDate = '',
+  endDate = '',
+  now = Date.now(),
+): [number, number] {
   if (period === 'custom') {
     const start = startDate
       ? new Date(startDate + 'T00:00:00').getTime()
@@ -222,7 +226,7 @@ export function filterOpenCodexRows(
   rows: OpenCodexRow[],
   filters: OpenCodexFilters,
 ): OpenCodexRow[] {
-  const [start, end] = dayRange(filters.period, filters.startDate, filters.endDate);
+  const [start, end] = openCodexTimeRange(filters.period, filters.startDate, filters.endDate);
   const filtered = rows.filter((row) => {
     if (row.timestamp < start || row.timestamp > end) return false;
     if (filters.provider && row.provider !== filters.provider) return false;

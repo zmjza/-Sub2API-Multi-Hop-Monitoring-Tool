@@ -44,7 +44,7 @@
 | [tooling.md](tooling.md)                 | npm、审计、测试产物管理          |         16 |
 | [sub2api-adapter.md](sub2api-adapter.md) | sub2api 二开响应与能力适配       |         25 |
 | [rate-comparison.md](rate-comparison.md) | 倍率评分、渠道稳定性与横向滚动   |         14 |
-| [opencodex.md](opencodex.md)             | OpenCodex 本地服务接入           |          1 |
+| [opencodex.md](opencodex.md)             | OpenCodex 本地服务接入           |          2 |
 
 ## 初始历史回填记录
 

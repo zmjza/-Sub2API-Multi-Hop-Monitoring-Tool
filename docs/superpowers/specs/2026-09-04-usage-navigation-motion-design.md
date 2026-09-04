@@ -4,6 +4,10 @@
 关联 PRD：[REQ-260904-usage-navigation-motion-PRD.md](../../../liran_docs/requirements/REQ-260904-usage-navigation-motion-PRD.md)
 状态：已获用户确认，待生成实施计划
 
+## 需求变更补充：OpenCodex 全量历史
+
+原先的 4000 条请求上限不能满足真实使用量。实现以 `/api/request-history` 为完整历史来源：服务端按 `from/to`、provider、model、status 过滤，客户端用 100 条分页和 cursor 拉取至 `hasMore=false`；`/api/logs` 仅保留作历史兼容事实，不参与完整使用记录。
+
 ## 目标
 
 本轮把 2.6.0 之后的三类体验问题收口：删除总览渠道推荐展示；修正 OpenCodex 使用记录的数据、缓存率和日期筛选口径；让 Sub2API 服务器、Radar、常用网站具备一致且即时的顶部快速切换；并为所有主页面建立克制、可访问、可验证的高级感动效。
@@ -136,4 +140,3 @@ Sub2API 服务器、Radar、常用网站分别维护自己的条目集合，在�
 4. 全站动效具备统一时序、可访问焦点和 reduced-motion 降级。
 5. Vitest、typecheck、lint、format、build、Electron E2E 和适用的 macOS 页面/真机检查通过。
 6. Git diff 仅包含本任务相关文件，发布版本、CHANGELOG、真机记录和归档按项目规则同步。
-

@@ -16,6 +16,7 @@ import {
   filterOpenCodexRows,
   normalizeOpenCodexLogs,
   OPENCODEX_COLUMNS,
+  openCodexTimeRange,
   openCodexOptions,
   openCodexStatTotals,
   type OpenCodexFilters,
@@ -53,7 +54,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
   const [visibleColumns, setVisibleColumns] = useState(() => new Set(OPENCODEX_COLUMNS));
   const requestSeqRef = useRef(0);
 
-  const load = () => {
+  const load = (activeFilters: OpenCodexFilters = filters) => {
     const desktop = window.sub2apiDesktop?.sites;
     if (!desktop) {
       setState({
@@ -64,8 +65,24 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
     }
     const requestId = ++requestSeqRef.current;
     setState({ status: 'loading' });
+    const [from, to] = openCodexTimeRange(
+      activeFilters.period,
+      activeFilters.startDate,
+      activeFilters.endDate,
+    );
+    const query = {
+      ...(activeFilters.provider ? { provider: activeFilters.provider } : {}),
+      ...(activeFilters.model ? { model: activeFilters.model } : {}),
+      ...(activeFilters.status ? { status: activeFilters.status } : {}),
+      ...(Number.isFinite(from) ? { from } : {}),
+      ...(Number.isFinite(to) ? { to } : {}),
+    };
+    if (Number.isFinite(from) && Number.isFinite(to) && from > to) {
+      setState({ status: 'success', payload: { total: 0, logs: [] }, rows: [] });
+      return;
+    }
     void desktop
-      .opencodexLogs({ limit: 4000 })
+      .opencodexLogs(query)
       .then((payload) => {
         if (requestId !== requestSeqRef.current) return;
         setState({ status: 'success', payload, rows: normalizeOpenCodexLogs(payload) });
@@ -81,11 +98,18 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
   };
 
   useEffect(() => {
-    load();
+    load(filters);
     return () => {
       requestSeqRef.current += 1;
     };
-  }, []);
+  }, [
+    filters.period,
+    filters.startDate,
+    filters.endDate,
+    filters.provider,
+    filters.model,
+    filters.status,
+  ]);
 
   const rows = state.status === 'success' ? state.rows : [];
   const options = useMemo(() => openCodexOptions(rows), [rows]);
@@ -94,8 +118,6 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), pages);
   const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  const totalLoaded = state.status === 'success' ? state.payload.total : 0;
-  const truncated = state.status === 'success' && totalLoaded > rows.length;
 
   const changeFilters = (patch: Partial<OpenCodexFilters>) => {
     setFilters((current) => ({ ...current, ...patch }));
@@ -142,7 +164,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
       <div className="usage-mode-header">
         <div className="usage-selected-site">
           当前数据来源：<strong>OpenCodex 本地日志</strong>
-          <span className="opencodex-source-hint">localhost:10100 · 最近 4000 条</span>
+          <span className="opencodex-source-hint">localhost:10100 · 当前范围全部记录</span>
         </div>
         <button
           className="usage-mode-toggle active"
@@ -318,14 +340,13 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
             {'共 ' + (state.status === 'success' ? filtered.length : '待查询') + ' 条 · 按'}
             {filters.sort === 'desc' ? '最新' : '最早'}时间
             {filters.sort === 'desc' ? '倒序' : '正序'}
-            {truncated ? ' · 已加载最近 4000 条' : ''}
           </span>
         </div>
         {state.status === 'error' && (
           <div className="empty-state opencodex-error" data-opencodex-error>
             <strong>OpenCodex 日志加载失败</strong>
             <span>{state.message}</span>
-            <button className="usage-action-button" onClick={load}>
+            <button className="usage-action-button" onClick={() => load()}>
               重试
             </button>
           </div>

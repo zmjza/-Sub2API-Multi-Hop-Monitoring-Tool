@@ -2,13 +2,14 @@ import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import {
-  opencodexLogsPayloadSchema,
+  opencodexRequestHistoryPageSchema,
   type OpenCodexLogsPayload,
   type OpenCodexLogsQuery,
 } from '../../shared/opencodex.js';
 
 export const OPENCODEX_BASE_URL = 'http://localhost:10100';
-export const OPENCODEX_LOGS_ENDPOINT = '/api/logs';
+export const OPENCODEX_LOGS_ENDPOINT = '/api/request-history';
+const OPENCODEX_HISTORY_PAGE_SIZE = 100;
 
 function adminTokenPath(): string {
   const opencodexHome = process.env.OPENCODEX_HOME?.trim();
@@ -36,11 +37,18 @@ export interface OpenCodexFetchOptions {
   timeoutMs?: number;
 }
 
-function queryString(query: OpenCodexLogsQuery): string {
+function queryString(query: OpenCodexLogsQuery, cursor?: string): string {
   const params = new URLSearchParams();
   if (query.provider) params.set('provider', query.provider);
+  if (query.model) params.set('model', query.model);
   if (query.status) params.set('status', query.status);
-  params.set('limit', String(query.limit ?? 4000));
+  if (query.from !== undefined) params.set('from', String(query.from));
+  if (query.to !== undefined) params.set('to', String(query.to));
+  params.set(
+    'limit',
+    String(Math.min(query.limit ?? OPENCODEX_HISTORY_PAGE_SIZE, OPENCODEX_HISTORY_PAGE_SIZE)),
+  );
+  if (cursor) params.set('cursor', cursor);
   return params.toString();
 }
 
@@ -56,52 +64,63 @@ export async function fetchOpenCodexLogs(
       'OPENCODEX_TOKEN_MISSING：未找到 OpenCodex 管理员令牌（~/.opencodex/admin-api-token），请先启动 opencodex 服务',
     );
   }
-  const url = baseUrl + OPENCODEX_LOGS_ENDPOINT + '?' + queryString(query);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Authorization: 'Bearer ' + token,
-        Accept: 'application/json',
-      },
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('OPENCODEX_TIMEOUT：OpenCodex 服务响应超时，请稍后重试', {
-        cause: error,
+  const logs: OpenCodexLogsPayload['logs'] = [];
+  let cursor: string | undefined;
+  let timeZone: string | undefined;
+  const seenCursors = new Set<string>();
+  while (true) {
+    const url = baseUrl + OPENCODEX_LOGS_ENDPOINT + '?' + queryString(query, cursor);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+        signal: controller.signal,
       });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError')
+        throw new Error('OPENCODEX_TIMEOUT：OpenCodex 服务响应超时，请稍后重试', { cause: error });
+      throw new Error(
+        'OPENCODEX_UNREACHABLE：无法连接 OpenCodex 服务，请确认 opencodex 已在 localhost:10100 启动',
+        { cause: error },
+      );
+    } finally {
+      clearTimeout(timer);
     }
-    throw new Error(
-      'OPENCODEX_UNREACHABLE：无法连接 OpenCodex 服务，请确认 opencodex 已在 localhost:10100 启动',
-      { cause: error },
-    );
-  } finally {
-    clearTimeout(timer);
+    if (!response.ok) {
+      const status = response.status;
+      const label =
+        status === 401
+          ? 'OPENCODEX_UNAUTHORIZED：OpenCodex 管理员令牌无效或已过期'
+          : status === 403
+            ? 'OPENCODEX_FORBIDDEN：OpenCodex 拒绝访问，请检查令牌权限'
+            : 'OPENCODEX_HTTP_' + status + '：OpenCodex 服务返回 HTTP ' + status;
+      throw new Error(label);
+    }
+    const text = await response.text();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error('OPENCODEX_INVALID_JSON：OpenCodex 返回的不是有效 JSON');
+    }
+    const result = opencodexRequestHistoryPageSchema.safeParse(parsed);
+    if (!result.success)
+      throw new Error('OPENCODEX_INVALID_PAYLOAD：OpenCodex 日志数据结构不符合预期');
+    logs.push(...result.data.entries);
+    timeZone ??=
+      typeof parsed === 'object' && parsed && 'timeZone' in parsed
+        ? String((parsed as { timeZone?: unknown }).timeZone ?? '') || undefined
+        : undefined;
+    if (!result.data.hasMore) break;
+    if (!result.data.nextCursor)
+      throw new Error('OPENCODEX_INVALID_PAYLOAD：OpenCodex 分页缺少 nextCursor');
+    if (seenCursors.has(result.data.nextCursor))
+      throw new Error('OPENCODEX_INVALID_PAYLOAD：OpenCodex 分页游标重复');
+    seenCursors.add(result.data.nextCursor);
+    cursor = result.data.nextCursor;
   }
-  if (!response.ok) {
-    const status = response.status;
-    const label =
-      status === 401
-        ? 'OPENCODEX_UNAUTHORIZED：OpenCodex 管理员令牌无效或已过期'
-        : status === 403
-          ? 'OPENCODEX_FORBIDDEN：OpenCodex 拒绝访问，请检查令牌权限'
-          : 'OPENCODEX_HTTP_' + status + '：OpenCodex 服务返回 HTTP ' + status;
-    throw new Error(label);
-  }
-  const text = await response.text();
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new Error('OPENCODEX_INVALID_JSON：OpenCodex 返回的不是有效 JSON');
-  }
-  const result = opencodexLogsPayloadSchema.safeParse(parsed);
-  if (!result.success) {
-    throw new Error('OPENCODEX_INVALID_PAYLOAD：OpenCodex 日志数据结构不符合预期');
-  }
-  return result.data;
+  return { timeZone, total: logs.length, logs };
 }

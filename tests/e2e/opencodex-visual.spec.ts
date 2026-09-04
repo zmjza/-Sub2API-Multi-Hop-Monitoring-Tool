@@ -28,6 +28,7 @@ test('checks OpenCodex usage page geometry at desktop and narrow widths', async 
   await expect(window.locator('[data-opencodex-page]')).toBeVisible();
   await expect(window.getByRole('button', { name: '切回中转站模式', exact: true })).toBeVisible();
   await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
+  await expect(window.locator('[data-opencodex-loading]')).toHaveCount(0, { timeout: 30_000 });
   if ((await window.locator('[data-opencodex-error]').count()) === 0) {
     await expect(window.locator('[data-opencodex-page] tbody tr').first()).toBeVisible();
     await expect(window.locator('[data-opencodex-page] .usage-cache-rate-badge')).toHaveCount(

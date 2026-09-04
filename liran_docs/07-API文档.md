@@ -1,17 +1,18 @@
 # sub2api API 文档
 
-## 2026-09-04 REQ-260904-usage-navigation-motion OpenCodex 读取边界
+## 2026-09-04 REQ-260905 OpenCodex 全量历史读取
 
-- OpenCodex 日志通过主进程固定访问 `http://localhost:10100/api/logs`，本轮默认请求上限为 4000 条；不修改服务端协议。
+- OpenCodex 日志通过主进程固定访问 `http://localhost:10100/api/request-history`，使用 `limit=100` 和 `cursor` 循环拉取所有匹配页；`from/to`、provider、model、status 在服务端过滤。
+- `/api/logs` 仅保留最近 2000 条内存环形缓冲，不能作为完整历史来源；request-history 的持久化索引负责跨天和跨周数据。
 - Renderer 只接收结构化日志结果，不接触 `~/.opencodex/admin-api-token` 内容。
 - 真实输入、缓存读取、缓存写入、输出、总数、耗时、首字和 t/s 按服务端字段分别归一化；缓存读取不得重复计入真实输入。
 
 ## 2.3.0 OpenCodex 日志 IPC 合同
 
-| 方法/通道           | 用途                       | 安全与状态规则                                                                                 |
-| ------------------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
-| IPC opencodex:logs  | 读取 OpenCodex 请求日志    | 输入/输出 Zod 校验；主进程读取 ~/.opencodex/admin-api-token 作 Bearer；仅固定 localhost:10100 |
-| preload opencodexLogs | Renderer 固定桥           | 不暴露令牌、Cookie 或任意 URL；查询只允许 provider/status/limit                                |
+| 方法/通道             | 用途                    | 安全与状态规则                                                                                |
+| --------------------- | ----------------------- | --------------------------------------------------------------------------------------------- |
+| IPC opencodex:logs    | 读取 OpenCodex 请求日志 | 输入/输出 Zod 校验；主进程读取 ~/.opencodex/admin-api-token 作 Bearer；仅固定 localhost:10100 |
+| preload opencodexLogs | Renderer 固定桥         | 不暴露令牌、Cookie 或任意 URL；查询只允许 provider/model/status/from/to/limit                 |
 
 OpenCodex 日志响应结构：顶层 timeZone/total/logs，每条含 timestamp、provider、model、firstOutputMs、inboundProtocol、requestedEffort/effectiveEffort、status、durationMs、usage（inputTokens/outputTokens/cachedInputTokens/reasoningOutputTokens）、totalTokens、displayMetrics（tokPerSecond/cost 估算）。字段缺失显示占位符，不伪造实际消费；令牌只从本机安全令牌文件读取，禁止写入仓库、日志或 Renderer。
 

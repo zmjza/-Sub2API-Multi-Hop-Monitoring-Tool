@@ -224,6 +224,7 @@ test('switches usage records to the OpenCodex mode preview', async () => {
   await expect(window.locator('.usage-selected-site')).toContainText('OpenCodex 本地日志');
   await expect(window.getByRole('button', { name: '切回中转站模式', exact: true })).toBeVisible();
   await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
+  await expect(window.locator('[data-opencodex-loading]')).toHaveCount(0, { timeout: 30_000 });
   const rows = window.locator('[data-opencodex-page] tbody tr');
   if ((await window.locator('[data-opencodex-error]').count()) > 0) {
     await expect(window.locator('[data-opencodex-error]')).toContainText('OpenCodex 日志加载失败');

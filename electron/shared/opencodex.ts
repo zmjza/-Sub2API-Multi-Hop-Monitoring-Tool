@@ -3,7 +3,10 @@ import { z } from 'zod';
 export const opencodexLogsQuerySchema = z
   .object({
     provider: z.string().trim().min(1).max(120).optional(),
+    model: z.string().trim().min(1).max(120).optional(),
     status: z.string().trim().min(1).max(16).optional(),
+    from: z.number().int().nonnegative().optional(),
+    to: z.number().int().nonnegative().optional(),
     limit: z.number().int().positive().max(4000).optional(),
   })
   .strict();
@@ -95,7 +98,7 @@ export const opencodexLogEntrySchema = z
     responseServiceTier: z.string().optional(),
     resolvedModel: z.string().optional(),
     status: z.number().int().nonnegative(),
-    durationMs: z.number().finite().nonnegative(),
+    durationMs: z.number().finite().nonnegative().optional(),
     errorCode: z.string().optional(),
     terminalStatus: z.string().optional(),
     closeReason: z.string().optional(),
@@ -110,11 +113,21 @@ export const opencodexLogEntrySchema = z
 
 export type OpenCodexLogEntry = z.infer<typeof opencodexLogEntrySchema>;
 
+export const opencodexRequestHistoryPageSchema = z
+  .object({
+    entries: z.array(opencodexLogEntrySchema),
+    nextCursor: z.string().min(1).optional(),
+    hasMore: z.boolean(),
+  })
+  .passthrough();
+
+export type OpenCodexRequestHistoryPage = z.infer<typeof opencodexRequestHistoryPageSchema>;
+
 export const opencodexLogsPayloadSchema = z
   .object({
     timeZone: z.string().optional(),
     total: z.number().int().nonnegative(),
-    logs: z.array(opencodexLogEntrySchema).max(4000),
+    logs: z.array(opencodexLogEntrySchema),
   })
   .passthrough();
 
