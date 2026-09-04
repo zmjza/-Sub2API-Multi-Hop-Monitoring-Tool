@@ -271,7 +271,7 @@ export function App() {
   const closeEmbeddedRadar = () => {
     const radar = window.sub2apiDesktop?.radar;
     if (radar) radar.close();
-    else setRadarEmbedState({ status: 'idle' });
+    setRadarEmbedState({ status: 'idle' });
   };
   const openEmbeddedRadar = (entry: RadarEntry) => {
     if (sub2apiServerEmbedState.status !== 'idle' || favoriteWebsiteEmbedState.status !== 'idle')
@@ -291,7 +291,7 @@ export function App() {
   const closeEmbeddedSub2ApiServer = () => {
     const servers = window.sub2apiDesktop?.sub2apiServers;
     if (servers) servers.close();
-    else setSub2ApiServerEmbedState({ status: 'idle' });
+    setSub2ApiServerEmbedState({ status: 'idle' });
   };
   const openEmbeddedSub2ApiServer = (server: Sub2ApiServer) => {
     const switching = sub2apiServerEmbedState.status !== 'idle';
@@ -320,7 +320,7 @@ export function App() {
   const closeEmbeddedFavoriteWebsite = () => {
     const favorites = window.sub2apiDesktop?.favoriteWebsites;
     if (favorites) favorites.close();
-    else setFavoriteWebsiteEmbedState({ status: 'idle' });
+    setFavoriteWebsiteEmbedState({ status: 'idle' });
   };
   const openEmbeddedFavoriteWebsite = (website: FavoriteWebsite) => {
     if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;

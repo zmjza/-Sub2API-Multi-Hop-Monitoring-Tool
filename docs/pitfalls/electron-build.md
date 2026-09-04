@@ -238,6 +238,39 @@ Electron E2E 断言打开服务器后的 Shell、服务器切换和返回其他�
 
 **禁止事项**
 
+## 关闭嵌入网页时必须先清空 Renderer 状态
+
+**现象**
+
+从 Sub2API 服务器、Radar 或常用网站内嵌页点击主导航后，页面仍显示内嵌网页，主导航像被网页拦截。
+
+**根因**
+
+关闭 IPC 到达主进程并销毁 `WebContentsView` 是异步的；Renderer 若等待主进程回传 `idle` 才清空状态，期间旧视图和旧异步事件仍可能覆盖新 Shell。
+
+**正确做法**
+
+关闭动作立即在 Renderer 设置对应嵌入状态为 `idle`，同时发送主进程关闭 IPC；主进程状态同步还必须校验事件来源仍是当前视图。
+
+**验证方式**
+
+打开常用网站内嵌页后点击“全部站点”和其他主导航，断言 Shell 切换成功且 `data-*-embedded` 不存在；重复快速切换并确认旧事件不回写。
+
+**禁止事项**
+
+不要只依赖主进程 `destroyed`/`idle` 回调更新 Renderer；不要通过延长点击等待时间掩盖异步状态竞态。
+
+**相关文件或命令**
+
+- `src/renderer/App.tsx`
+- `electron/main/services/favorite-websites-manager.ts`
+- `electron/main/services/sub2api-server-manager.ts`
+- `tests/e2e/favorite-websites.spec.ts`
+
+**适用范围**
+
+所有原生 `WebContentsView` 与 Renderer Shell 并行存在的导航关闭流程。
+
 不要通过修改远程 Sub2API DOM、提高 z-index 或扩大/缩小 WebContentsView 几何范围掩盖 Shell 状态错误。
 
 **相关文件或命令**
