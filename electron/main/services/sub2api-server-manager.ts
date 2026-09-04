@@ -376,7 +376,7 @@ export class Sub2ApiServerManager {
     target = this.target,
     server = this.currentServer,
   ): void {
-    if (!view || !target || !server || view.webContents.isDestroyed()) return;
+    if (this.view !== view || !view || !target || !server || view.webContents.isDestroyed()) return;
     const loginState = this.db
       .getSub2ApiServers()
       .find((item) => item.id === server.id)?.loginState;

@@ -135,6 +135,9 @@ test('opens a local favorite website in the embedded web view', async () => {
       await expect(
         window.getByRole('button', { name: '关闭常用网站网页', exact: true }),
       ).toBeVisible();
+      await window.getByRole('button', { name: '全部站点', exact: true }).click();
+      await expect(window.locator('.app-shell[data-shell="overview"]')).toBeVisible();
+      await expect(window.locator('[data-favorite-embedded="true"]')).toHaveCount(0);
       await window.screenshot({ path: 'test-results/fav-embed.png' });
     });
   } finally {

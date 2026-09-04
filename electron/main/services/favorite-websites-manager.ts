@@ -310,7 +310,8 @@ export class FavoriteWebsitesManager {
     target = this.target,
     website = this.currentWebsite,
   ): void {
-    if (!view || !target || !website || view.webContents.isDestroyed()) return;
+    if (this.view !== view || !view || !target || !website || view.webContents.isDestroyed())
+      return;
     this.emit({
       status: 'open',
       target,
