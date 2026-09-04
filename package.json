@@ -1,6 +1,6 @@
 {
   "name": "sub2api-multi-hub-monitor",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "private": true,
   "description": "Local desktop monitor for multiple sub2api-compatible sites",
   "main": "dist-electron/main/index.js",

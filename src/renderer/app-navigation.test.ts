@@ -8,12 +8,12 @@ describe('Sub2API server switching', () => {
     );
   });
 
-  it('blocks duplicate or opening-state switches', () => {
+  it('blocks duplicate switches but allows replacing an opening target', () => {
     expect(canSwitchSub2ApiServer({ status: 'open', target: { id: 'server-a' } }, 'server-a')).toBe(
       false,
     );
     expect(
       canSwitchSub2ApiServer({ status: 'opening', target: { id: 'server-a' } }, 'server-b'),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

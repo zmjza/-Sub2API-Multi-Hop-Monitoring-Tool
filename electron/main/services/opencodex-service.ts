@@ -40,7 +40,7 @@ function queryString(query: OpenCodexLogsQuery): string {
   const params = new URLSearchParams();
   if (query.provider) params.set('provider', query.provider);
   if (query.status) params.set('status', query.status);
-  params.set('limit', String(query.limit ?? 2000));
+  params.set('limit', String(query.limit ?? 4000));
   return params.toString();
 }
 

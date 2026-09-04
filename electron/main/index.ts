@@ -132,6 +132,7 @@ let scheduler: RefreshScheduler;
 let notificationService: NotificationService;
 let updateService: UpdateService;
 let radarView: WebContentsView | undefined;
+let radarOpenSequence = 0;
 let sub2apiServerManager: Sub2ApiServerManager;
 let favoriteWebsitesManager: FavoriteWebsitesManager;
 const scheduledTimers: NodeJS.Timeout[] = [];
@@ -197,19 +198,15 @@ function closeRadarView(notify = true) {
   if (notify) sendRadarState({ status: 'idle' });
 }
 
-function failRadarView(view: WebContentsView) {
-  if (radarView !== view || !radarViewTarget) return;
-  const target = radarViewTarget;
-  closeRadarView(false);
-  sendRadarState({ status: 'error', target, message: RADAR_LOAD_ERROR_MESSAGE });
-}
-
 async function openRadarView(entry: RadarEntry) {
+  const sequence = ++radarOpenSequence;
   const url = normalizeRadarUrl(entry.url);
   if (!url || !mainWindow || mainWindow.isDestroyed()) return;
   const target: RadarTarget = { id: entry.id, label: entry.label };
-
-  closeRadarView(false);
+  const previous =
+    radarView && radarViewTarget
+      ? { view: radarView, target: radarViewTarget, cleanup: radarViewCleanup }
+      : undefined;
   sendRadarState({ status: 'opening', target });
 
   const view = new WebContentsView({
@@ -225,13 +222,26 @@ async function openRadarView(entry: RadarEntry) {
   radarView = view;
   radarViewTarget = target;
 
+  const fail = () => {
+    if (radarView !== view) return;
+    const cleanup = radarViewCleanup;
+    radarView = previous?.view;
+    radarViewTarget = previous?.target;
+    radarViewCleanup = previous?.cleanup;
+    cleanup?.();
+    if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    if (previous) sendRadarState({ status: 'open', target: previous.target });
+    else sendRadarState({ status: 'error', target, message: RADAR_LOAD_ERROR_MESSAGE });
+  };
+
   const rejectExternalNavigation = (
     event: Electron.Event<{ isMainFrame: boolean; url: string }>,
   ) => {
     const allowedOrigin = new URL(url).origin;
     if (!event.isMainFrame || isAllowedRadarNavigation(event.url, allowedOrigin)) return;
     event.preventDefault();
-    failRadarView(view);
+    fail();
   };
   const onBeforeInput = (event: Electron.Event, input: Electron.Input) => {
     if (input.type !== 'keyDown' || input.key !== 'Escape') return;
@@ -245,7 +255,7 @@ async function openRadarView(entry: RadarEntry) {
     _validatedURL: string,
     isMainFrame: boolean,
   ) => {
-    if (isMainFrame) failRadarView(view);
+    if (isMainFrame) fail();
   };
   const onWillAttachWebview = (event: Electron.Event) => event.preventDefault();
   const onDestroyed = () => {
@@ -277,9 +287,19 @@ async function openRadarView(entry: RadarEntry) {
   syncRadarViewBounds();
   try {
     await view.webContents.loadURL(url);
-    if (radarView === view) sendRadarState({ status: 'open', target });
+    if (sequence !== radarOpenSequence) return;
+    if (radarView === view) {
+      if (previous) {
+        previous.cleanup?.();
+        if (!previous.view.webContents.isDestroyed())
+          previous.view.webContents.close({ waitForBeforeUnload: false });
+        if (!mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(previous.view);
+      }
+      sendRadarState({ status: 'open', target });
+    }
   } catch {
-    failRadarView(view);
+    if (sequence !== radarOpenSequence) return;
+    fail();
   }
 }
 

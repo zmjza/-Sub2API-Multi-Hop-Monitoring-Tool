@@ -136,6 +136,7 @@ export function App() {
   const [isRefreshingRates, setIsRefreshingRates] = useState(false);
   const [refreshingRateSiteIds, setRefreshingRateSiteIds] = useState<Set<string>>(() => new Set());
   const [radarEmbedState, setRadarEmbedState] = useState<RadarEmbedState>({ status: 'idle' });
+  const [radarEntries, setRadarEntries] = useState<RadarEntry[]>([]);
   const [sub2apiServerEmbedState, setSub2ApiServerEmbedState] = useState<Sub2ApiServerEmbedState>({
     status: 'idle',
   });
@@ -145,6 +146,7 @@ export function App() {
   >({});
   const [favoriteWebsiteEmbedState, setFavoriteWebsiteEmbedState] =
     useState<FavoriteWebsiteEmbedState>({ status: 'idle' });
+  const [favoriteWebsites, setFavoriteWebsites] = useState<FavoriteWebsite[]>([]);
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
     position: 'top-right',
     opacity: 84,
@@ -272,11 +274,7 @@ export function App() {
     else setRadarEmbedState({ status: 'idle' });
   };
   const openEmbeddedRadar = (entry: RadarEntry) => {
-    if (
-      radarEmbedState.status !== 'idle' ||
-      sub2apiServerEmbedState.status !== 'idle' ||
-      favoriteWebsiteEmbedState.status !== 'idle'
-    )
+    if (sub2apiServerEmbedState.status !== 'idle' || favoriteWebsiteEmbedState.status !== 'idle')
       return;
     const radar = window.sub2apiDesktop?.radar;
     if (!radar) {
@@ -325,12 +323,7 @@ export function App() {
     else setFavoriteWebsiteEmbedState({ status: 'idle' });
   };
   const openEmbeddedFavoriteWebsite = (website: FavoriteWebsite) => {
-    if (
-      favoriteWebsiteEmbedState.status !== 'idle' ||
-      sub2apiServerEmbedState.status !== 'idle' ||
-      radarEmbedState.status !== 'idle'
-    )
-      return;
+    if (sub2apiServerEmbedState.status !== 'idle' || radarEmbedState.status !== 'idle') return;
     const favorites = window.sub2apiDesktop?.favoriteWebsites;
     if (!favorites) {
       setFavoriteWebsiteEmbedState({
@@ -376,6 +369,10 @@ export function App() {
     const unsubscribe = window.sub2apiDesktop?.radar.onStateChange((nextState) => {
       setRadarEmbedState(nextState);
     });
+    void window.sub2apiDesktop?.radar
+      .list()
+      .then(setRadarEntries)
+      .catch(() => undefined);
     return () => unsubscribe?.();
   }, []);
   useEffect(() => {
@@ -387,6 +384,12 @@ export function App() {
       .then(setSub2apiServers)
       .catch(() => undefined);
     return () => unsubscribe?.();
+  }, []);
+  useEffect(() => {
+    void window.sub2apiDesktop?.favoriteWebsites
+      .list()
+      .then(setFavoriteWebsites)
+      .catch(() => undefined);
   }, []);
   useEffect(() => {
     const unsubscribe = window.sub2apiDesktop?.favoriteWebsites.onStateChange((nextState) => {
@@ -1433,6 +1436,23 @@ export function App() {
                 <Globe size={16} aria-hidden="true" />
                 <span>{favoriteWebsiteEmbedState.target.label}</span>
               </div>
+              <nav className="svr-server-switcher" aria-label="切换常用网站">
+                {favoriteWebsites.map((website) => {
+                  const active = website.id === favoriteWebsiteEmbedState.target.id;
+                  return (
+                    <button
+                      key={website.id}
+                      type="button"
+                      className={active ? 'active' : ''}
+                      aria-current={active ? 'page' : undefined}
+                      aria-label={`切换到 ${website.name}`}
+                      onClick={() => openEmbeddedFavoriteWebsite(website)}
+                    >
+                      {website.name}
+                    </button>
+                  );
+                })}
+              </nav>
               <div className="fav-embed-nav">
                 <button
                   className="icon-button"
@@ -1507,7 +1527,7 @@ export function App() {
                       className={active ? 'active' : ''}
                       aria-current={active ? 'page' : undefined}
                       aria-label={`切换到 ${server.name}`}
-                      disabled={active || sub2apiServerEmbedState.status === 'opening'}
+                      disabled={active}
                       onClick={() => openEmbeddedSub2ApiServer(server)}
                     >
                       {server.name}
@@ -1573,6 +1593,23 @@ export function App() {
                 <Radio size={16} aria-hidden="true" />
                 <span>{radarEmbedState.target.label}</span>
               </div>
+              <nav className="svr-server-switcher" aria-label="切换雷达站点">
+                {radarEntries.map((entry) => {
+                  const active = entry.id === radarEmbedState.target.id;
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className={active ? 'active' : ''}
+                      aria-current={active ? 'page' : undefined}
+                      aria-label={`切换到 ${entry.label}`}
+                      onClick={() => openEmbeddedRadar(entry)}
+                    >
+                      {entry.label}
+                    </button>
+                  );
+                })}
+              </nav>
               <button
                 className="icon-button radar-embed-close"
                 aria-label="关闭雷达网页"

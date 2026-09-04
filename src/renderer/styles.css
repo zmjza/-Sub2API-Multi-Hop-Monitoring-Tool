@@ -94,6 +94,11 @@ input {
   gap: 12px;
   padding: 0 16px;
   font: 500 14px inherit;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
   cursor: pointer;
   text-align: left;
 }
@@ -111,6 +116,27 @@ input {
   margin-left: 284px;
   height: 100vh;
   min-height: 0;
+}
+
+.app-content > section {
+  animation: app-page-enter 200ms ease-out both;
+}
+
+@keyframes app-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-content > section {
+    animation: none;
+  }
 }
 .app-toolbar {
   -webkit-app-region: drag;

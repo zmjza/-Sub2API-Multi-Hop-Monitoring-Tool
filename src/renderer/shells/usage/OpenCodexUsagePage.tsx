@@ -65,7 +65,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
     const requestId = ++requestSeqRef.current;
     setState({ status: 'loading' });
     void desktop
-      .opencodexLogs({ limit: 2000 })
+      .opencodexLogs({ limit: 4000 })
       .then((payload) => {
         if (requestId !== requestSeqRef.current) return;
         setState({ status: 'success', payload, rows: normalizeOpenCodexLogs(payload) });
@@ -142,7 +142,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
       <div className="usage-mode-header">
         <div className="usage-selected-site">
           当前数据来源：<strong>OpenCodex 本地日志</strong>
-          <span className="opencodex-source-hint">localhost:10100 · 最近 2000 条</span>
+          <span className="opencodex-source-hint">localhost:10100 · 最近 4000 条</span>
         </div>
         <button
           className="usage-mode-toggle active"
@@ -318,7 +318,7 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
             {'共 ' + (state.status === 'success' ? filtered.length : '待查询') + ' 条 · 按'}
             {filters.sort === 'desc' ? '最新' : '最早'}时间
             {filters.sort === 'desc' ? '倒序' : '正序'}
-            {truncated ? ' · 已加载最近 2000 条' : ''}
+            {truncated ? ' · 已加载最近 4000 条' : ''}
           </span>
         </div>
         {state.status === 'error' && (
@@ -428,6 +428,13 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
                               <b>{row.cacheReadTokens}</b>
                             </span>
                           </div>
+                        </td>
+                      )}
+                      {visibleColumns.has('缓存率') && (
+                        <td>
+                          <span className={'usage-cache-rate-badge is-' + row.cacheRateTone}>
+                            {row.cacheRateLabel}
+                          </span>
                         </td>
                       )}
                       {visibleColumns.has('首字') && (

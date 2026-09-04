@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OpenCodexLogsPayload } from '../../../../electron/shared/opencodex';
 import {
   filterOpenCodexRows,
@@ -25,7 +25,13 @@ const payload: OpenCodexLogsPayload = {
       effectiveEffort: 'max',
       inboundProtocol: 'responses',
       usageStatus: 'reported',
-      usage: { inputTokens: 231, outputTokens: 231, cachedInputTokens: 165_632 },
+      usage: {
+        inputTokens: 231,
+        outputTokens: 231,
+        cachedInputTokens: 165_632,
+        cacheReadInputTokens: 165_632,
+        cacheCreationInputTokens: 0,
+      },
       totalTokens: 166_094,
       displayMetrics: {
         tokPerSecond: { kind: 'value', value: 18.55, estimated: false },
@@ -82,6 +88,9 @@ describe('normalizeOpenCodexLogs', () => {
       speedTier: 'slow',
       costLabel: '$0.0006',
       totalTokens: '166.09K',
+      inputTokens: '0',
+      cacheReadTokens: '165.63K',
+      cacheWriteTokens: '0',
     });
     expect(rows[1]).toMatchObject({
       reasoning: '—',
@@ -101,6 +110,7 @@ describe('normalizeOpenCodexLogs', () => {
 });
 
 describe('filterOpenCodexRows', () => {
+  afterEach(() => vi.useRealTimers());
   it('filters by provider, model, reasoning, request type and status', () => {
     const rows = normalizeOpenCodexLogs(payload);
     expect(filterOpenCodexRows(rows, { ...filters, provider: 'opencode-go' })).toHaveLength(1);
@@ -137,6 +147,42 @@ describe('filterOpenCodexRows', () => {
       }),
     ).toHaveLength(0);
   });
+
+  it('uses local natural-day boundaries for today and 7d', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-04T10:00:00+08:00'));
+    const rows = normalizeOpenCodexLogs({
+      timeZone: 'Asia/Shanghai',
+      total: 3,
+      logs: [
+        {
+          timestamp: new Date('2026-09-04T00:00:00+08:00').getTime(),
+          provider: 'p',
+          model: 'today',
+          status: 200,
+          durationMs: 0,
+        },
+        {
+          timestamp: new Date('2026-09-03T23:59:59+08:00').getTime(),
+          provider: 'p',
+          model: 'yesterday',
+          status: 200,
+          durationMs: 0,
+        },
+        {
+          timestamp: new Date('2026-08-29T00:00:00+08:00').getTime(),
+          provider: 'p',
+          model: 'seven',
+          status: 200,
+          durationMs: 0,
+        },
+      ],
+    });
+    expect(
+      filterOpenCodexRows(rows, { ...filters, period: 'today' }).map((row) => row.model),
+    ).toEqual(['today']);
+    expect(filterOpenCodexRows(rows, { ...filters, period: '7d' })).toHaveLength(3);
+  });
 });
 
 describe('openCodexStatTotals', () => {
@@ -145,7 +191,7 @@ describe('openCodexStatTotals', () => {
     const totals = openCodexStatTotals(rows);
     expect(totals.totalRequests).toBe(2);
     expect(totals.totalTokens).toBe(166_104);
-    expect(totals.totalInputTokens).toBe(241);
+    expect(totals.totalInputTokens).toBe(10);
     expect(totals.totalOutputTokens).toBe(231);
     expect(totals.totalCacheReadTokens).toBe(165_632);
     expect(totals.totalCost).toBeCloseTo(0.0005607896);
@@ -175,17 +221,16 @@ describe('OpenCodex column layout', () => {
       '思考模式',
       '请求类型',
       'Token',
+      '缓存率',
       '首字',
       '耗时 / t/s',
       '实际消费',
     ]);
   });
 
-  it('does not include a cache-rate display field in OpenCodex rows', () => {
+  it('includes cache rate display fields in OpenCodex rows', () => {
     const [row] = normalizeOpenCodexLogs(payload);
-    expect(row).not.toHaveProperty('cacheRate');
-    expect(row).not.toHaveProperty('cacheRateLabel');
-    expect(row).not.toHaveProperty('cacheRateTone');
+    expect(row).toMatchObject({ cacheRateLabel: '100.0%', cacheRateTone: 'purple' });
   });
 });
 

@@ -4,6 +4,12 @@ import type {
 } from '../../../../electron/shared/opencodex';
 import { formatLocalTimestamp, formatTokenCount } from '../../lib/format';
 import { usageSpeedTier, type UsageSpeedTier } from './usage-speed';
+import {
+  calculateCacheRate,
+  cacheRateTone,
+  formatCacheRate,
+  type CacheRateTone,
+} from './cache-rate';
 
 export type OpenCodexReasoningLabel = string;
 
@@ -15,6 +21,7 @@ export const OPENCODEX_COLUMNS = [
   '思考模式',
   '请求类型',
   'Token',
+  '缓存率',
   '首字',
   '耗时 / t/s',
   '实际消费',
@@ -35,6 +42,8 @@ export interface OpenCodexRow {
   outputTokensValue?: number;
   cacheReadTokensValue?: number;
   cacheWriteTokensValue?: number;
+  cacheRateLabel: string;
+  cacheRateTone: CacheRateTone;
   totalTokensValue?: number;
   costValue?: number;
   durationMsValue?: number;
@@ -109,6 +118,10 @@ function numericOrUndefined(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function nonNegative(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
 function formatTokensPerSecond(entry: OpenCodexLogEntry): string {
   const metric = entry.displayMetrics?.tokPerSecond;
   if (metric?.kind !== 'value') return '—';
@@ -123,21 +136,31 @@ function speedTierFor(entry: OpenCodexLogEntry): UsageSpeedTier {
 
 export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodexRow[] {
   return payload.logs.map((entry) => {
+    const rawInput = nonNegative(entry.usage?.inputTokens);
+    const cacheRead = nonNegative(
+      entry.usage?.cacheReadInputTokens ?? entry.usage?.cachedInputTokens,
+    );
+    const cacheWrite = nonNegative(entry.usage?.cacheCreationInputTokens);
+    const realInput = rawInput === undefined ? undefined : Math.max(0, rawInput - (cacheRead ?? 0));
+    const cacheRate = calculateCacheRate(realInput, cacheRead, cacheWrite);
     return {
       time: formatLocalTimestamp(entry.timestamp),
       provider: entry.provider,
       model: entry.model,
       reasoning: reasoningLabel(entry.effectiveEffort ?? entry.requestedEffort),
       requestType: requestTypeLabel(entry.inboundProtocol),
-      inputTokens: formatToken(entry.usage?.inputTokens),
+      inputTokens: formatToken(realInput),
       outputTokens: formatToken(entry.usage?.outputTokens),
-      cacheReadTokens: formatToken(entry.usage?.cachedInputTokens),
-      cacheWriteTokens: '—',
+      cacheReadTokens: formatToken(cacheRead),
+      cacheWriteTokens: formatToken(cacheWrite),
       totalTokens: formatToken(entry.totalTokens),
-      inputTokensValue: numericOrUndefined(entry.usage?.inputTokens),
+      inputTokensValue: realInput,
       outputTokensValue: numericOrUndefined(entry.usage?.outputTokens),
-      cacheReadTokensValue: numericOrUndefined(entry.usage?.cachedInputTokens),
+      cacheReadTokensValue: cacheRead,
+      cacheWriteTokensValue: cacheWrite,
       totalTokensValue: numericOrUndefined(entry.totalTokens),
+      cacheRateLabel: formatCacheRate(cacheRate),
+      cacheRateTone: cacheRateTone(cacheRate),
       costValue: openCodexCostValue(entry),
       durationMsValue: numericOrUndefined(entry.durationMs),
       firstTokenLabel:
@@ -178,7 +201,6 @@ export interface OpenCodexFilters {
 
 function dayRange(period: OpenCodexPeriod, startDate: string, endDate: string): [number, number] {
   const now = Date.now();
-  const dayMs = 86_400_000;
   if (period === 'custom') {
     const start = startDate
       ? new Date(startDate + 'T00:00:00').getTime()
@@ -189,8 +211,11 @@ function dayRange(period: OpenCodexPeriod, startDate: string, endDate: string): 
       Number.isFinite(end) ? end : Number.POSITIVE_INFINITY,
     ];
   }
-  const days = period === 'today' ? 1 : period === '7d' ? 7 : 30;
-  return [now - days * dayMs, Number.POSITIVE_INFINITY];
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (period === '7d') start.setDate(start.getDate() - 6);
+  if (period === '30d') start.setDate(start.getDate() - 29);
+  return [start.getTime(), Number.POSITIVE_INFINITY];
 }
 
 export function filterOpenCodexRows(
@@ -220,10 +245,17 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
   let totalCost = 0;
   let durationSumMs = 0;
   let durationCount = 0;
+  let totalTokensFromService = 0;
   for (const row of rows) {
     totalInputTokens += row.inputTokensValue ?? 0;
     totalOutputTokens += row.outputTokensValue ?? 0;
     totalCacheReadTokens += row.cacheReadTokensValue ?? 0;
+    totalTokensFromService +=
+      row.totalTokensValue ??
+      (row.inputTokensValue ?? 0) +
+        (row.outputTokensValue ?? 0) +
+        (row.cacheReadTokensValue ?? 0) +
+        (row.cacheWriteTokensValue ?? 0);
     totalCost += row.costValue ?? 0;
     if (row.durationMsValue !== undefined) {
       durationSumMs += row.durationMsValue;
@@ -232,7 +264,7 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
   }
   return {
     totalRequests: rows.length,
-    totalTokens: totalInputTokens + totalOutputTokens + totalCacheReadTokens,
+    totalTokens: totalTokensFromService,
     totalInputTokens,
     totalOutputTokens,
     totalCacheReadTokens,

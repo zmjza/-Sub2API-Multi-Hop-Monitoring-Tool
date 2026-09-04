@@ -23,6 +23,7 @@ export class Sub2ApiServerManager {
   private target: Sub2ApiServerTarget | undefined;
   private currentServer: Sub2ApiServer | undefined;
   private cleanup: (() => void) | undefined;
+  private openSequence = 0;
 
   constructor(
     private readonly db: AppDatabase,
@@ -119,6 +120,7 @@ export class Sub2ApiServerManager {
   }
 
   async open(id: string, targetUrl?: string): Promise<void> {
+    const sequence = ++this.openSequence;
     const mainWindow = this.getMainWindow();
     const server = this.db.getSub2ApiServers().find((candidate) => candidate.id === id);
     if (!server || !mainWindow) throw new Error('SUB2API_SERVER_NOT_FOUND');
@@ -230,6 +232,7 @@ export class Sub2ApiServerManager {
     this.syncBounds();
     try {
       await this.loadServerPage(view.webContents, url);
+      if (sequence !== this.openSequence) return;
       if (this.view === view) {
         if (previous?.view) {
           previous.cleanup?.();
@@ -241,6 +244,7 @@ export class Sub2ApiServerManager {
         syncState();
       }
     } catch {
+      if (sequence !== this.openSequence) return;
       fail();
     }
   }

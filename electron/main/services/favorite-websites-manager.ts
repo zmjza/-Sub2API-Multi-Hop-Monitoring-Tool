@@ -25,6 +25,7 @@ export class FavoriteWebsitesManager {
   private target: FavoriteWebsiteTarget | undefined;
   private currentWebsite: FavoriteWebsite | undefined;
   private cleanup: (() => void) | undefined;
+  private openSequence = 0;
 
   constructor(
     private readonly db: AppDatabase,
@@ -114,13 +115,22 @@ export class FavoriteWebsitesManager {
   }
 
   async open(id: string): Promise<void> {
+    const sequence = ++this.openSequence;
     const mainWindow = this.getMainWindow();
     const website = this.db.getFavoriteWebsites().find((candidate) => candidate.id === id);
     if (!website || !mainWindow) throw new Error('FAVORITE_WEBSITE_NOT_FOUND');
     if (!isFavoriteWebsiteAllowed(website, this.policy()))
       throw new Error('FAVORITE_WEBSITE_POLICY_BLOCKED');
 
-    this.closeView(false);
+    const previous =
+      this.view && this.target && this.currentWebsite
+        ? {
+            view: this.view,
+            target: this.target,
+            website: this.currentWebsite,
+            cleanup: this.cleanup,
+          }
+        : undefined;
     const target: FavoriteWebsiteTarget = { id: website.id, label: website.name };
     this.emit({ status: 'opening', target });
     const view = new WebContentsView({
@@ -136,6 +146,20 @@ export class FavoriteWebsitesManager {
     this.view = view;
     this.target = target;
     this.currentWebsite = website;
+
+    const fail = () => {
+      if (this.view !== view) return;
+      const cleanup = this.cleanup;
+      this.view = previous?.view;
+      this.target = previous?.target;
+      this.currentWebsite = previous?.website;
+      this.cleanup = previous?.cleanup;
+      cleanup?.();
+      if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
+      if (!mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+      if (previous) this.emitCurrentState(previous.view, previous.target, previous.website);
+      else this.emit({ status: 'error', target, message: FAVORITE_WEBSITE_LOAD_ERROR });
+    };
 
     const onWillNavigate = (event: Electron.Event<{ isMainFrame: boolean; url: string }>) => {
       if (
@@ -158,7 +182,7 @@ export class FavoriteWebsitesManager {
       _validatedURL: string,
       isMainFrame: boolean,
     ) => {
-      if (isMainFrame) this.failView(view, target);
+      if (isMainFrame) fail();
     };
     const onWillAttachWebview = (event: Electron.Event) => event.preventDefault();
     const onDestroyed = () => {
@@ -211,12 +235,14 @@ export class FavoriteWebsitesManager {
     this.syncBounds();
     try {
       await this.loadWebsitePage(view.webContents, website.url);
+      if (sequence !== this.openSequence) return;
       if (this.view === view) {
         await this.waitForDomReady();
         syncState();
       }
     } catch {
-      this.failView(view, target);
+      if (sequence !== this.openSequence) return;
+      fail();
     }
   }
 
@@ -329,12 +355,6 @@ export class FavoriteWebsitesManager {
 
   private waitForDomReady(): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, 2_500));
-  }
-
-  private failView(view: WebContentsView, target: FavoriteWebsiteTarget): void {
-    if (this.view !== view || !this.target) return;
-    this.closeView(false);
-    this.emit({ status: 'error', target, message: FAVORITE_WEBSITE_LOAD_ERROR });
   }
 
   private assertUnique(websites: FavoriteWebsite[], name: string, url: string): void {

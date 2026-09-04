@@ -30,7 +30,9 @@ test('checks OpenCodex usage page geometry at desktop and narrow widths', async 
   await expect(window.locator('.table-caption strong')).toHaveText('OpenCodex 请求记录');
   if ((await window.locator('[data-opencodex-error]').count()) === 0) {
     await expect(window.locator('[data-opencodex-page] tbody tr').first()).toBeVisible();
-    await expect(window.locator('[data-opencodex-page] .usage-cache-rate-badge')).toHaveCount(0);
+    await expect(window.locator('[data-opencodex-page] .usage-cache-rate-badge')).toHaveCount(
+      await window.locator('[data-opencodex-page] tbody tr').count(),
+    );
     const headers = await window.locator('[data-opencodex-page] thead th').allTextContents();
     expect(headers.slice(0, 4).map((text) => text.replace(/[↓↑]/g, '').trim())).toEqual([
       '时间',

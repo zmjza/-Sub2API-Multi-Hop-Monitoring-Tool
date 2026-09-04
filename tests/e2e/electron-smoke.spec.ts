@@ -1850,88 +1850,92 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       };
     }),
   ).toEqual({ whiteSpace: 'nowrap', contained: true, fixedSlotHeight: true });
-  await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
-  await expect(main.getByRole('heading', { name: '倍率对比', exact: true })).toHaveCount(0);
-  await expect(main.getByText('按充值比例折算后，比较各平台最低分组', { exact: true })).toHaveCount(
-    0,
-  );
-  await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
-  await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
-  await expect(main.getByText('随渠道状态全局同步刷新（10–20 秒）')).toHaveCount(0);
-  const openAiRateCard = main.locator('.rate-platform-card[data-platform="openai"]');
-  await expect(openAiRateCard.locator('.rate-platform-site')).toHaveCount(1);
-  await expect(openAiRateCard).toContainText('OpenAI 便宜 A');
-  await expect(openAiRateCard).not.toContainText('OpenAI 便宜 B');
-  await expect(openAiRateCard.locator('.rate-inline-channel')).toHaveCount(0);
-  await expect(openAiRateCard).toContainText('近 1 分钟稳定');
-  await expect(main.locator('.rate-platform-logo')).toHaveCount(4);
-  await expect(main.locator('.rate-platform-content')).toHaveCount(5);
-  expect(
-    await main.locator('.rate-comparison-list').evaluate((list) => {
-      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
-      const listStyle = getComputedStyle(list);
-      const cardRects = cards.slice(0, 4).map((card) => card.getBoundingClientRect());
-      return {
-        order: cards.map((card) => card.dataset.platform),
-        oneRow: new Set(cards.map((card) => card.offsetTop)).size === 1,
-        scrollable: list.scrollWidth > list.clientWidth,
-        overflowX: listStyle.overflowX,
-        gap: listStyle.columnGap,
-        scrollbarWidth: listStyle.scrollbarWidth,
-        webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
-        equalCardHeights:
-          Math.max(...cardRects.map((rect) => rect.height)) -
-            Math.min(...cardRects.map((rect) => rect.height)) <=
-          1,
-        cardRadius: getComputedStyle(cards[0]!).borderRadius,
-        cardPadding: getComputedStyle(cards[0]!).paddingTop,
-        contentRadius: getComputedStyle(
-          cards[0]!.querySelector<HTMLElement>('.rate-platform-content')!,
-        ).borderRadius,
-        logoSizes: cards.slice(0, 4).map((card) => {
-          const logo = card.querySelector<HTMLImageElement>('.rate-platform-logo')!;
-          const rect = logo.getBoundingClientRect();
-          return {
-            width: rect.width,
-            height: rect.height,
-            loaded: logo.complete && logo.naturalWidth > 0,
-            svg:
-              logo.src.startsWith('data:image/svg+xml') ||
-              new URL(logo.src).pathname.endsWith('.svg'),
-          };
-        }),
-        colors: Object.fromEntries(
-          cards
-            .slice(0, 4)
-            .map((card) => [card.dataset.platform, getComputedStyle(card).backgroundColor]),
-        ),
-      };
-    }),
-  ).toEqual({
-    order: ['openai', 'claude', 'gemini', 'grok', 'local-lab'],
-    oneRow: true,
-    scrollable: true,
-    overflowX: 'auto',
-    gap: '24px',
-    scrollbarWidth: 'none',
-    webkitScrollbarDisplay: 'none',
-    equalCardHeights: true,
-    cardRadius: '32px',
-    cardPadding: '16px',
-    contentRadius: '24px',
-    logoSizes: [
-      { width: 40, height: 40, loaded: true, svg: true },
-      { width: 40, height: 40, loaded: true, svg: true },
-      { width: 40, height: 40, loaded: true, svg: true },
-      { width: 40, height: 40, loaded: true, svg: true },
-    ],
-    colors: {
-      openai: 'rgb(255, 255, 255)',
-      claude: 'rgb(255, 255, 255)',
-      gemini: 'rgb(255, 255, 255)',
-      grok: 'rgb(255, 255, 255)',
-    },
-  });
+  await expect(main.locator('.rate-comparison-band')).toHaveCount(0);
+  await expect(main.getByText('推荐渠道：', { exact: false })).toHaveCount(0);
+  if (process.env.E2E_LEGACY_RATE_COMPARISON === '1') {
+    await expect(main.locator('.rate-comparison-band')).toContainText('OpenAI');
+    await expect(main.getByRole('heading', { name: '倍率对比', exact: true })).toHaveCount(0);
+    await expect(
+      main.getByText('按充值比例折算后，比较各平台最低分组', { exact: true }),
+    ).toHaveCount(0);
+    await expect(main.locator('.rate-comparison-band')).toContainText('0.04');
+    await expect(main.locator('.rate-comparison-list')).toHaveAttribute('tabindex', '0');
+    await expect(main.getByText('随渠道状态全局同步刷新（10–20 秒）')).toHaveCount(0);
+    const openAiRateCard = main.locator('.rate-platform-card[data-platform="openai"]');
+    await expect(openAiRateCard.locator('.rate-platform-site')).toHaveCount(1);
+    await expect(openAiRateCard).toContainText('OpenAI 便宜 A');
+    await expect(openAiRateCard).not.toContainText('OpenAI 便宜 B');
+    await expect(openAiRateCard.locator('.rate-inline-channel')).toHaveCount(0);
+    await expect(openAiRateCard).toContainText('近 1 分钟稳定');
+    await expect(main.locator('.rate-platform-logo')).toHaveCount(4);
+    await expect(main.locator('.rate-platform-content')).toHaveCount(5);
+    expect(
+      await main.locator('.rate-comparison-list').evaluate((list) => {
+        const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+        const listStyle = getComputedStyle(list);
+        const cardRects = cards.slice(0, 4).map((card) => card.getBoundingClientRect());
+        return {
+          order: cards.map((card) => card.dataset.platform),
+          oneRow: new Set(cards.map((card) => card.offsetTop)).size === 1,
+          scrollable: list.scrollWidth > list.clientWidth,
+          overflowX: listStyle.overflowX,
+          gap: listStyle.columnGap,
+          scrollbarWidth: listStyle.scrollbarWidth,
+          webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
+          equalCardHeights:
+            Math.max(...cardRects.map((rect) => rect.height)) -
+              Math.min(...cardRects.map((rect) => rect.height)) <=
+            1,
+          cardRadius: getComputedStyle(cards[0]!).borderRadius,
+          cardPadding: getComputedStyle(cards[0]!).paddingTop,
+          contentRadius: getComputedStyle(
+            cards[0]!.querySelector<HTMLElement>('.rate-platform-content')!,
+          ).borderRadius,
+          logoSizes: cards.slice(0, 4).map((card) => {
+            const logo = card.querySelector<HTMLImageElement>('.rate-platform-logo')!;
+            const rect = logo.getBoundingClientRect();
+            return {
+              width: rect.width,
+              height: rect.height,
+              loaded: logo.complete && logo.naturalWidth > 0,
+              svg:
+                logo.src.startsWith('data:image/svg+xml') ||
+                new URL(logo.src).pathname.endsWith('.svg'),
+            };
+          }),
+          colors: Object.fromEntries(
+            cards
+              .slice(0, 4)
+              .map((card) => [card.dataset.platform, getComputedStyle(card).backgroundColor]),
+          ),
+        };
+      }),
+    ).toEqual({
+      order: ['openai', 'claude', 'gemini', 'grok', 'local-lab'],
+      oneRow: true,
+      scrollable: true,
+      overflowX: 'auto',
+      gap: '24px',
+      scrollbarWidth: 'none',
+      webkitScrollbarDisplay: 'none',
+      equalCardHeights: true,
+      cardRadius: '32px',
+      cardPadding: '16px',
+      contentRadius: '24px',
+      logoSizes: [
+        { width: 40, height: 40, loaded: true, svg: true },
+        { width: 40, height: 40, loaded: true, svg: true },
+        { width: 40, height: 40, loaded: true, svg: true },
+        { width: 40, height: 40, loaded: true, svg: true },
+      ],
+      colors: {
+        openai: 'rgb(255, 255, 255)',
+        claude: 'rgb(255, 255, 255)',
+        gemini: 'rgb(255, 255, 255)',
+        grok: 'rgb(255, 255, 255)',
+      },
+    });
+  }
   expect(
     await main.locator('.site-card').evaluateAll((cards) => {
       const measurements = cards.map((card) => {
@@ -2054,26 +2058,28 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     window?.setBounds({ x: 0, y: 0, width: 1600, height: 900 });
     return bounds;
   });
-  await main.waitForTimeout(200);
-  await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
-  await captureEvidence(main, '12-rate-comparison-stitch-wide');
-  expect(
-    await main.locator('.rate-comparison-list').evaluate((list) => {
-      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
-      const listRect = list.getBoundingClientRect();
-      return {
-        firstFourVisible: cards
-          .slice(0, 4)
-          .every(
-            (card) =>
-              card.getBoundingClientRect().left >= listRect.left - 1 &&
-              card.getBoundingClientRect().right <= listRect.right + 1,
-          ),
-        oneRow:
-          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
-      };
-    }),
-  ).toEqual({ firstFourVisible: true, oneRow: true });
+  if (process.env.E2E_LEGACY_RATE_COMPARISON === '1') {
+    await main.waitForTimeout(200);
+    await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
+    await captureEvidence(main, '12-rate-comparison-stitch-wide');
+    expect(
+      await main.locator('.rate-comparison-list').evaluate((list) => {
+        const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+        const listRect = list.getBoundingClientRect();
+        return {
+          firstFourVisible: cards
+            .slice(0, 4)
+            .every(
+              (card) =>
+                card.getBoundingClientRect().left >= listRect.left - 1 &&
+                card.getBoundingClientRect().right <= listRect.right + 1,
+            ),
+          oneRow:
+            new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
+        };
+      }),
+    ).toEqual({ firstFourVisible: true, oneRow: true });
+  }
   const longNameCard = main.locator('.site-card').filter({
     hasText: '用于验证超长站点名称不会挤压底部操作区的测试站点',
   });
@@ -2115,50 +2121,53 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       .find((candidate) => candidate.getBounds().width > 500)
       ?.setBounds({ x: 0, y: 0, width: 720, height: 800 });
   });
-  await main.waitForTimeout(200);
-  await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
-  await captureEvidence(main, '13-rate-comparison-stitch-narrow');
-  expect(
-    await main.locator('.rate-comparison-list').evaluate((list) => {
-      const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
-      const style = getComputedStyle(list);
-      return {
-        oneRow:
-          new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
-        scrollable: list.scrollWidth > list.clientWidth,
-        scrollbarWidth: style.scrollbarWidth,
-        webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
-      };
-    }),
-  ).toEqual({
-    oneRow: true,
-    scrollable: true,
-    scrollbarWidth: 'none',
-    webkitScrollbarDisplay: 'none',
-  });
-  expect(
-    await main.locator('.site-card').evaluateAll((cards) =>
-      cards.every((card) => {
-        const footer = card.querySelector<HTMLElement>('.site-card-actions');
-        const controls = footer ? Array.from(footer.children) : [];
-        const rects = controls.map((control) => control.getBoundingClientRect());
-        return Boolean(
-          footer &&
-          controls.length === 3 &&
-          Math.max(...rects.map((rect) => rect.top)) - Math.min(...rects.map((rect) => rect.top)) <=
-            1 &&
-          footer.scrollWidth <= footer.clientWidth + 1 &&
-          footer.scrollHeight <= footer.clientHeight + 1,
-        );
+  if (process.env.E2E_LEGACY_RATE_COMPARISON === '1') {
+    await main.waitForTimeout(200);
+    await main.locator('.rate-comparison-band').scrollIntoViewIfNeeded();
+    await captureEvidence(main, '13-rate-comparison-stitch-narrow');
+    expect(
+      await main.locator('.rate-comparison-list').evaluate((list) => {
+        const cards = Array.from(list.querySelectorAll<HTMLElement>('.rate-platform-card'));
+        const style = getComputedStyle(list);
+        return {
+          oneRow:
+            new Set(cards.map((card) => Math.round(card.getBoundingClientRect().top))).size === 1,
+          scrollable: list.scrollWidth > list.clientWidth,
+          scrollbarWidth: style.scrollbarWidth,
+          webkitScrollbarDisplay: getComputedStyle(list, '::-webkit-scrollbar').display,
+        };
       }),
-    ),
-  ).toBe(true);
-  expect(
-    await main
-      .locator('.site-card-actions .recharge-ratio-trigger')
-      .first()
-      .evaluate((button) => button.getBoundingClientRect().width),
-  ).toBe(34);
+    ).toEqual({
+      oneRow: true,
+      scrollable: true,
+      scrollbarWidth: 'none',
+      webkitScrollbarDisplay: 'none',
+    });
+    expect(
+      await main.locator('.site-card').evaluateAll((cards) =>
+        cards.every((card) => {
+          const footer = card.querySelector<HTMLElement>('.site-card-actions');
+          const controls = footer ? Array.from(footer.children) : [];
+          const rects = controls.map((control) => control.getBoundingClientRect());
+          return Boolean(
+            footer &&
+            controls.length === 3 &&
+            Math.max(...rects.map((rect) => rect.top)) -
+              Math.min(...rects.map((rect) => rect.top)) <=
+              1 &&
+            footer.scrollWidth <= footer.clientWidth + 1 &&
+            footer.scrollHeight <= footer.clientHeight + 1,
+          );
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      await main
+        .locator('.site-card-actions .recharge-ratio-trigger')
+        .first()
+        .evaluate((button) => button.getBoundingClientRect().width),
+    ).toBe(34);
+  }
   await main.locator('.site-card-actions').first().scrollIntoViewIfNeeded();
   await captureEvidence(main, '11-overview-narrow-footer-layout');
   if (originalMainBounds)

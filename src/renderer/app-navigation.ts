@@ -4,5 +4,5 @@ type ServerSwitchState = {
 };
 
 export function canSwitchSub2ApiServer(state: ServerSwitchState, targetId: string): boolean {
-  return (state.status === 'open' || state.status === 'error') && state.target?.id !== targetId;
+  return state.status !== 'idle' && state.target?.id !== targetId;
 }

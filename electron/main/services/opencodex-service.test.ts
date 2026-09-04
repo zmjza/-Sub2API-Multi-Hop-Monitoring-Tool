@@ -56,6 +56,21 @@ const samplePayload = {
 };
 
 describe('fetchOpenCodexLogs', () => {
+  it('defaults to the 4000-record window', async () => {
+    process.env.OPENCODEX_ADMIN_AUTH_TOKEN = 'ocx_admin_testtoken1234567890abcdefghijklmnop';
+    await withServer(
+      (req, res) => {
+        const url = new URL(req.url ?? '', 'http://localhost');
+        expect(url.searchParams.get('limit')).toBe('4000');
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ timeZone: 'UTC', total: 0, logs: [] }));
+      },
+      async (baseUrl) => {
+        await expect(fetchOpenCodexLogs({}, { baseUrl })).resolves.toMatchObject({ total: 0 });
+      },
+    );
+  });
+
   it('sends the bearer token and returns a validated payload', async () => {
     process.env.OPENCODEX_ADMIN_AUTH_TOKEN = 'ocx_admin_testtoken1234567890abcdefghijklmnop';
     await withServer(

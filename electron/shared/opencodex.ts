@@ -4,7 +4,7 @@ export const opencodexLogsQuerySchema = z
   .object({
     provider: z.string().trim().min(1).max(120).optional(),
     status: z.string().trim().min(1).max(16).optional(),
-    limit: z.number().int().positive().max(2000).optional(),
+    limit: z.number().int().positive().max(4000).optional(),
   })
   .strict();
 
@@ -15,6 +15,8 @@ export const opencodexUsageSchema = z
     inputTokens: z.number().finite().nonnegative().optional(),
     outputTokens: z.number().finite().nonnegative().optional(),
     cachedInputTokens: z.number().finite().nonnegative().optional(),
+    cacheReadInputTokens: z.number().finite().nonnegative().optional(),
+    cacheCreationInputTokens: z.number().finite().nonnegative().optional(),
     reasoningOutputTokens: z.number().finite().nonnegative().optional(),
   })
   .passthrough();
@@ -112,7 +114,7 @@ export const opencodexLogsPayloadSchema = z
   .object({
     timeZone: z.string().optional(),
     total: z.number().int().nonnegative(),
-    logs: z.array(opencodexLogEntrySchema).max(2000),
+    logs: z.array(opencodexLogEntrySchema).max(4000),
   })
   .passthrough();
 

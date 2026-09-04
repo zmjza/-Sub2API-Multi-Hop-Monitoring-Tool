@@ -14,10 +14,6 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatTokenCount } from '../../lib/format';
-import openAiLogo from '../../assets/rate-platforms/openai-official.svg';
-import claudeLogo from '../../assets/rate-platforms/claude-official.svg';
-import geminiLogo from '../../assets/rate-platforms/gemini-official.svg';
-import grokLogo from '../../assets/rate-platforms/grok-official.svg';
 import type { OverviewProps } from './types';
 import type { ChannelAssociation } from '../../../../electron/shared/contracts';
 import { overviewSites } from './data';
@@ -38,11 +34,7 @@ import {
   type InlineChannelDetailState,
   type InlineChannelListState,
 } from './RateChannelSummary';
-import {
-  comparePlatformRates,
-  formatRateMultiplier,
-  type RateChannelSnapshot,
-} from './rate-comparison';
+import { formatRateMultiplier, type RateChannelSnapshot } from './rate-comparison';
 import {
   aggregateCurrentKeyStats,
   availableCreditForKey,
@@ -50,13 +42,6 @@ import {
   type CurrentKeyStatsState,
 } from './current-key-stats';
 import './overview.css';
-
-const ratePlatformLogos: Record<string, string> = {
-  openai: openAiLogo,
-  claude: claudeLogo,
-  gemini: geminiLogo,
-  grok: grokLogo,
-};
 
 export type InlineChannelRefreshState = {
   state: InlineChannelListState;
@@ -133,9 +118,6 @@ export function OverviewPage(props: OverviewProps) {
   const [rateChannelRelationshipsBySite, setRateChannelRelationshipsBySite] = useState<
     Record<string, AvailableChannelRelationship[]>
   >({});
-  const [rateChannelStateBySite, setRateChannelStateBySite] = useState<
-    Record<string, 'supported' | 'unsupported' | 'error'>
-  >({});
   const [manualAssociationsBySite, setManualAssociationsBySite] = useState<
     Record<string, ChannelAssociation[]>
   >({});
@@ -180,22 +162,6 @@ export function OverviewPage(props: OverviewProps) {
     currentKeyTotals.availableCreditCount === 0
       ? '待查询'
       : `$${currentKeyTotals.availableCredit.toFixed(2)}`;
-  const rateComparisons = comparePlatformRates(
-    liveSites.map((site) => ({
-      siteId: site.id,
-      siteName: siteNote(site) || site.name,
-      ratio: props.rateContexts?.ratios[site.id],
-      groups: props.rateContexts?.sites[site.id]?.groups ?? [],
-      channels: rateChannelsBySite[site.id],
-      relationships: rateChannelRelationshipsBySite[site.id],
-      channelState: rateChannelStateBySite[site.id],
-      relationshipsState: channelStatusCacheBySite[site.id]?.channels?.availableChannelsState,
-      channelAssociations: associationsBySite[site.id],
-    })),
-  );
-  const pendingRatioCount = liveSites.filter(
-    (site) => props.rateContexts?.ratios[site.id] === undefined,
-  ).length;
   const comparableSiteIdsKey = JSON.stringify(
     liveSites
       .filter(
@@ -287,10 +253,6 @@ export function OverviewPage(props: OverviewProps) {
         ...current,
         [siteId]: envelope.availableChannels ?? [],
       }));
-      setRateChannelStateBySite((current) => ({
-        ...current,
-        [siteId]: envelope.state === 'supported' ? 'supported' : 'unsupported',
-      }));
       setInlineChannelListStateBySite((current) => ({
         ...current,
         [siteId]: reduceInlineChannelRefreshState(current[siteId], {
@@ -310,8 +272,6 @@ export function OverviewPage(props: OverviewProps) {
       }));
     } catch (error) {
       if (inlineChannelRequestBySiteRef.current.get(siteId) !== requestId) return;
-      const cached = channelStatusLoaderRef.current!.cacheForSite(siteId).channels;
-      if (!cached) setRateChannelStateBySite((current) => ({ ...current, [siteId]: 'error' }));
       const reason =
         error instanceof Error && error.message.includes('CHANNEL_AUTH_REQUIRED')
           ? 'auth'
@@ -394,10 +354,6 @@ export function OverviewPage(props: OverviewProps) {
         ...current,
         [siteId]: channels.availableChannels ?? [],
       }));
-      setRateChannelStateBySite((current) => ({
-        ...current,
-        [siteId]: channels.state === 'supported' ? 'supported' : 'unsupported',
-      }));
       setInlineChannelListStateBySite((current) => ({
         ...current,
         [siteId]: reduceInlineChannelRefreshState(current[siteId], {
@@ -476,181 +432,6 @@ export function OverviewPage(props: OverviewProps) {
           </article>
         ))}
       </div>
-      <section className="rate-comparison-band" aria-label="跨站倍率对比">
-        <div className="rate-comparison-heading"></div>
-        {rateComparisons.length > 0 ? (
-          <div className="rate-comparison-list" tabIndex={0} aria-label="倍率平台横向列表">
-            {rateComparisons.map((comparison) => {
-              const recommendation =
-                comparison.state === 'ready'
-                  ? comparison.sites.find((site) => site.recommendationKind === 'with-status')
-                  : undefined;
-              const secondaryRecommendation =
-                comparison.state === 'ready'
-                  ? comparison.sites.find((site) => site.recommendationKind === 'without-status')
-                  : undefined;
-              const leadingRecommendation = recommendation ?? secondaryRecommendation;
-              const logo = ratePlatformLogos[comparison.platformKey];
-              const multiplier = leadingRecommendation
-                ? formatRateMultiplier(leadingRecommendation.effectiveRate).replace(/x$/, '')
-                : '—';
-              const stateLabel = recommendation
-                ? recommendation.stabilityLabel
-                : secondaryRecommendation
-                  ? '无渠道状态'
-                  : comparison.state === 'checking'
-                    ? '核验中'
-                    : '待推荐';
-
-              return (
-                <article
-                  key={comparison.platformKey}
-                  className={`rate-platform-card rate-platform-${comparison.platformKey}`}
-                  data-platform={comparison.platformKey}
-                  tabIndex={0}
-                  aria-label={`${comparison.platformLabel} 倍率推荐`}
-                >
-                  <header className="rate-platform-header">
-                    <div className="rate-platform-brand">
-                      {logo ? (
-                        <img
-                          className="rate-platform-logo"
-                          src={logo}
-                          alt={`${comparison.platformLabel} 图标`}
-                        />
-                      ) : (
-                        <span className="rate-platform-logo-fallback" aria-hidden="true">
-                          <BadgePercent size={22} />
-                        </span>
-                      )}
-                      <div className="rate-platform-identity">
-                        <h3>{comparison.platformLabel}</h3>
-                        <span className={`rate-platform-badge is-${comparison.state}`}>
-                          {stateLabel}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="rate-platform-multiplier">
-                      <strong>
-                        {multiplier}
-                        {leadingRecommendation ? <small>x</small> : null}
-                      </strong>
-                      <span>倍率</span>
-                    </div>
-                  </header>
-
-                  <div
-                    className={`rate-platform-content is-${comparison.state}`}
-                    role={recommendation || secondaryRecommendation ? undefined : 'status'}
-                  >
-                    {recommendation ? (
-                      <>
-                        <span className="rate-platform-state-icon" aria-hidden="true">
-                          {recommendation.stabilityLabel === '稳定' ? (
-                            <CheckCircle2 size={26} />
-                          ) : (
-                            <Activity size={26} />
-                          )}
-                        </span>
-                        <p className="rate-platform-recommendation">
-                          推荐渠道：
-                          <b title={recommendation.siteName}>{recommendation.siteName}</b>
-                        </p>
-                        <div className="rate-platform-site">
-                          <span title={recommendation.groups[0]?.name}>
-                            {recommendation.groups[0]?.name ?? '未命名分组'}
-                          </span>
-                          <small>
-                            原始 {formatRateMultiplier(recommendation.rawRate)} · 充值比例 1:
-                            {recommendation.ratio}
-                          </small>
-                        </div>
-                        <div className="rate-platform-score-row">
-                          <span>
-                            价格 <b>{recommendation.priceScore.toFixed(1)}</b>
-                          </span>
-                          <span>
-                            稳定 <b>{recommendation.stabilityScore.toFixed(1)}</b>
-                          </span>
-                        </div>
-                        <span
-                          className={`rate-status-label ${recommendation.stabilityLabel === '稳定' ? '稳定' : '待核验'}`}
-                        >
-                          {recommendation.stabilityLabel === '稳定'
-                            ? '近 1 分钟稳定'
-                            : recommendation.recommendationKind === 'without-status'
-                              ? '无渠道状态 · 价格优先'
-                              : '待核验'}
-                        </span>
-                        {secondaryRecommendation && (
-                          <div
-                            className="rate-platform-secondary"
-                            aria-label="无渠道状态最低价推荐"
-                          >
-                            <span>无渠道状态最低价</span>
-                            <b title={secondaryRecommendation.siteName}>
-                              {secondaryRecommendation.siteName}
-                            </b>
-                            <small>
-                              {secondaryRecommendation.groups[0]?.name ?? '未命名分组'} ·{' '}
-                              {formatRateMultiplier(secondaryRecommendation.effectiveRate)}
-                            </small>
-                          </div>
-                        )}
-                      </>
-                    ) : secondaryRecommendation ? (
-                      <>
-                        <span className="rate-platform-state-icon" aria-hidden="true">
-                          <Activity size={25} />
-                        </span>
-                        <strong>暂无有渠道状态</strong>
-                        <small>以下为无渠道状态最低价推荐</small>
-                        <div className="rate-platform-secondary" aria-label="无渠道状态最低价推荐">
-                          <span>无渠道状态最低价</span>
-                          <b title={secondaryRecommendation.siteName}>
-                            {secondaryRecommendation.siteName}
-                          </b>
-                          <small>
-                            {secondaryRecommendation.groups[0]?.name ?? '未命名分组'} ·{' '}
-                            {formatRateMultiplier(secondaryRecommendation.effectiveRate)}
-                          </small>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span className="rate-platform-state-icon" aria-hidden="true">
-                          {comparison.state === 'checking' ? (
-                            <RefreshCw size={25} className="spin" />
-                          ) : (
-                            <Activity size={25} />
-                          )}
-                        </span>
-                        <strong>
-                          {comparison.state === 'checking' ? '正在核验渠道稳定性' : '暂无稳定渠道'}
-                        </strong>
-                        <small>
-                          {comparison.state === 'checking' ? '请稍候' : '正在持续核验中'}
-                        </small>
-                      </>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="rate-comparison-empty" role="status">
-            <BadgePercent size={19} className={props.isRefreshingRates ? 'spin' : ''} />
-            <span>
-              {props.isRefreshingRates
-                ? '正在比较各站点倍率…'
-                : pendingRatioCount > 0
-                  ? `暂无可比较站点 · ${pendingRatioCount} 个站点待设置充值比例`
-                  : '暂无可比较站点'}
-            </span>
-          </div>
-        )}
-      </section>
       <div className="overview-grid">
         <section className="data-panel site-panel">
           <div className="panel-heading">
@@ -1073,10 +854,6 @@ export function OverviewPage(props: OverviewProps) {
             }));
           }}
           onStateChange={(state) => {
-            setRateChannelStateBySite((current) => ({
-              ...current,
-              [channelPopover.siteId]: state,
-            }));
             if (state !== 'supported')
               setInlineChannelListStateBySite((current) => ({
                 ...current,
