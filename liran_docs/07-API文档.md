@@ -1,5 +1,11 @@
 # sub2api API 文档
 
+## 2026-09-04 REQ-260904-usage-navigation-motion OpenCodex 读取边界
+
+- OpenCodex 日志通过主进程固定访问 `http://localhost:10100/api/logs`，本轮默认请求上限为 4000 条；不修改服务端协议。
+- Renderer 只接收结构化日志结果，不接触 `~/.opencodex/admin-api-token` 内容。
+- 真实输入、缓存读取、缓存写入、输出、总数、耗时、首字和 t/s 按服务端字段分别归一化；缓存读取不得重复计入真实输入。
+
 ## 2.3.0 OpenCodex 日志 IPC 合同
 
 | 方法/通道           | 用途                       | 安全与状态规则                                                                                 |
