@@ -112,6 +112,8 @@ describe('normalizeOpenCodexLogs', () => {
 describe('filterOpenCodexRows', () => {
   afterEach(() => vi.useRealTimers());
   it('filters by provider, model, reasoning, request type and status', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:00:00+08:00'));
     const rows = normalizeOpenCodexLogs(payload);
     expect(filterOpenCodexRows(rows, { ...filters, provider: 'opencode-go' })).toHaveLength(1);
     expect(filterOpenCodexRows(rows, { ...filters, status: '401' })).toHaveLength(1);
@@ -123,6 +125,8 @@ describe('filterOpenCodexRows', () => {
   });
 
   it('applies sort direction by timestamp', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:00:00+08:00'));
     const rows = normalizeOpenCodexLogs(payload);
     expect(filterOpenCodexRows(rows, filters)[0]?.model).toBe('deepseek-v4-flash');
     expect(filterOpenCodexRows(rows, { ...filters, sort: 'asc' })[0]?.model).toBe('gpt-5.2');
@@ -196,6 +200,21 @@ describe('openCodexStatTotals', () => {
     expect(totals.totalCacheReadTokens).toBe(165_632);
     expect(totals.totalCost).toBeCloseTo(0.0005607896);
     expect(totals.averageDurationSeconds).toBeCloseTo(6.627);
+    expect(totals.averageCacheRate).toBeCloseTo(50);
+  });
+
+  it('averages duration and cache rate from the newest 100 filtered rows', () => {
+    const rows = Array.from({ length: 120 }, (_, index) => ({
+      ...normalizeOpenCodexLogs(payload)[0]!,
+      timestamp: index,
+      durationMsValue: index < 20 ? 5000 : 1000,
+      cacheRateValue: index < 20 ? 10 : 80,
+    }));
+    const totals = openCodexStatTotals(rows);
+    expect(totals.totalRequests).toBe(120);
+    expect(totals.averageDurationSeconds).toBe(1);
+    expect(totals.averageCacheRate).toBe(80);
+    expect(totals.averageDurationSampleCount).toBe(100);
   });
 });
 

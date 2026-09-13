@@ -96,6 +96,7 @@ describe('Sub2ApiAdapter', () => {
     });
     await expect(adapter.readOptionalChannels('access')).resolves.toEqual({
       state: 'unsupported',
+      monitorSource: 'v1',
       channels: [],
     });
   });
@@ -137,6 +138,7 @@ describe('Sub2ApiAdapter', () => {
     expect(result).toEqual({
       state: 'supported',
       availableChannelsState: 'empty',
+      monitorSource: 'v1',
       channels: [
         {
           id: '7',
@@ -250,6 +252,91 @@ describe('Sub2ApiAdapter', () => {
       state: 'supported',
       availableChannelsState: 'partial',
     });
+  });
+
+  it('uses V2 matrix when the contract is valid and does not call V1', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path.includes('/channel-monitor-v2/matrix')) {
+          return {
+            code: 0,
+            data: {
+              group_by: 'platform_group',
+              coverage: { data_through: '2026-09-13T12:05:00Z', coverage_complete: true },
+              items: [
+                {
+                  platform: 'anthropic',
+                  group_id: 130,
+                  group_name: 'Claude-Aws',
+                  metrics: {
+                    request_count: 12,
+                    has_requests: true,
+                    success_rate: 0.8,
+                    ttft: { trimmed_avg_ms: 1500 },
+                  },
+                  health: { overall: 'warning' },
+                  buckets: [],
+                },
+              ],
+            },
+          };
+        }
+        if (path === '/channel-monitors') throw new Error('must not fall back to V1');
+        return {};
+      },
+    });
+    await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
+      state: 'supported',
+      monitorSource: 'v2',
+      channels: [{ id: '130', name: 'Claude-Aws', status: 'degraded', latencyMs: 1500 }],
+    });
+  });
+
+  it('falls back to V1 when V2 is missing', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path.includes('/channel-monitor-v2/matrix')) {
+          throw {
+            code: 'UNSUPPORTED_CAPABILITY',
+            message: 'missing',
+            retryable: false,
+            httpStatus: 404,
+          };
+        }
+        if (path === '/channel-monitors') {
+          return { data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] } };
+        }
+        return {};
+      },
+    });
+    await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
+      monitorSource: 'v1',
+      channels: [{ name: 'old', status: 'normal' }],
+    });
+  });
+
+  it('does not disguise V2 auth errors as V1 success', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path.includes('/channel-monitor-v2/matrix')) {
+          throw { code: 'AUTH_REQUIRED', message: 'auth', retryable: false, httpStatus: 401 };
+        }
+        return { data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] } };
+      },
+    });
+    await expect(adapter.readOptionalChannels('access')).rejects.toMatchObject({ httpStatus: 401 });
+  });
+
+  it('keeps V2 as temporary failure on 429 instead of marking V1', async () => {
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string) => {
+        if (path.includes('/channel-monitor-v2/matrix')) {
+          throw { code: 'RATE_LIMITED', message: 'slow down', retryable: true, httpStatus: 429 };
+        }
+        return { data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] } };
+      },
+    });
+    await expect(adapter.readOptionalChannels('access')).rejects.toMatchObject({ httpStatus: 429 });
   });
 
   it('reads per-key request counts for automatic default-key selection', async () => {

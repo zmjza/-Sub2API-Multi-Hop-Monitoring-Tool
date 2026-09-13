@@ -8,6 +8,7 @@ import {
   DollarSign,
   FileText,
   Package,
+  Gauge,
   RefreshCw,
 } from 'lucide-react';
 import type { OpenCodexLogsPayload } from '../../../../electron/shared/opencodex';
@@ -23,7 +24,8 @@ import {
   type OpenCodexPeriod,
   type OpenCodexRow,
 } from './opencodex-data';
-import { firstTokenClass } from './UsagePage';
+import { firstTokenClass, formatAverageSample } from './UsagePage';
+import { formatCacheRate } from './cache-rate';
 import './usage.css';
 
 const PAGE_SIZE = 20;
@@ -222,7 +224,25 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
                 ? stats.averageDurationSeconds.toFixed(2) + 's'
                 : '—'}
             </b>
-            <small>筛选后</small>
+            <small>
+              {state.status === 'success'
+                ? formatAverageSample(stats.averageDurationSampleCount)
+                : '筛选后'}
+            </small>
+          </div>
+        </article>
+        <article className="usage-stat cache-rate">
+          <div className="usage-stat-icon">
+            <Gauge size={24} />
+          </div>
+          <div>
+            <span>平均缓存率</span>
+            <b>{state.status === 'success' ? formatCacheRate(stats.averageCacheRate) : '—'}</b>
+            <small>
+              {state.status === 'success'
+                ? formatAverageSample(stats.averageCacheRateSampleCount)
+                : '筛选后'}
+            </small>
           </div>
         </article>
       </div>

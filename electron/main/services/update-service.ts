@@ -33,9 +33,11 @@ const DOWNLOAD_RETRY_DELAY_MS = 250;
 
 function isRetryableDownloadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|UND_ERR|aborted|terminated|CONNECTION_RESET)/i.test(
-    message,
-  ) || /^DOWNLOAD_HTTP_5\d\d$/.test(message);
+  return (
+    /(?:ECONNRESET|ECONNREFUSED|ETIMEDOUT|UND_ERR|aborted|terminated|CONNECTION_RESET)/i.test(
+      message,
+    ) || /^DOWNLOAD_HTTP_5\d\d$/.test(message)
+  );
 }
 
 export function compareSemver(a: string, b: string): number {
@@ -203,7 +205,11 @@ export class UpdateService {
               callback(null, chunk);
             },
           });
-          await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), stream, createWriteStream(filePath));
+          await pipeline(
+            Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]),
+            stream,
+            createWriteStream(filePath),
+          );
           if ((await sha256File(filePath)).toLowerCase() !== asset.sha256.toLowerCase()) {
             throw new Error('SHA256_MISMATCH');
           }

@@ -737,7 +737,7 @@
 .site-card-actions {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 34px repeat(3, minmax(0, 1fr));
   align-items: center;
   gap: 6px;
   padding-top: 12px;
@@ -900,7 +900,8 @@
 }
 
 .view-rates-button,
-.view-channel-status-button {
+.view-channel-status-button,
+.view-connectivity-button {
   min-width: 0;
   justify-content: center;
   white-space: nowrap;
@@ -923,6 +924,7 @@
 }
 .view-rates-button:hover,
 .view-channel-status-button:hover,
+.view-connectivity-button:hover,
 .view-rates-button:focus-visible,
 .view-channel-status-button:focus-visible {
   transform: translateY(-1px);
@@ -957,6 +959,17 @@
   border-color: #86efac;
 }
 
+.view-connectivity-button {
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  color: #0369a1;
+}
+.view-connectivity-button:hover,
+.view-connectivity-button:focus-visible {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
 @media (max-width: 900px) {
   .site-card-actions {
     gap: 4px;
@@ -968,7 +981,8 @@
     gap: 3px;
   }
   .view-rates-button,
-  .view-channel-status-button {
+  .view-channel-status-button,
+  .view-connectivity-button {
     gap: 3px;
     padding-inline: 5px;
     font-size: 10px;
@@ -2137,4 +2151,130 @@
   .rate-group-values {
     text-align: left;
   }
+}
+
+.connectivity-dialog-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 33, 58, 0.28);
+  backdrop-filter: blur(4px);
+}
+.connectivity-dialog {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid #d8d4e6;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(23, 33, 58, 0.22);
+}
+.connectivity-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.connectivity-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.connectivity-dialog > header button,
+.connectivity-dialog footer button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #d8d4e6;
+  border-radius: 10px;
+  background: #fff;
+  color: #26233a;
+}
+.connectivity-site-card {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #ece9f5;
+  border-radius: 12px;
+  background: #f8f7fc;
+}
+.connectivity-site-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #10b981;
+  color: #fff;
+}
+.connectivity-site-card strong {
+  display: block;
+}
+.connectivity-site-card small,
+.connectivity-dialog label {
+  color: #777587;
+  font-size: 12px;
+}
+.connectivity-site-card em {
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #047857;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.connectivity-warning {
+  margin: 0;
+  color: #b45309;
+  font-size: 12px;
+}
+.connectivity-dialog label {
+  display: grid;
+  gap: 6px;
+}
+.connectivity-dialog .select-field {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d8d4e6;
+  border-radius: 10px;
+  background: #fff;
+}
+.connectivity-log {
+  min-height: 140px;
+  max-height: 220px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 12px;
+  background: #111827;
+  color: #e5e7eb;
+  font-size: 12px;
+  line-height: 1.6;
+  display: grid;
+  gap: 6px;
+  white-space: pre-wrap;
+}
+.connectivity-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.connectivity-dialog footer .connectivity-start {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: #10b981;
+  color: #fff;
+}
+.connectivity-start:disabled {
+  opacity: 0.55;
 }

@@ -64,6 +64,7 @@ describe('local mock sub2api integration', () => {
     expect(core.rates.get('group-a')).toBe(2);
     await expect(adapter.readOptionalChannels(session.accessToken)).resolves.toEqual({
       state: 'unsupported',
+      monitorSource: 'v1',
       channels: [],
     });
   });

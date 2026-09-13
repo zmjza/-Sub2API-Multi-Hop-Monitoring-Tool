@@ -4,6 +4,8 @@ import { CredentialVault } from '../storage/credential-vault.js';
 import { normalizeSiteUrl } from '../adapters/url.js';
 import { getInteractiveVerificationProvider, Sub2ApiClient } from '../adapters/http-client.js';
 import { Sub2ApiAdapter } from '../adapters/sub2api-adapter.js';
+import { classifyV2Failure } from '../adapters/channel-monitor-v2.js';
+import { averageRecentSamples, cacheRateFromTokens } from '../../shared/recent-averages.js';
 import { aggregateSnapshots } from '../domain/snapshot.js';
 import { selectDefaultKey } from '../domain/key-policy.js';
 import { buildCsv } from '../domain/csv.js';
@@ -84,6 +86,11 @@ export class SiteService {
   private readonly channelCache = new Map<
     string,
     import('../../shared/contracts.js').ChannelViewPayload
+  >();
+  private readonly channelApiVersion = new Map<string, 'v1' | 'v2'>();
+  private readonly channelV2Details = new Map<
+    string,
+    Record<string, import('../adapters/sub2api-adapter.js').NormalizedChannelDetail>
   >();
   private readonly apiKeyWrites = new Map<string, Promise<ManagedApiKey>>();
   private readonly apiKeyUsageCache = new Map<
@@ -941,12 +948,39 @@ export class SiteService {
     const credential = site ? this.vault.read(site.id) : undefined;
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
-    const result = await new Sub2ApiAdapter(client).readUsageStats(
-      credential.accessToken,
-      usageUpstreamQuery(query),
-    );
+    const adapter = new Sub2ApiAdapter(client);
+    const upstream = usageUpstreamQuery(query);
+    const result = await adapter.readUsageStats(credential.accessToken, upstream);
+    const recent = await adapter
+      .readUsage(credential.accessToken, {
+        ...upstream,
+        page: 1,
+        page_size: 100,
+        sort_by: 'created_at',
+        sort_order: 'desc',
+      })
+      .catch(() => undefined);
+    const averages = recent
+      ? averageRecentSamples(recent.items, {
+          durationMs: (row) => row.durationMs,
+          cacheRate: (row) =>
+            cacheRateFromTokens(row.inputTokens, row.cacheReadTokens, row.cacheCreationTokens),
+        })
+      : undefined;
     this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageStats: 'supported' });
-    return result;
+    return {
+      ...result,
+      averageDurationMs: averages ? (averages.averageDurationMs ?? 0) : result.averageDurationMs,
+      ...(averages?.averageCacheRate !== undefined
+        ? { averageCacheRate: averages.averageCacheRate }
+        : {}),
+      ...(averages
+        ? {
+            averageDurationSampleCount: averages.durationSamples,
+            averageCacheRateSampleCount: averages.cacheRateSamples,
+          }
+        : {}),
+    };
   }
 
   async usageCsv(query: UsageQuery): Promise<string> {
@@ -987,9 +1021,45 @@ export class SiteService {
     const site = this.db.listSites().find((candidate) => candidate.id === siteId);
     const credential = site ? this.vault.read(site.id) : undefined;
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
+    const known = this.channelApiVersion.get(siteId);
+    return this.loadChannels(
+      siteId,
+      site,
+      credential.accessToken,
+      known === 'v1' ? 'v1' : known === 'v2' ? 'v2' : 'auto',
+    );
+  }
+
+  private async loadChannels(
+    siteId: string,
+    site: StoredSite,
+    accessToken: string,
+    prefer: 'v1' | 'v2' | 'auto',
+  ) {
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
-    const result = await new Sub2ApiAdapter(client).readOptionalChannels(credential.accessToken);
-    const next = { ...result, fetchedAt: Date.now(), stale: false };
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const result = await new Sub2ApiAdapter(client).readOptionalChannelsWithFallback(
+      accessToken,
+      timezone,
+      prefer,
+    );
+    if (result.monitorSource === 'v2') {
+      this.channelApiVersion.set(siteId, 'v2');
+      this.channelV2Details.set(siteId, result.v2Details ?? {});
+    } else {
+      this.channelApiVersion.set(siteId, 'v1');
+      this.channelV2Details.delete(siteId);
+    }
+    const next = {
+      state: result.state,
+      channels: result.channels,
+      ...(result.availableChannels ? { availableChannels: result.availableChannels } : {}),
+      ...(result.availableChannelsState
+        ? { availableChannelsState: result.availableChannelsState }
+        : {}),
+      fetchedAt: Date.now(),
+      stale: false,
+    };
     this.channelCache.set(siteId, next);
     this.db.setCapabilities(siteId, {
       ...(site.capabilities ?? {}),
@@ -1006,6 +1076,7 @@ export class SiteService {
     try {
       return await this.channels(siteId);
     } catch (error) {
+      if (classifyV2Failure(error) === 'auth') throw error;
       const cached = this.channelCache.get(siteId);
       if (cached) {
         const stale = { ...cached, stale: true, error: safeMessage(error) };
@@ -1021,6 +1092,22 @@ export class SiteService {
     const credential = site ? this.vault.read(site.id) : undefined;
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+    if (this.channelApiVersion.get(siteId) === 'v2') {
+      const cached = this.channelV2Details.get(siteId)?.[channelId];
+      if (cached) return { state: 'supported' as const, detail: cached };
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const result = await new Sub2ApiAdapter(client).readOptionalChannelsWithFallback(
+        credential.accessToken,
+        timezone,
+        'v2',
+      );
+      if (result.monitorSource === 'v2') {
+        this.channelV2Details.set(siteId, result.v2Details ?? {});
+        const detail = result.v2Details?.[channelId];
+        if (detail) return { state: 'supported' as const, detail };
+      }
+      return { state: 'unsupported' as const, detail: undefined };
+    }
     return new Sub2ApiAdapter(client).readChannelStatus(credential.accessToken, channelId);
   }
 
@@ -1100,6 +1187,19 @@ export class SiteService {
   async apiKeyDetail(input: ApiKeyDetailRequest): Promise<ManagedApiKey> {
     const { adapter, accessToken } = this.apiKeySession(input.siteId);
     return adapter.readApiKeyDetail(accessToken, input.keyId);
+  }
+
+  async revealApiKey(siteId: string, keyId: string): Promise<string> {
+    try {
+      const detail = await this.apiKeyDetail({ siteId, keyId });
+      if (detail.apiKey) return detail.apiKey;
+    } catch {
+      // Overview keys may use non-numeric ids; fall through to the raw detail endpoint.
+    }
+    const { adapter, accessToken } = this.apiKeySession(siteId);
+    const raw = await adapter.readApiKeySecret(accessToken, keyId);
+    if (!raw) throw new Error('API_KEY_UNAVAILABLE');
+    return raw;
   }
 
   updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey> {

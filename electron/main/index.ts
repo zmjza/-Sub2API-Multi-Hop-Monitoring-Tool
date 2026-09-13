@@ -54,6 +54,8 @@ import {
   apiKeyGroupUpdateRequestSchema,
   apiKeyManagementPayloadSchema,
   managedApiKeySchema,
+  connectivityTestStartSchema,
+  connectivityEventSchema,
 } from '../shared/contracts.js';
 import { opencodexLogsQuerySchema } from '../shared/opencodex.js';
 import { fetchOpenCodexLogs } from './services/opencodex-service.js';
@@ -61,6 +63,7 @@ import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
 import { FileSecretBackend } from './storage/file-secret-backend.js';
 import { InteractiveVerificationRequiredError, SiteService } from './services/site-service.js';
+import { ConnectivityTestRunner } from './services/connectivity-test.js';
 import { Sub2ApiServerManager } from './services/sub2api-server-manager.js';
 import { FavoriteWebsitesManager } from './services/favorite-websites-manager.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
@@ -328,6 +331,7 @@ function broadcastRefreshState(
 }
 
 function registerIpc() {
+  const connectivityRunner = new ConnectivityTestRunner();
   ipcMain.on('app:version', (event) => {
     event.returnValue = app.getVersion();
   });
@@ -578,6 +582,34 @@ function registerIpc() {
     if (!detail.apiKey) throw new Error('API_KEY_UNAVAILABLE');
     clipboard.writeText(detail.apiKey);
     return { copied: true };
+  });
+  ipcMain.handle('connectivity:test:start', async (event, input: unknown) => {
+    const request = connectivityTestStartSchema.parse(input);
+    const site = siteService.listSites().sites.find((candidate) => candidate.id === request.siteId);
+    const key = siteService
+      .listKeys(request.siteId)
+      .find((candidate) => candidate.id === request.keyId && candidate.status === 'active');
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    if (!key) throw new Error('KEY_UNAVAILABLE');
+    const apiKey = await siteService.revealApiKey(request.siteId, request.keyId);
+    const started = connectivityRunner.start({
+      baseUrl: site.baseUrl,
+      apiKey,
+      maskedKey: key.maskedLabel,
+      model: request.model,
+      prompt: request.prompt,
+      emit: (payload) => {
+        if (event.sender.isDestroyed()) return;
+        event.sender.send('connectivity:event', connectivityEventSchema.parse(payload));
+      },
+    });
+    return { requestId: started.requestId };
+  });
+  ipcMain.handle('connectivity:test:cancel', (_event, input: unknown) => {
+    if (typeof input !== 'string' || input.length < 1 || input.length > 128)
+      throw new Error('INVALID_REQUEST');
+    const requestId = input;
+    return { cancelled: connectivityRunner.cancel(requestId) };
   });
   ipcMain.handle('keys:contexts', () => siteKeyContextsSchema.parse(siteService.listKeyContexts()));
   ipcMain.handle('keys:preference:get', (_event, input: unknown) =>

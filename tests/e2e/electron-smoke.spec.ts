@@ -1228,6 +1228,22 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           },
         }),
       );
+    if (
+      request.method === 'GET' &&
+      (url === '/api/v1/keys/key-e2e' || url === '/api/v1/keys/key-e2e-manual')
+    )
+      return response.end(
+        JSON.stringify({
+          data: {
+            id: url.split('/').at(-1),
+            name: 'E2E Key',
+            key: 'x',
+            status: 'active',
+          },
+        }),
+      );
+    if (request.method === 'POST' && url === '/v1/chat/completions')
+      return response.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
     if (request.method === 'PUT' && url === '/api/v1/keys/101') {
       managedKeyGroupId = '202';
       return response.end(JSON.stringify({ data: { id: 101 } }));
@@ -1952,7 +1968,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           display: footer ? getComputedStyle(footer).display : '',
           flexWrap: footer ? getComputedStyle(footer).flexWrap : '',
           oneRow:
-            controlRects.length === 3 &&
+            controlRects.length === 4 &&
             Math.max(...controlRects.map((rect) => rect.top)) -
               Math.min(...controlRects.map((rect) => rect.top)) <=
               1 &&
@@ -2015,7 +2031,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
             summaryBeforeFooter,
             summaryNoOverflow,
           }) =>
-            controlCount === 3 &&
+            controlCount === 4 &&
             display === 'grid' &&
             flexWrap === 'nowrap' &&
             oneRow &&
@@ -2152,7 +2168,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           const rects = controls.map((control) => control.getBoundingClientRect());
           return Boolean(
             footer &&
-            controls.length === 3 &&
+            controls.length === 4 &&
             Math.max(...rects.map((rect) => rect.top)) -
               Math.min(...rects.map((rect) => rect.top)) <=
               1 &&
@@ -2267,6 +2283,28 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   expect(channelDetailRequestCount).toBe(detailsBeforeShortcut);
   await main.keyboard.press('Escape');
   await expect(main.getByRole('dialog', { name: '本地集成站点 渠道状态' })).toHaveCount(0);
+  await firstSiteCard.getByRole('button', { name: '测试 本地集成站点 连通性' }).click();
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toBeVisible();
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toContainText(
+    '测试会产生一次真实请求',
+  );
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toContainText('选择 Key');
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toContainText('选择测试模型');
+  await expect(main.getByRole('button', { name: '开始测试' })).toBeEnabled({ timeout: 15_000 });
+  await captureEvidence(main, '12-connectivity-modal');
+  await main.getByRole('button', { name: '开始测试' }).click();
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toContainText('pong', {
+    timeout: 15_000,
+  });
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toContainText('测试完成');
+  await captureEvidence(main, '12-connectivity-result');
+  await main
+    .getByRole('dialog', { name: '测试账号连接' })
+    .locator('footer')
+    .getByRole('button', { name: '关闭' })
+    .click();
+  await expect(main.getByRole('dialog', { name: '测试账号连接' })).toHaveCount(0);
+  await expect(firstSiteCard).not.toContainText('测试完成');
   const channelsAfterFirstOpen = channelRequestCount;
   const detailsAfterFirstOpen = channelDetailRequestCount;
   await firstSiteCard.getByLabel('查看 本地集成站点 渠道状态').click();
@@ -2357,6 +2395,42 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await main.getByRole('button', { name: '使用记录', exact: true }).click();
   await main.locator('.usage-summary').scrollIntoViewIfNeeded();
   await expect(main.locator('.usage-summary').getByText('1.23K', { exact: true })).toBeVisible();
+  await expect(main.locator('.usage-summary .usage-stat')).toHaveCount(5);
+  await expect(main.locator('.usage-summary')).toContainText('平均缓存率');
+  await expect(main.locator('.usage-summary .usage-stat.cache-rate')).toContainText('97.0%');
+  const usageBounds = await application.evaluate(({ BrowserWindow }) => {
+    const mainWindow = BrowserWindow.getAllWindows().find(
+      (candidate) => candidate.getBounds().width > 500,
+    );
+    const bounds = mainWindow?.getBounds();
+    mainWindow?.setSize(1440, 900);
+    return bounds;
+  });
+  await main.waitForTimeout(250);
+  await main.locator('.usage-summary').scrollIntoViewIfNeeded();
+  expect(
+    await main.locator('.usage-summary').evaluate((root) => {
+      const cards = Array.from(root.querySelectorAll('.usage-stat')).map((card) =>
+        card.getBoundingClientRect(),
+      );
+      const box = root.getBoundingClientRect();
+      return {
+        count: cards.length,
+        oneRow:
+          Math.max(...cards.map((card) => card.top)) - Math.min(...cards.map((card) => card.top)) <=
+          2,
+        inside: cards.every((card) => card.right <= box.right + 1 && card.left >= box.left - 1),
+        noOverflow: root.scrollWidth <= root.clientWidth + 1,
+      };
+    }),
+  ).toEqual({ count: 5, oneRow: true, inside: true, noOverflow: true });
+  await captureEvidence(main, '02-usage-summary');
+  if (usageBounds)
+    await application.evaluate(({ BrowserWindow }, bounds) => {
+      BrowserWindow.getAllWindows()
+        .find((candidate) => candidate.getBounds().width > 500)
+        ?.setBounds(bounds);
+    }, usageBounds);
   await expect(main.getByLabel('分组').locator('option')).toContainText(
     ['全部', 'E2E 分组', '独立分组'],
     { timeout: 1_000 },

@@ -1,5 +1,124 @@
 # sub2api 适配器避坑
 
+## channel-monitor-v2 必须区分能力缺失与临时失败
+
+**现象**
+
+部分中转站已启用 channel-monitor-v2/matrix，部分站点仍只有旧版 /channel-monitors；如果把所有 V2 请求错误都直接降级为旧版，可能把 429、5xx、超时或网络抖动误判为“站点仅支持旧版”，后续长期不再探测新版。
+
+**根因**
+
+V2 路由受功能开关和 mode=v2 guard 保护，404/405/未启用属于能力缺失；401/403 属于鉴权或权限问题；429、5xx、超时属于临时失败。三类错误的业务语义不同。
+
+**正确做法**
+
+逐站点先请求 V2 矩阵。只有明确能力缺失、未启用、404/405 或响应契约不合法时才回退旧版；临时失败保留旧缓存与错误状态，并在下一刷新周期重新探测 V2。V2 与 V1 响应先在主进程归一化，再交给现有渠道 UI。
+
+**验证方式**
+
+覆盖 V2 合法响应、404/405、401/403、429、5xx、超时、非法 JSON、coverage 未完成和 bootstrap.active；确认能力缓存不会把临时失败永久写成 v1，且旧版回退只发生在明确不支持场景。
+
+**禁止事项**
+
+不要把一次网络错误永久标记为 v1；不要把 401/403 伪装成旧版成功；不要让未来 bucket 或超过 data_through 的数据成为最新状态；不要为 V2 新建独立 UI 结构。
+
+**相关文件或命令**
+
+- electron/main/adapters/sub2api-adapter.ts
+- electron/main/services/site-service.ts
+- src/renderer/shells/overview/rate-channel-status-loader.ts
+- liran_docs/requirements/REQ-260913-connectivity-test-需求整理.md
+
+**适用范围**
+
+所有同时兼容旧版渠道监测和 channel-monitor-v2 的站点状态读取流程。
+
+## 非数字 Key ID 不能走 assertNumericId
+
+**现象**
+
+总览当前生效 Key 的 id 可能是 `key-e2e` 这类非数字字符串。连通性测试如果先 `assertNumericId` 再读 secret，会在真实测试前直接失败。
+
+**根因**
+
+`/keys` 列表项 id 与部分站点的 Key 主键并不保证是纯数字；连通性测试需要按站点已展示的 Key id 回读 secret。
+
+**正确做法**
+
+使用 `SiteService.revealApiKey` / `Sub2ApiAdapter.readApiKeySecret` 按原始 keyId 读取，不要复用强制数字 ID 的 Key 详情路径。
+
+**验证方式**
+
+e2e mock `GET /api/v1/keys/key-e2e` 后发起普通文本测试，弹窗应出现响应文本而不是 ID 校验错误。
+
+**禁止事项**
+
+不要把完整 Key 回传 Renderer；不要为了测试把 keyId 改写成数字。
+
+**相关文件或命令**
+
+- electron/main/services/site-service.ts
+- electron/main/adapters/sub2api-adapter.ts
+- tests/e2e/electron-smoke.spec.ts
+
+**适用范围**
+
+连通性测试读 Key secret 的主进程路径。
+
+## 站点卡片 footer 现为四个按钮
+
+**现象**
+
+新增“测试连通性”后，若仍按三列网格或旧 E2E 只断言三个 footer 控件，按钮会被挤出或用例失败。开始测试按钮也可能被通用 footer 样式盖成次按钮。
+
+**正确做法**
+
+`.site-card-actions` 按四个现有按钮单行排；E2E 断言 4 个控件。弹窗主按钮使用 `.connectivity-dialog footer .connectivity-start`，不要吃通用 footer 按钮样式。
+
+**验证方式**
+
+宽屏 10-overview-wide-footer-layout.png、窄屏 11-overview-narrow-footer-layout.png，以及 e2e footer 控件数。
+
+**禁止事项**
+
+不要为第四个按钮新建一套卡片视觉或换行布局。
+
+**相关文件或命令**
+
+- src/renderer/shells/overview/overview.css
+- src/renderer/shells/overview/OverviewPage.tsx
+
+**适用范围**
+
+全部站点卡片 footer 与连通性弹窗按钮。
+
+## 使用记录五卡片必须允许窄窗换列
+
+**现象**
+
+五张统计卡在宽屏单行 flex 下，若窄窗仍强制单行，总 Token 明细会裁切溢出。
+
+**正确做法**
+
+宽屏 `.usage-summary` 用 flex 单行；`max-width: 1000px` 改为两列网格。总请求/总消费仍用筛选全量，平均耗时/平均缓存率只用最近 100 条有效样本。
+
+**验证方式**
+
+e2e 在 1440 宽窗断言单行；02-usage-summary.png 确认五卡片。
+
+**禁止事项**
+
+不要用当前页 20 条记录代替最近 100 条平均。
+
+**相关文件或命令**
+
+- src/renderer/shells/usage/usage.css
+- electron/shared/recent-averages.ts
+
+**适用范围**
+
+中转站与 OpenCodex 使用记录统计卡。
+
 ## Chrome 登录失败态必须保留直接重试入口
 
 **现象**
@@ -858,6 +977,7 @@ fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次
 **适用范围**
 
 所有基于 `Wei-Shaw/sub2api` 二开的 Sub2API 服务器快捷入口功能。
+
 ## 自签名证书上游导致 Sub2API 模型同步为空、账号导入失败
 
 **现象**

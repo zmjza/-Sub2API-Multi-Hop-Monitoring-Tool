@@ -1,5 +1,11 @@
 # 渠道状态 UI 壳接入清单
 
+## 2026-09-13 REQ-260913-connectivity-test（现有壳已接入）
+
+- 保留现有渠道页、总览弹层和悬浮窗视觉；V2 matrix 只替换归一化参数。
+- `healthy→normal`、`warning→degraded`、`critical→failed`、`unknown→unknown`；无请求量显示未知/待核验。
+- 固定 `range=90m&group_by=platform_group`，不增加时间窗口控件。
+
 ## 2026-08-05 1.7.9 实时状态与 stale 回退复核
 
 - 手动选择的渠道、关联关系、列表和详情在后台强刷失败时继续显示，错误以弹窗内 stale 状态和局部重试表达，不依赖重新点击查看渠道状态恢复。

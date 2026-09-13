@@ -1,5 +1,11 @@
 # API 适配器与能力探测
 
+## 2026-09-13 REQ-260913-connectivity-test 适配边界
+
+- 渠道状态按站点先探测 `/api/v1/channel-monitor-v2/matrix?range=90m&group_by=platform_group&timezone=...`；仅明确不存在、未启用、404/405 或契约非法时回退旧版，429/5xx/超时保留缓存并下周期重探测，401/403 显示权限错误。
+- V2 `items/metrics/health/buckets/coverage` 必须在主进程归一化为现有渠道模型；`coverage.data_through` 是有效上界，未来 bucket/bootstrap 未覆盖数据不得成为最新状态。
+- 连通性测试只允许普通文本请求；Renderer 传 `siteId/keyId/model/prompt`，主进程重校验并读取完整 Key，完整凭据不得进入 Renderer、日志或持久化。
+
 ## 2026-08-05 1.7.9 认证账号归属与渠道状态回退
 
 - 适配器核心 profile 结果参与首次添加和重新验证的账号归属检查；异账号不会覆盖同地址其他站点。

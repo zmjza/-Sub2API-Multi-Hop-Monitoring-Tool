@@ -10,6 +10,7 @@ import {
   formatCacheRate,
   type CacheRateTone,
 } from './cache-rate';
+import { averageRecentSamples } from '../../../../electron/shared/recent-averages';
 
 export type OpenCodexReasoningLabel = string;
 
@@ -44,6 +45,7 @@ export interface OpenCodexRow {
   cacheWriteTokensValue?: number;
   cacheRateLabel: string;
   cacheRateTone: CacheRateTone;
+  cacheRateValue?: number;
   totalTokensValue?: number;
   costValue?: number;
   durationMsValue?: number;
@@ -161,6 +163,7 @@ export function normalizeOpenCodexLogs(payload: OpenCodexLogsPayload): OpenCodex
       totalTokensValue: numericOrUndefined(entry.totalTokens),
       cacheRateLabel: formatCacheRate(cacheRate),
       cacheRateTone: cacheRateTone(cacheRate),
+      cacheRateValue: cacheRate,
       costValue: openCodexCostValue(entry),
       durationMsValue: numericOrUndefined(entry.durationMs),
       firstTokenLabel:
@@ -247,8 +250,6 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
   let totalOutputTokens = 0;
   let totalCacheReadTokens = 0;
   let totalCost = 0;
-  let durationSumMs = 0;
-  let durationCount = 0;
   let totalTokensFromService = 0;
   for (const row of rows) {
     totalInputTokens += row.inputTokensValue ?? 0;
@@ -261,11 +262,12 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
         (row.cacheReadTokensValue ?? 0) +
         (row.cacheWriteTokensValue ?? 0);
     totalCost += row.costValue ?? 0;
-    if (row.durationMsValue !== undefined) {
-      durationSumMs += row.durationMsValue;
-      durationCount += 1;
-    }
   }
+  const recent = [...rows].sort((left, right) => right.timestamp - left.timestamp);
+  const averages = averageRecentSamples(recent, {
+    durationMs: (row) => row.durationMsValue,
+    cacheRate: (row) => row.cacheRateValue,
+  });
   return {
     totalRequests: rows.length,
     totalTokens: totalTokensFromService,
@@ -273,7 +275,11 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
     totalOutputTokens,
     totalCacheReadTokens,
     totalCost,
-    averageDurationSeconds: durationCount ? durationSumMs / durationCount / 1000 : undefined,
+    averageDurationSeconds:
+      averages.averageDurationMs === undefined ? undefined : averages.averageDurationMs / 1000,
+    averageCacheRate: averages.averageCacheRate,
+    averageDurationSampleCount: averages.durationSamples,
+    averageCacheRateSampleCount: averages.cacheRateSamples,
   };
 }
 

@@ -11,6 +11,7 @@ import {
   Check,
   BadgePercent,
   Activity,
+  Play,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatTokenCount } from '../../lib/format';
@@ -21,6 +22,7 @@ import { RechargeRatioControl } from './RechargeRatioControl';
 import { RatePopover } from './RatePopover';
 import { ChannelStatusPopover } from './ChannelStatusPopover';
 import type { ChannelStatusCache } from './ChannelStatusPopover';
+import { ConnectivityTestModal } from './ConnectivityTestModal';
 import {
   resolveChannelPresentation,
   type AvailableChannelRelationship,
@@ -109,6 +111,7 @@ export function OverviewPage(props: OverviewProps) {
     siteId: string;
     anchor: HTMLElement;
   }>();
+  const [connectivitySiteId, setConnectivitySiteId] = useState<string>();
   const [channelStatusCacheBySite, setChannelStatusCacheBySite] = useState<
     Record<string, ChannelStatusCache>
   >({});
@@ -768,6 +771,19 @@ export function OverviewPage(props: OverviewProps) {
                         <Activity size={14} />
                         查看渠道状态
                       </button>
+                      <button
+                        type="button"
+                        className="view-connectivity-button"
+                        aria-label={'测试 ' + site.name + ' 连通性'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setConnectivitySiteId(site.id);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <Play size={14} />
+                        测试连通性
+                      </button>
                     </div>
                   </div>
                 );
@@ -872,6 +888,17 @@ export function OverviewPage(props: OverviewProps) {
               }));
           }}
           onClose={() => setChannelPopover(undefined)}
+        />
+      )}
+      {connectivitySiteId && (
+        <ConnectivityTestModal
+          siteId={connectivitySiteId}
+          siteName={liveSites.find((site) => site.id === connectivitySiteId)?.name ?? '当前站点'}
+          siteStatus={liveSites.find((site) => site.id === connectivitySiteId)?.status ?? ''}
+          keys={keyContextForSite(connectivitySiteId, props).keys}
+          preference={keyContextForSite(connectivitySiteId, props).preference}
+          effectiveKeyId={effectiveKeyIdForSite(connectivitySiteId, props)}
+          onClose={() => setConnectivitySiteId(undefined)}
         />
       )}
     </section>

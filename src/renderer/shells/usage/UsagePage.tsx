@@ -156,7 +156,18 @@ export function Sub2ApiUsagePage(props: UsageProps) {
           </div>
           <div>
             <span>平均耗时</span>
-            <b>{stats ? `${(stats.averageDurationMs / 1000).toFixed(2)}s` : '—'}</b>
+            <b>{formatAverageDuration(stats)}</b>
+            <small>{formatAverageSample(stats?.averageDurationSampleCount)}</small>
+          </div>
+        </article>
+        <article className="usage-stat cache-rate">
+          <div className="usage-stat-icon">
+            <Gauge size={24} />
+          </div>
+          <div>
+            <span>平均缓存率</span>
+            <b>{stats ? formatCacheRate(stats.averageCacheRate) : '—'}</b>
+            <small>{formatAverageSample(stats?.averageCacheRateSampleCount)}</small>
           </div>
         </article>
       </div>
@@ -545,10 +556,30 @@ export function readUsageStats(value: unknown) {
   ] as const;
   if (keys.some((key) => typeof record[key] !== 'number' || !Number.isFinite(record[key])))
     return undefined;
-  return Object.fromEntries(keys.map((key) => [key, record[key]])) as Record<
+  const required = Object.fromEntries(keys.map((key) => [key, record[key]])) as Record<
     (typeof keys)[number],
     number
   >;
+  return {
+    ...required,
+    averageCacheRate: optionalNumber(record.averageCacheRate),
+    averageDurationSampleCount: optionalNumber(record.averageDurationSampleCount),
+    averageCacheRateSampleCount: optionalNumber(record.averageCacheRateSampleCount),
+  };
+}
+
+export function formatAverageDuration(stats: ReturnType<typeof readUsageStats>): string {
+  if (!stats) return '—';
+  if ((stats.averageDurationSampleCount ?? 1) <= 0) return '—';
+  return (stats.averageDurationMs / 1000).toFixed(2) + 's';
+}
+
+export function formatAverageSample(count: number | undefined): string {
+  return count === undefined ? '近 100 次' : '近 ' + String(count) + ' 次';
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 export function readUsagePagination(value: unknown, fallbackPage = 1, fallbackPages = 0) {

@@ -1,5 +1,6 @@
 import { normalizeApiKey, upstreamApiKeySchema } from './schemas.js';
 import type { ApiKeySummary } from '../domain/types.js';
+import { classifyV2Failure, normalizeV2Matrix } from './channel-monitor-v2.js';
 import type {
   ApiKeyBatchUsage,
   ApiKeyDailyUsage,
@@ -106,6 +107,15 @@ export interface NormalizedChannelDetail {
   }>;
 }
 
+export interface OptionalChannelReadResult {
+  state: 'supported' | 'unsupported';
+  channels: NormalizedChannelSummary[];
+  availableChannels?: NormalizedAvailableChannel[];
+  availableChannelsState?: 'complete' | 'empty' | 'partial' | 'error';
+  monitorSource?: 'v1' | 'v2';
+  v2Details?: Record<string, NormalizedChannelDetail>;
+}
+
 export class Sub2ApiAdapter {
   constructor(
     private readonly client: JsonClient,
@@ -173,35 +183,81 @@ export class Sub2ApiAdapter {
   }
 
   async readOptionalChannels(accessToken: string) {
+    return this.readOptionalChannelsWithFallback(accessToken, 'Asia/Shanghai');
+  }
+
+  async readOptionalChannelsWithFallback(
+    accessToken: string,
+    timezone: string,
+    prefer: 'v2' | 'v1' | 'auto' = 'auto',
+  ): Promise<OptionalChannelReadResult> {
+    if (prefer === 'v1') return this.readV1Channels(accessToken);
     try {
-      let availableChannelsRequestFailed = false;
-      const [raw, availableRaw] = await Promise.all([
-        this.client.getJson('/channel-monitors', accessToken, 'channelMonitors'),
-        this.client.getJson('/channels/available', accessToken, 'availableChannels').catch(() => {
-          availableChannelsRequestFailed = true;
-          return undefined;
-        }),
-      ]);
-      const availableChannels = normalizeAvailableChannels(availableRaw);
-      const availableRelationshipsPartial = hasIncompleteAvailableGroupIds(availableRaw);
+      const raw = await this.client.getJson(
+        '/channel-monitor-v2/matrix?range=90m&group_by=platform_group&timezone=' +
+          encodeURIComponent(timezone),
+        accessToken,
+        'channelMonitorV2',
+      );
+      const normalized = normalizeV2Matrix(raw);
+      if (!normalized.ok) {
+        return this.readV1Channels(accessToken);
+      }
+      const available = await this.readAvailableChannels(accessToken);
       return {
-        state: 'supported' as const,
+        state: 'supported',
+        monitorSource: 'v2',
+        channels: normalized.channels,
+        v2Details: normalized.details,
+        ...available,
+      };
+    } catch (error) {
+      const kind = classifyV2Failure(error);
+      if (kind !== 'missing') throw error;
+      return this.readV1Channels(accessToken);
+    }
+  }
+
+  private async readV1Channels(accessToken: string): Promise<OptionalChannelReadResult> {
+    try {
+      const [raw, available] = await Promise.all([
+        this.client.getJson('/channel-monitors', accessToken, 'channelMonitors'),
+        this.readAvailableChannels(accessToken),
+      ]);
+      return {
+        state: 'supported',
+        monitorSource: 'v1',
         channels: asArray(unwrapPayload(raw)).map((item) =>
           normalizeChannelSummary(asRecord(item)),
         ),
-        ...(availableChannels.length ? { availableChannels } : {}),
-        availableChannelsState: availableChannelsRequestFailed
-          ? ('error' as const)
-          : availableRelationshipsPartial
-            ? ('partial' as const)
-            : availableChannels.length
-              ? ('complete' as const)
-              : ('empty' as const),
+        ...available,
       };
     } catch (error) {
-      if (isUnsupported(error)) return { state: 'unsupported' as const, channels: [] };
+      if (isUnsupported(error)) return { state: 'unsupported', monitorSource: 'v1', channels: [] };
       throw error;
     }
+  }
+
+  private async readAvailableChannels(accessToken: string) {
+    let availableChannelsRequestFailed = false;
+    const availableRaw = await this.client
+      .getJson('/channels/available', accessToken, 'availableChannels')
+      .catch(() => {
+        availableChannelsRequestFailed = true;
+        return undefined;
+      });
+    const availableChannels = normalizeAvailableChannels(availableRaw);
+    const availableRelationshipsPartial = hasIncompleteAvailableGroupIds(availableRaw);
+    return {
+      ...(availableChannels.length ? { availableChannels } : {}),
+      availableChannelsState: availableChannelsRequestFailed
+        ? ('error' as const)
+        : availableRelationshipsPartial
+          ? ('partial' as const)
+          : availableChannels.length
+            ? ('complete' as const)
+            : ('empty' as const),
+    };
   }
 
   private async readAllKeys(accessToken: string, timezone: string): Promise<unknown[]> {
@@ -256,6 +312,18 @@ export class Sub2ApiAdapter {
       'apiKeyDetail',
     );
     return normalizeManagedApiKey(asRecord(unwrapPayload(raw)));
+  }
+
+  async readApiKeySecret(accessToken: string, keyId: string): Promise<string | undefined> {
+    if (!keyId || keyId.length > 128) throw new Error('Invalid API key ID');
+    const raw = await this.client.getJson(
+      `/keys/${encodeURIComponent(keyId)}`,
+      accessToken,
+      'apiKeyDetail',
+    );
+    const record = asRecord(unwrapPayload(raw));
+    const secret = stringOrUndefined(record?.key ?? record?.api_key);
+    return secret;
   }
 
   async updateApiKeyGroup(accessToken: string, keyId: string, groupId: string) {
@@ -772,7 +840,7 @@ function normalizeChannelStatus(value: unknown): NormalizedChannelStatus {
   const status = String(value ?? '').toLowerCase();
   if (['operational', 'normal', 'healthy', 'success', 'ok'].includes(status)) return 'normal';
   if (['degraded', 'warning', 'partial'].includes(status)) return 'degraded';
-  if (['failed', 'error', 'down', 'unavailable'].includes(status)) return 'failed';
+  if (['failed', 'error', 'down', 'unavailable', 'critical'].includes(status)) return 'failed';
   return 'unknown';
 }
 

@@ -23,6 +23,8 @@ import {
   siteAddResultSchema,
   usageStatsSchema,
   channelAssociationRequestSchema,
+  connectivityTestStartSchema,
+  connectivityEventSchema,
 } from './contracts.js';
 
 describe('IPC boundary schemas', () => {
@@ -361,5 +363,39 @@ describe('IPC boundary schemas', () => {
         averageDurationMs: 350,
       }),
     ).toThrow();
+  });
+});
+
+describe('connectivity IPC schemas', () => {
+  it('rejects a full API key field on start and events', () => {
+    expect(() =>
+      connectivityTestStartSchema.parse({
+        siteId: 'site-a',
+        keyId: '12',
+        model: 'gpt-5.6-sol',
+        prompt: 'hi',
+        apiKey: 'sk-live-complete-key-fixture-never-leak',
+      }),
+    ).toThrow();
+    expect(() =>
+      connectivityEventSchema.parse({
+        requestId: 'req-1',
+        type: 'started',
+        apiKey: 'sk-live-complete-key-fixture-never-leak',
+      }),
+    ).toThrow();
+    expect(
+      connectivityEventSchema.parse({
+        requestId: 'req-1',
+        type: 'delta',
+        message: 'ok',
+        maskedKey: 'Key · ••••',
+      }),
+    ).toEqual({
+      requestId: 'req-1',
+      type: 'delta',
+      message: 'ok',
+      maskedKey: 'Key · ••••',
+    });
   });
 });

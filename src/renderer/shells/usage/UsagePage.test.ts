@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   firstTokenClass,
+  formatAverageDuration,
   readUsagePagination,
   readUsageRecords,
+  readUsageStats,
   USAGE_COLUMNS,
   usageResetQuery,
 } from './UsagePage';
@@ -115,5 +117,41 @@ describe('readUsageRecords', () => {
       ['50.00 t/s', 'fast'],
       ['—', 'unavailable'],
     ]);
+  });
+});
+
+describe('readUsageStats', () => {
+  const base = {
+    totalRequests: 10,
+    totalTokens: 20,
+    totalInputTokens: 8,
+    totalOutputTokens: 7,
+    totalCacheReadTokens: 4,
+    totalCacheCreationTokens: 1,
+    totalActualCost: 0.2,
+    totalCost: 0.3,
+    averageDurationMs: 1800,
+  };
+
+  it('keeps required totals and optional last-100 averages', () => {
+    const stats = readUsageStats({
+      ...base,
+      averageCacheRate: 42.5,
+      averageDurationSampleCount: 8,
+      averageCacheRateSampleCount: 8,
+    });
+    expect(stats).toMatchObject({
+      totalRequests: 10,
+      averageDurationMs: 1800,
+      averageCacheRate: 42.5,
+      averageDurationSampleCount: 8,
+    });
+    expect(formatAverageDuration(stats)).toBe('1.80s');
+  });
+
+  it('shows a placeholder when duration samples are empty', () => {
+    expect(formatAverageDuration(readUsageStats({ ...base, averageDurationSampleCount: 0 }))).toBe(
+      '—',
+    );
   });
 });

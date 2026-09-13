@@ -412,8 +412,30 @@ export const usageStatsSchema = z
     totalActualCost: z.number().finite().nonnegative(),
     totalCost: z.number().finite().nonnegative(),
     averageDurationMs: z.number().finite().nonnegative(),
+    averageCacheRate: z.number().finite().nonnegative().optional(),
+    averageDurationSampleCount: z.number().int().nonnegative().optional(),
+    averageCacheRateSampleCount: z.number().int().nonnegative().optional(),
   })
   .strict();
+export const connectivityTestStartSchema = z
+  .object({
+    siteId: siteIdSchema,
+    keyId: z.string().min(1).max(128),
+    model: z.string().trim().min(1).max(200),
+    prompt: z.string().trim().min(1).max(4000),
+  })
+  .strict();
+export const connectivityEventSchema = z
+  .object({
+    requestId: z.string().min(1).max(128),
+    type: z.enum(['started', 'delta', 'completed', 'failed', 'cancelled']),
+    message: z.string().max(8000).optional(),
+    maskedKey: z.string().max(120).optional(),
+    model: z.string().max(200).optional(),
+  })
+  .strict();
+export type ConnectivityTestStart = z.infer<typeof connectivityTestStartSchema>;
+export type ConnectivityEvent = z.infer<typeof connectivityEventSchema>;
 export type ApiKeyListQuery = z.input<typeof apiKeyListQuerySchema>;
 export type ApiKeyDetailRequest = z.infer<typeof apiKeyDetailRequestSchema>;
 export type ApiKeyGroupUpdateRequest = z.infer<typeof apiKeyGroupUpdateRequestSchema>;

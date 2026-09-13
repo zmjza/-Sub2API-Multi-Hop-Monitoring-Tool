@@ -18,6 +18,8 @@ import type {
   ApiKeyManagementPayload,
   ManagedApiKey,
   ChannelAssociation,
+  ConnectivityEvent,
+  ConnectivityTestStart,
 } from '../shared/contracts.js';
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 import type { RadarEmbedState, RadarEntry, RadarEntryInput } from '../shared/radar.js';
@@ -124,6 +126,9 @@ export interface DesktopBridge {
     apiKeys(query: ApiKeyListQuery): Promise<ApiKeyManagementPayload>;
     updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey>;
     copyApiKey(input: { siteId: string; keyId: string }): Promise<{ copied: boolean }>;
+    startConnectivityTest(input: ConnectivityTestStart): Promise<{ requestId: string }>;
+    cancelConnectivityTest(requestId: string): Promise<{ cancelled: boolean }>;
+    onConnectivityEvent(listener: (event: ConnectivityEvent) => void): () => void;
     keyContexts(): Promise<SiteKeyContexts>;
     keyPreference(siteId: string): Promise<unknown>;
     setKeyPreference(

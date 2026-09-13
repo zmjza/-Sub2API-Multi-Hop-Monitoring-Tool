@@ -4,36 +4,43 @@
 }
 .usage-summary {
   display: flex;
-  gap: 24px;
+  gap: 12px;
   margin-bottom: 24px;
+  min-width: 0;
 }
 .usage-stat {
   height: 120px;
   background: #fff;
   border: 1px solid rgba(199, 196, 216, 0.3);
   border-radius: 8px;
-  padding: 24px;
+  padding: 18px 12px;
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
+  flex: 1 1 0;
+  overflow: hidden;
 }
 .usage-stat.requests,
 .usage-stat.duration {
-  width: 20%;
+  flex: 0.9 1 0;
+}
+.usage-stat.cache-rate {
+  flex: 0.9 1 0;
 }
 .usage-stat.tokens {
-  width: 35%;
+  flex: 1.7 1 0;
 }
 .usage-stat.cost-stat {
-  width: 25%;
+  flex: 1.05 1 0;
 }
 .usage-stat-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   display: grid;
   place-items: center;
-  flex: 0 0 48px;
+  flex: 0 0 40px;
 }
 .requests {
   background: rgba(79, 70, 229, 0.05);
@@ -63,11 +70,19 @@
   background: rgba(139, 92, 246, 0.1);
   color: #7c3aed;
 }
+.cache-rate {
+  background: rgba(6, 182, 212, 0.05);
+}
+.cache-rate .usage-stat-icon {
+  background: rgba(6, 182, 212, 0.1);
+  color: #0891b2;
+}
 .usage-stat > div:last-child {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  overflow: hidden;
 }
 .usage-stat small {
   font-size: 12px;
@@ -84,8 +99,11 @@
   color: #777587;
 }
 .usage-summary b {
-  font-size: 28px;
+  font-size: 22px;
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .usage-panel,
 .usage-table-panel {
@@ -436,7 +454,7 @@
   .usage-summary {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
+    gap: 12px;
   }
   .usage-summary > .usage-stat,
   .usage-summary > .usage-stat.tokens {
@@ -458,6 +476,16 @@
   }
   .usage-stat small {
     max-width: 100%;
+  }
+}
+@media (min-width: 1301px) {
+  .usage-stat-icon {
+    width: 48px;
+    height: 48px;
+    flex-basis: 48px;
+  }
+  .usage-summary b {
+    font-size: 28px;
   }
 }
 .custom-date-range {

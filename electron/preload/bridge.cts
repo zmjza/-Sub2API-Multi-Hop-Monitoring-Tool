@@ -105,6 +105,15 @@ const desktopBridge: DesktopBridge = {
     apiKeys: (query) => ipcRenderer.invoke('api-keys:list', query),
     updateApiKeyGroup: (input) => ipcRenderer.invoke('api-keys:update-group', input),
     copyApiKey: (input) => ipcRenderer.invoke('api-keys:copy', input),
+    startConnectivityTest: (input) => ipcRenderer.invoke('connectivity:test:start', input),
+    cancelConnectivityTest: (requestId) =>
+      ipcRenderer.invoke('connectivity:test:cancel', requestId),
+    onConnectivityEvent: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('connectivity:event', handler);
+      return () => ipcRenderer.removeListener('connectivity:event', handler);
+    },
     keyContexts: () => ipcRenderer.invoke('keys:contexts'),
     keyPreference: (siteId) => ipcRenderer.invoke('keys:preference:get', siteId),
     setKeyPreference: (siteId, value) =>

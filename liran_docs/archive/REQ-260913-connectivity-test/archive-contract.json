@@ -1,0 +1,28 @@
+{
+  "task_id": "REQ-260913-connectivity-test",
+  "artifact_task_ids": ["REQ-260913-connectivity-test"],
+  "goal_stage": "final",
+  "acceptance_owner": "Codex 真机测试",
+  "source_state": "真机测试通过",
+  "archive_state": "已归档",
+  "final_state": "已完成",
+  "unresolved_states": [],
+  "cleanup_performed": true,
+  "other_active_tasks_preserved": true,
+  "current_index_valid": true,
+  "completed_residue_absent": true,
+  "active_task_ids_before": ["REQ-260913-connectivity-test", "REQ-260904-usage-navigation-motion"],
+  "active_task_ids_after": ["REQ-260904-usage-navigation-motion"],
+  "requirements_path": "/Users/liran/Documents/中转站悬浮窗/liran_docs/archive/REQ-260913-connectivity-test/任务归档.md",
+  "archive_path": "/Users/liran/Documents/中转站悬浮窗/liran_docs/archive/REQ-260913-connectivity-test",
+  "steps": [
+    "长期事实已更新",
+    "归档已创建",
+    "归档内容已校验",
+    "归档索引已更新",
+    "活动区已按任务 ID 清理",
+    "其他活动任务未受影响",
+    "当前索引有效",
+    "活动区无已完成残留"
+  ]
+}
