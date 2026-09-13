@@ -249,6 +249,7 @@ export function ChannelStatusPopover(props: {
   }, [props.anchor, props.onClose]);
 
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
+  const monitorSource = props.cache?.channels?.monitorSource ?? 'v1';
   const model = detail?.models[0];
   const displayTimeline = selected
     ? channelTimelineForDisplay(selected.timeline ?? [], Date.now(), 20)
@@ -277,7 +278,7 @@ export function ChannelStatusPopover(props: {
   return createPortal(
     <div
       ref={panelRef}
-      className="rate-channel-popover"
+      className={`rate-channel-popover monitor-${monitorSource}`}
       style={style}
       role="dialog"
       aria-label={`${props.siteName} 渠道状态`}

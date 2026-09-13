@@ -33,6 +33,39 @@ V2 路由受功能开关和 mode=v2 guard 保护，404/405/未启用属于能力
 
 所有同时兼容旧版渠道监测和 channel-monitor-v2 的站点状态读取流程。
 
+## 所选 Key 的模型列表不能复用站点登录态模型接口
+
+**现象**
+
+测试连通性弹窗选择 API Key 后模型为空，导致开始测试按钮一直不可用。
+
+**根因**
+
+usage/dashboard/models 表示登录态可见模型，不能证明当前 API Key 的模型权限；切换 Key 若未触发重新加载，还会继续显示旧 Key 模型。
+
+**正确做法**
+
+主进程按 siteId 和 keyId 校验 active Key 并使用该 Key 请求站点根地址 /v1/models，Renderer 只接收脱敏模型 ID 列表。Key 变化时取消或忽略旧请求，成功后选择第一项；空列表和错误保持明确空态。
+
+**验证方式**
+
+覆盖默认 Key、切换 Key、非数字 keyId、三种模型响应形状、HTTP 错误、超时、非法 JSON、空列表和迟到响应；检查完整 Key 不出现在 Renderer、IPC、日志和截图。
+
+**禁止事项**
+
+不要把 usage/dashboard/models 当作所选 Key 的权限列表；不要在 Renderer 读取完整 secret；不要保留旧 Key 模型或静默回退其他 Key。
+
+**相关文件或命令**
+
+- src/renderer/shells/overview/ConnectivityTestModal.tsx
+- electron/preload/index.ts
+- electron/preload/bridge.cts
+- electron/main/index.ts
+
+**适用范围**
+
+全部站点普通文本连通性测试。
+
 ## 非数字 Key ID 不能走 assertNumericId
 
 **现象**
@@ -977,6 +1010,38 @@ fake timer 测试分别断言自动轮询不绕过退避、人工重试可单次
 **适用范围**
 
 所有基于 `Wei-Shaw/sub2api` 二开的 Sub2API 服务器快捷入口功能。
+
+## 按 Key 获取模型不能复用后台用量模型接口
+
+**现象**
+
+测试连通性弹窗切换 Key 后模型列表为空，或仍显示旧 Key 的模型，导致无法开始测试。
+
+**根因**
+
+后台用量模型接口使用管理访问令牌，返回的是站点统计范围模型；测试请求实际使用用户选择的 API Key，两者模型权限可能不同。
+
+**正确做法**
+
+主进程先读取并校验当前站点的 active Key secret，再以该 Key 请求站点根地址 `/v1/models`，归一化数组、`data` 或 `models` 容器；Renderer 每次切换 Key 都清空旧模型并取消/忽略旧请求结果。
+
+**验证方式**
+
+运行 `electron/main/adapters/sub2api-adapter.test.ts`，确认请求路径、Bearer 值、响应形状和去重结果；运行完整 Vitest、typecheck、lint 和构建。
+
+**禁止事项**
+
+不要用管理 access token 代替所选 Key；不要把完整 Key 返回 Renderer 或写入日志；不要在切换 Key 后保留旧模型。
+
+**相关文件或命令**
+
+- `electron/main/adapters/sub2api-adapter.ts`
+- `electron/main/services/site-service.ts`
+- `src/renderer/shells/overview/ConnectivityTestModal.tsx`
+
+**适用范围**
+
+所有多 Key 站点的模型选择和连通性测试。
 
 ## 自签名证书上游导致 Sub2API 模型同步为空、账号导入失败
 

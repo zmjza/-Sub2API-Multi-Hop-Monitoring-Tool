@@ -425,6 +425,9 @@ export const connectivityTestStartSchema = z
     prompt: z.string().trim().min(1).max(4000),
   })
   .strict();
+export const keyModelsRequestSchema = z
+  .object({ siteId: siteIdSchema, keyId: z.string().min(1).max(128) })
+  .strict();
 export const connectivityEventSchema = z
   .object({
     requestId: z.string().min(1).max(128),
@@ -435,6 +438,7 @@ export const connectivityEventSchema = z
   })
   .strict();
 export type ConnectivityTestStart = z.infer<typeof connectivityTestStartSchema>;
+export type KeyModelsRequest = z.infer<typeof keyModelsRequestSchema>;
 export type ConnectivityEvent = z.infer<typeof connectivityEventSchema>;
 export type ApiKeyListQuery = z.input<typeof apiKeyListQuerySchema>;
 export type ApiKeyDetailRequest = z.infer<typeof apiKeyDetailRequestSchema>;
@@ -493,6 +497,7 @@ export const channelDetailSchema = z
 export const channelViewSchema = z
   .object({
     state: z.enum(['supported', 'unsupported']),
+    monitorSource: z.enum(['v1', 'v2']).optional(),
     fetchedAt: z.number().int().nonnegative().optional(),
     stale: z.boolean().optional(),
     error: z.string().max(500).optional(),

@@ -77,6 +77,7 @@ export function ChannelsPage(props: ChannelsProps) {
   const selectedItem =
     rankedChannels.find((item) => item.id === props.selectedChannelId) ?? rankedChannels[0];
   const detail = readChannelDetail(props.channelDetail);
+  const monitorSource = liveChannels?.monitorSource ?? 'v1';
   const detailModel =
     detail?.models.find((model) => model.model === selectedItem?.primaryModel) ?? detail?.models[0];
   const detailStatus = detailModel?.status ?? selectedItem?.status ?? 'unknown';
@@ -91,7 +92,7 @@ export function ChannelsPage(props: ChannelsProps) {
   const sync = channelSyncPresentation(props.state, props.channelsData);
   const stale = isChannelDataStale(props.channelsData);
   return (
-    <section className="channels-page">
+    <section className={`channels-page monitor-${monitorSource}`}>
       <div className="channel-toolbar">
         <button
           className="channel-refresh"

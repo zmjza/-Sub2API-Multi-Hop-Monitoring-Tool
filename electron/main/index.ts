@@ -55,6 +55,7 @@ import {
   apiKeyManagementPayloadSchema,
   managedApiKeySchema,
   connectivityTestStartSchema,
+  keyModelsRequestSchema,
   connectivityEventSchema,
 } from '../shared/contracts.js';
 import { opencodexLogsQuerySchema } from '../shared/opencodex.js';
@@ -479,6 +480,12 @@ function registerIpc() {
   ipcMain.handle('usage:models', async (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
     return usageFilterOptionsSchema.shape.models.parse(await siteService.usageModels(siteId));
+  });
+  ipcMain.handle('usage:key-models', async (_event, input: unknown) => {
+    const request = keyModelsRequestSchema.parse(input);
+    return usageFilterOptionsSchema.shape.models.parse(
+      await siteService.keyModels(request.siteId, request.keyId),
+    );
   });
   ipcMain.handle('usage:csv', async (_event, input: unknown) => {
     const csv = await siteService.usageCsv(usageQuerySchema.parse(input));

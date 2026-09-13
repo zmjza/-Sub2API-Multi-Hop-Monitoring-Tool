@@ -191,7 +191,22 @@ export class Sub2ApiAdapter {
     timezone: string,
     prefer: 'v2' | 'v1' | 'auto' = 'auto',
   ): Promise<OptionalChannelReadResult> {
-    if (prefer === 'v1') return this.readV1Channels(accessToken);
+    if (prefer !== 'v2') {
+      const v1 = await this.readV1Channels(accessToken);
+      if (prefer === 'v1' || (v1.state === 'supported' && v1.channels.length > 0)) return v1;
+      if (v1.state === 'unsupported' || (v1.state === 'supported' && v1.channels.length === 0)) {
+        const v2 = await this.readV2Channels(accessToken, timezone);
+        if (v2.state === 'supported') return v2;
+      }
+      return v1;
+    }
+    return this.readV2Channels(accessToken, timezone);
+  }
+
+  private async readV2Channels(
+    accessToken: string,
+    timezone: string,
+  ): Promise<OptionalChannelReadResult> {
     try {
       const raw = await this.client.getJson(
         '/channel-monitor-v2/matrix?range=90m&group_by=platform_group&timezone=' +
@@ -201,7 +216,7 @@ export class Sub2ApiAdapter {
       );
       const normalized = normalizeV2Matrix(raw);
       if (!normalized.ok) {
-        return this.readV1Channels(accessToken);
+        return { state: 'unsupported', monitorSource: 'v2', channels: [] };
       }
       const available = await this.readAvailableChannels(accessToken);
       return {
@@ -214,7 +229,7 @@ export class Sub2ApiAdapter {
     } catch (error) {
       const kind = classifyV2Failure(error);
       if (kind !== 'missing') throw error;
-      return this.readV1Channels(accessToken);
+      return { state: 'unsupported', monitorSource: 'v2', channels: [] };
     }
   }
 
@@ -561,6 +576,32 @@ export class Sub2ApiAdapter {
         })
       : [];
     return [...new Set(models)];
+  }
+
+  async readKeyModels(apiKey: string): Promise<string[]> {
+    if (!apiKey || apiKey.length > 512) throw new Error('Invalid API key');
+    const raw = await this.client.getJson('/v1/models', apiKey, 'keyModels');
+    const payload = unwrapPayload(raw);
+    const container = asRecord(payload);
+    const values = Array.isArray(payload)
+      ? payload
+      : Array.isArray(container?.data)
+        ? container.data
+        : Array.isArray(container?.models)
+          ? container.models
+          : [];
+    return [
+      ...new Set(
+        values
+          .flatMap((item) => {
+            if (typeof item === 'string') return [item.trim()];
+            const record = asRecord(item);
+            const id = stringOrUndefined(record?.id ?? record?.name ?? record?.model);
+            return id ? [id] : [];
+          })
+          .filter(Boolean),
+      ),
+    ];
   }
 
   async readTodayRequestsByKey(accessToken: string, keys: Array<{ id: string }>, timezone: string) {

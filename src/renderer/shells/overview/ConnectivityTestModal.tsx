@@ -51,16 +51,25 @@ export function ConnectivityTestModal(props: {
       setModel('gpt-5.6-sol');
       return;
     }
-    void desktop.sites.usageModels(props.siteId).then((value) => {
-      if (cancelled) return;
-      const next = Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
-      setModels(next);
-      setModel(next[0] ?? '');
-    });
+    setModels([]);
+    setModel('');
+    void desktop.sites
+      .keyModels({ siteId: props.siteId, keyId })
+      .then((value) => {
+        if (cancelled) return;
+        const next = Array.isArray(value) ? value.filter((item) => typeof item === 'string') : [];
+        setModels(next);
+        setModel(next[0] ?? '');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setModels([]);
+        setModel('');
+      });
     return () => {
       cancelled = true;
     };
-  }, [props.siteId]);
+  }, [props.siteId, keyId]);
 
   useEffect(() => {
     const desktop = window.sub2apiDesktop;

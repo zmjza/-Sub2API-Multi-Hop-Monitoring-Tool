@@ -80,6 +80,7 @@ const desktopBridge: DesktopBridge = {
     usageStats: (query) => ipcRenderer.invoke('usage:stats', query),
     usageGroups: (siteId) => ipcRenderer.invoke('usage:groups', siteId),
     usageModels: (siteId) => ipcRenderer.invoke('usage:models', siteId),
+    keyModels: (input) => ipcRenderer.invoke('usage:key-models', input),
     usageCsv: (query) => ipcRenderer.invoke('usage:csv', query),
     opencodexLogs: (query) => ipcRenderer.invoke('opencodex:logs', query),
     channels: (siteId) => ipcRenderer.invoke('channels:list', siteId),

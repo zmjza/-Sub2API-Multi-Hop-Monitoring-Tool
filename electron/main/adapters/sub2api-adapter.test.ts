@@ -254,42 +254,37 @@ describe('Sub2ApiAdapter', () => {
     });
   });
 
-  it('uses V2 matrix when the contract is valid and does not call V1', async () => {
+  it('uses V1 first even when V2 is also available', async () => {
     const adapter = new Sub2ApiAdapter({
       getJson: async (path: string) => {
-        if (path.includes('/channel-monitor-v2/matrix')) {
+        if (path === '/channel-monitors') {
           return {
-            code: 0,
-            data: {
-              group_by: 'platform_group',
-              coverage: { data_through: '2026-09-13T12:05:00Z', coverage_complete: true },
-              items: [
-                {
-                  platform: 'anthropic',
-                  group_id: 130,
-                  group_name: 'Claude-Aws',
-                  metrics: {
-                    request_count: 12,
-                    has_requests: true,
-                    success_rate: 0.8,
-                    ttft: { trimmed_avg_ms: 1500 },
-                  },
-                  health: { overall: 'warning' },
-                  buckets: [],
-                },
-              ],
-            },
+            data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] },
           };
         }
-        if (path === '/channel-monitors') throw new Error('must not fall back to V1');
         return {};
       },
     });
     await expect(adapter.readOptionalChannels('access')).resolves.toMatchObject({
       state: 'supported',
-      monitorSource: 'v2',
-      channels: [{ id: '130', name: 'Claude-Aws', status: 'degraded', latencyMs: 1500 }],
+      monitorSource: 'v1',
+      channels: [{ id: '1', name: 'old', status: 'normal' }],
     });
+  });
+
+  it('reads models with the selected API key as bearer credential', async () => {
+    const calls: string[] = [];
+    const adapter = new Sub2ApiAdapter({
+      getJson: async (path: string, token: string) => {
+        calls.push(`${path}:${token}`);
+        return { data: { data: [{ id: 'gpt-5.6-sol' }, { id: 'claude-3' }] } };
+      },
+    });
+    await expect(adapter.readKeyModels('selected-key')).resolves.toEqual([
+      'gpt-5.6-sol',
+      'claude-3',
+    ]);
+    expect(calls).toEqual(['/v1/models:selected-key']);
   });
 
   it('falls back to V1 when V2 is missing', async () => {
@@ -321,6 +316,7 @@ describe('Sub2ApiAdapter', () => {
         if (path.includes('/channel-monitor-v2/matrix')) {
           throw { code: 'AUTH_REQUIRED', message: 'auth', retryable: false, httpStatus: 401 };
         }
+        if (path === '/channel-monitors') throw { code: 'UNSUPPORTED_CAPABILITY', httpStatus: 404 };
         return { data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] } };
       },
     });
@@ -333,6 +329,7 @@ describe('Sub2ApiAdapter', () => {
         if (path.includes('/channel-monitor-v2/matrix')) {
           throw { code: 'RATE_LIMITED', message: 'slow down', retryable: true, httpStatus: 429 };
         }
+        if (path === '/channel-monitors') throw { code: 'UNSUPPORTED_CAPABILITY', httpStatus: 404 };
         return { data: { items: [{ id: 1, name: 'old', primary_status: 'operational' }] } };
       },
     });

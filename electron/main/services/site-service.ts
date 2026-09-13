@@ -1017,6 +1017,18 @@ export class SiteService {
     );
   }
 
+  async keyModels(siteId: string, keyId: string) {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    const key = this.listKeys(siteId).find(
+      (candidate) => candidate.id === keyId && candidate.status === 'active',
+    );
+    if (!key) throw new Error('KEY_UNAVAILABLE');
+    const apiKey = await this.revealApiKey(siteId, keyId);
+    const client = new Sub2ApiClient(site.baseUrl);
+    return new Sub2ApiAdapter(client).readKeyModels(apiKey);
+  }
+
   async channels(siteId: string) {
     const site = this.db.listSites().find((candidate) => candidate.id === siteId);
     const credential = site ? this.vault.read(site.id) : undefined;
@@ -1052,6 +1064,7 @@ export class SiteService {
     }
     const next = {
       state: result.state,
+      ...(result.monitorSource ? { monitorSource: result.monitorSource } : {}),
       channels: result.channels,
       ...(result.availableChannels ? { availableChannels: result.availableChannels } : {}),
       ...(result.availableChannelsState

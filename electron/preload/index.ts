@@ -20,6 +20,7 @@ import type {
   ChannelAssociation,
   ConnectivityEvent,
   ConnectivityTestStart,
+  KeyModelsRequest,
 } from '../shared/contracts.js';
 import type { UpdateCheckResult, UpdateManifest } from '../main/services/update-service.js';
 import type { RadarEmbedState, RadarEntry, RadarEntryInput } from '../shared/radar.js';
@@ -103,6 +104,7 @@ export interface DesktopBridge {
     usageStats(query: UsageQuery): Promise<UsageStats>;
     usageGroups(siteId: string): Promise<unknown>;
     usageModels(siteId: string): Promise<unknown>;
+    keyModels(input: KeyModelsRequest): Promise<string[]>;
     usageCsv(query: UsageQuery): Promise<{ canceled: boolean; filePath?: string }>;
     opencodexLogs(query?: OpenCodexLogsQuery): Promise<OpenCodexLogsPayload>;
     channels(siteId: string): Promise<unknown>;

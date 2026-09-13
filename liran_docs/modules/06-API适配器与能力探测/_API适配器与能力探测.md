@@ -68,6 +68,16 @@
 
 适配层拆为安全基址探测、标准客户端和能力矩阵三个稳定边界。
 
+### REQ-260914 渠道监测协议事实（2026-09-14）
+
+渠道状态按站点优先探测 V1 `/api/v1/channel-monitors`，仅在明确不支持时探测 V2 `/api/v1/channel-monitor-v2/snapshot` 与 `/matrix`；主进程负责契约校验、错误分类和脱敏归一化，Renderer 只接收 `monitorSource` 安全载荷。
+
+### REQ-260914 合并任务的 Key 模型查询事实（2026-09-14）
+
+- Renderer 只提交 siteId 和 keyId；主进程校验站点与 active Key 后读取 secret，请求站点根地址的 /v1/models。
+- 模型响应归一化为脱敏模型 ID 列表，兼容 data 数组、data.models 和 models 三种形状以及 id/model/name 字段；空值过滤、去重和数量上限在适配器边界完成。
+- 401/403/404/429/5xx、超时、非法 JSON 和空列表必须分类为可理解错误或空态，不能把 usage/dashboard/models 当成所选 Key 模型权限来源。
+
 ### 基址探测
 
 - 对规范化站点 URL 尝试有限候选前缀；不得任意扫描路径。
