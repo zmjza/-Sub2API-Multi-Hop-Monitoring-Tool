@@ -1,0 +1,22 @@
+{
+  "task_id": "REQ-260914-channel-status-dual-ui",
+  "artifact_task_ids": ["REQ-260914-channel-status-dual-ui", "REQ-260915-connectivity-test-models"],
+  "goal_stage": "final",
+  "acceptance_owner": "Codex macOS 源码 Electron 验收，用户确认真机页面无问题",
+  "source_state": "用户验收通过",
+  "archive_state": "已归档",
+  "final_state": "已完成",
+  "unresolved_states": [],
+  "known_limitations": ["真实远程站点刷新受网络/凭据解密限制，未纳入通过结论", "Windows 仅 x64 交叉构建与结构验证"],
+  "cleanup_performed": true,
+  "other_active_tasks_preserved": true,
+  "current_index_valid": true,
+  "completed_residue_absent": true,
+  "active_task_ids_before": ["REQ-260914-channel-status-dual-ui", "REQ-260904-usage-navigation-motion"],
+  "active_task_ids_after": ["REQ-260904-usage-navigation-motion"],
+  "requirements_path": "liran_docs/requirements/REQ-260914-channel-status-dual-ui-PRD.md",
+  "archive_path": "liran_docs/archive/REQ-260914-channel-status-dual-ui",
+  "confirmation_message": "归档吧，归档完毕记得回收目标模式。",
+  "confirmation_date": "2026-09-14",
+  "steps": ["长期事实已更新", "归档已创建", "归档内容与证据路径已校验", "归档索引已更新", "活动区按任务 ID 清理", "其他活动任务未受影响", "当前索引有效", "活动区无本任务残留"]
+}
