@@ -1,5 +1,37 @@
 # Electron 构建避坑
 
+## 源码 Electron 真机验收要隔离旧打包实例
+
+**现象**
+
+Computer Use 或桌面读取到的窗口 URL 仍指向 release/ 旧包，源码改动看起来没有生效。
+
+**根因**
+
+源码与已安装包共用 Electron 应用标识；旧实例存活时会抢占新启动请求，导致截图来源错误。
+
+**正确做法**
+
+先关闭旧打包实例，再用独立 SUB2API_TEST_USER_DATA 启动源码 Electron；截图和 DOM 证据必须确认 URL/版本来自当前工作区 dist。
+
+**验证方式**
+
+使用 Playwright _electron.launch({ args: ['.'], env: { SUB2API_TEST_USER_DATA: <临时目录> } })，并在页面上断言目标 Shell、版本徽标和协议壳，再保存截图。
+
+**禁止事项**
+
+不要把 release/ 窗口截图冒充源码真机验收；不要为了抢占窗口复制真实凭据或删除用户数据。
+
+**相关文件或命令**
+
+- electron/main/index.ts
+- tests/e2e/channel-v2-real.spec.ts
+- SUB2API_TEST_USER_DATA
+
+**适用范围**
+
+所有需要在 macOS 桌面窗口中验收当前源码 Renderer 的任务。
+
 ## 渠道实时刷新不能放在 Renderer 页面定时器
 
 **现象**

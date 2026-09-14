@@ -7,6 +7,10 @@ real-test-evidence/
 test-results/
 playwright-report/
 liran_docs/stitch-artifacts/
+liran_docs/04-开发追踪.md
+liran_docs/08-测试用例.md
+liran_docs/09-真机实测.md
+tests/e2e/channel-v2-real.spec.ts
 *.sqlite
 *.sqlite-*
 credentials.json
