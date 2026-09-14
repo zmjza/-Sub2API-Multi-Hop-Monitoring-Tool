@@ -557,3 +557,34 @@ Electron 透明/圆角窗口内的模态遮罩、点击外部关闭与无障碍�
 **适用范围**
 
 GitHub Release 发布、发布中断后重跑、重复发布和客户端在线更新的资产一致性验证。
+
+# Electron E2E 本地站点夹具必须提供按 Key 的模型端点
+
+**现象**
+
+连通性弹窗能正常打开，但“开始测试”持续禁用。
+
+**根因**
+
+实现已切换为使用所选 Key 请求 `/v1/models`，旧 E2E 夹具只实现了管理用量模型接口，没有提供根地址模型接口。
+
+**正确做法**
+
+本地 Sub2API 夹具同时提供 `GET /v1/models`，响应至少包含一个模型，并在测试中统计请求次数。
+
+**验证方式**
+
+运行 `npx playwright test tests/e2e/electron-smoke.spec.ts -g 'connects site entry'`，确认弹窗启用“开始测试”并收到 `pong`。
+
+**禁止事项**
+
+不要把管理 token 的 `/api/v1/usage/dashboard/models` 响应冒充 Key 模型列表。
+
+**相关文件或命令**
+
+- `tests/e2e/electron-smoke.spec.ts`
+- `electron/main/adapters/sub2api-adapter.ts`
+
+**适用范围**
+
+所有按用户 API Key 获取模型的连通性测试 E2E。

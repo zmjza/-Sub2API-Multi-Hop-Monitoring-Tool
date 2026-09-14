@@ -45,6 +45,34 @@ describe('readChannelItems', () => {
     expect(readChannelItems(undefined)).toEqual([]);
   });
 
+  it('preserves the V2-only metric payload for the renderer', () => {
+    const v2 = {
+      cacheRate: 0.42,
+      successRate: 0.91,
+      ttftMs: 1200,
+      buckets: [{ checkedAt: '2026-09-14T01:00:00Z', status: 'normal' as const }],
+    };
+    expect(
+      readChannelItems({
+        state: 'supported',
+        monitorSource: 'v2',
+        channels: [
+          {
+            id: 'v2-1',
+            name: 'V2 channel',
+            platform: 'openai',
+            groupName: 'V2',
+            primaryModel: '',
+            extraModels: [],
+            status: 'normal',
+            timeline: [],
+            v2,
+          },
+        ],
+      })[0]?.v2,
+    ).toEqual(v2);
+  });
+
   it('keeps channel health surfaces free of multiplier conversion UI', () => {
     const page = readFileSync(
       fileURLToPath(new URL('./ChannelsPage.tsx', import.meta.url)),

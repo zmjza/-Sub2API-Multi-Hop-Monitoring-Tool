@@ -251,6 +251,7 @@ export function ChannelStatusPopover(props: {
   const status = detail?.models[0]?.status ?? selected?.status ?? 'unknown';
   const monitorSource = props.cache?.channels?.monitorSource ?? 'v1';
   const model = detail?.models[0];
+  const v2 = selected?.v2;
   const displayTimeline = selected
     ? channelTimelineForDisplay(selected.timeline ?? [], Date.now(), 20)
     : [];
@@ -389,18 +390,32 @@ export function ChannelStatusPopover(props: {
             </div>
           ) : null}
           <div className="rate-channel-metrics">
-            <span>
-              <Zap size={14} />
-              对话延迟 <b>{formatMilliseconds(selected.latencyMs)}</b>
-            </span>
-            <span>
-              <Globe2 size={14} />
-              端点 PING <b>{formatMilliseconds(selected.pingMs)}</b>
-            </span>
-            <span>
-              <Clock3 size={14} />7 天可用率{' '}
-              <b>{formatAvailability(model?.availability7d ?? selected.availability7d)}</b>
-            </span>
+            {v2 ? (
+              <>
+                <span>
+                  可用率 <b>{formatRate(v2.successRate)}</b>
+                </span>
+                <span>
+                  缓存率 <b>{formatRate(v2.cacheRate)}</b>
+                </span>
+                <span>
+                  <Clock3 size={14} /> 首 Token <b>{formatMilliseconds(v2.ttftMs)}</b>
+                </span>
+              </>
+            ) : (
+              <>
+                <span>
+                  <Zap size={14} /> 对话延迟 <b>{formatMilliseconds(selected.latencyMs)}</b>
+                </span>
+                <span>
+                  <Globe2 size={14} /> 端点 PING <b>{formatMilliseconds(selected.pingMs)}</b>
+                </span>
+                <span>
+                  <Clock3 size={14} />7 天可用率{' '}
+                  <b>{formatAvailability(model?.availability7d ?? selected.availability7d)}</b>
+                </span>
+              </>
+            )}
             <span>
               <CheckCircle2 size={14} />
               最近检查 <b>{formatCheckedAt(checkedAt)}</b>
@@ -516,6 +531,10 @@ function formatMilliseconds(value: number | undefined) {
 
 function formatAvailability(value: number | undefined) {
   return value === undefined ? '待查询' : `${value.toFixed(2)}%`;
+}
+
+function formatRate(value: number | undefined) {
+  return value === undefined ? '未知' : (value * 100).toFixed(2) + '%';
 }
 
 function formatCheckedAt(value: string | undefined) {

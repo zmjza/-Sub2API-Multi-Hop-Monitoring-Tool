@@ -1,6 +1,11 @@
 import { normalizeApiKey, upstreamApiKeySchema } from './schemas.js';
 import type { ApiKeySummary } from '../domain/types.js';
-import { classifyV2Failure, normalizeV2Matrix } from './channel-monitor-v2.js';
+import {
+  classifyV2Failure,
+  normalizeV2Matrix,
+  normalizeV2SnapshotMeta,
+} from './channel-monitor-v2.js';
+import type { V2SnapshotMeta } from './channel-monitor-v2.js';
 import type {
   ApiKeyBatchUsage,
   ApiKeyDailyUsage,
@@ -79,6 +84,23 @@ export interface NormalizedChannelSummary {
     pingMs?: number;
     checkedAt?: string;
   }>;
+  v2?: {
+    cacheRate?: number;
+    successRate?: number;
+    ttftMs?: number;
+    durationMs?: number;
+    requestCount?: number;
+    coveragePartial?: boolean;
+    dataThrough?: string;
+    buckets: Array<{
+      checkedAt: string;
+      status: NormalizedChannelStatus;
+      cacheRate?: number;
+      successRate?: number;
+      ttftMs?: number;
+      requestCount?: number;
+    }>;
+  };
 }
 
 export interface NormalizedAvailableChannel {
@@ -105,6 +127,7 @@ export interface NormalizedChannelDetail {
     availability30d?: number;
     averageLatency7dMs?: number;
   }>;
+  v2?: NormalizedChannelSummary['v2'];
 }
 
 export interface OptionalChannelReadResult {
@@ -114,6 +137,7 @@ export interface OptionalChannelReadResult {
   availableChannelsState?: 'complete' | 'empty' | 'partial' | 'error';
   monitorSource?: 'v1' | 'v2';
   v2Details?: Record<string, NormalizedChannelDetail>;
+  v2Meta?: V2SnapshotMeta;
 }
 
 export class Sub2ApiAdapter {
@@ -208,12 +232,21 @@ export class Sub2ApiAdapter {
     timezone: string,
   ): Promise<OptionalChannelReadResult> {
     try {
-      const raw = await this.client.getJson(
-        '/channel-monitor-v2/matrix?range=90m&group_by=platform_group&timezone=' +
-          encodeURIComponent(timezone),
-        accessToken,
-        'channelMonitorV2',
-      );
+      const [matrixResult, snapshotResult] = await Promise.allSettled([
+        this.client.getJson(
+          '/channel-monitor-v2/matrix?range=90m&group_by=platform_group&timezone=' +
+            encodeURIComponent(timezone),
+          accessToken,
+          'channelMonitorV2',
+        ),
+        this.client.getJson(
+          '/channel-monitor-v2/snapshot?range=90m&timezone=' + encodeURIComponent(timezone),
+          accessToken,
+          'channelMonitorV2Snapshot',
+        ),
+      ]);
+      if (matrixResult.status === 'rejected') throw matrixResult.reason;
+      const raw = matrixResult.value;
       const normalized = normalizeV2Matrix(raw);
       if (!normalized.ok) {
         return { state: 'unsupported', monitorSource: 'v2', channels: [] };
@@ -224,6 +257,10 @@ export class Sub2ApiAdapter {
         monitorSource: 'v2',
         channels: normalized.channels,
         v2Details: normalized.details,
+        v2Meta:
+          snapshotResult.status === 'fulfilled'
+            ? { ...normalized.meta, ...normalizeV2SnapshotMeta(snapshotResult.value) }
+            : normalized.meta,
         ...available,
       };
     } catch (error) {

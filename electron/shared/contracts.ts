@@ -451,6 +451,39 @@ export type ApiKeyBatchUsage = z.infer<typeof apiKeyBatchUsageSchema>;
 export type ApiKeyDailyUsage = z.infer<typeof apiKeyDailyUsageSchema>;
 export type UsageStats = z.infer<typeof usageStatsSchema>;
 const normalizedChannelStatusSchema = z.enum(['normal', 'degraded', 'failed', 'unknown']);
+const v2BucketSchema = z
+  .object({
+    checkedAt: z.string(),
+    status: normalizedChannelStatusSchema,
+    cacheRate: z.number().optional(),
+    successRate: z.number().optional(),
+    ttftMs: z.number().optional(),
+    requestCount: z.number().optional(),
+  })
+  .strict();
+const v2MetricsSchema = z
+  .object({
+    cacheRate: z.number().optional(),
+    successRate: z.number().optional(),
+    ttftMs: z.number().optional(),
+    durationMs: z.number().optional(),
+    requestCount: z.number().optional(),
+    coveragePartial: z.boolean().optional(),
+    dataThrough: z.string().optional(),
+    buckets: z.array(v2BucketSchema),
+  })
+  .strict();
+const v2MetaSchema = z
+  .object({
+    dataThrough: z.string().optional(),
+    coverageComplete: z.boolean().optional(),
+    refreshIntervalSeconds: z.number().optional(),
+    bootstrapActive: z.boolean().optional(),
+    bootstrapProgressPercent: z.number().optional(),
+    successRate: z.number().optional(),
+    cacheRate: z.number().optional(),
+  })
+  .strict();
 const channelTimelinePointSchema = z
   .object({
     status: normalizedChannelStatusSchema,
@@ -472,6 +505,7 @@ export const channelSummarySchema = z
     pingMs: z.number().optional(),
     availability7d: z.number().optional(),
     timeline: z.array(channelTimelinePointSchema),
+    v2: v2MetricsSchema.optional(),
   })
   .strict();
 const channelModelDetailSchema = z
@@ -492,6 +526,7 @@ export const channelDetailSchema = z
     platform: z.string(),
     groupName: z.string(),
     models: z.array(channelModelDetailSchema),
+    v2: v2MetricsSchema.optional(),
   })
   .strict();
 export const channelViewSchema = z
@@ -525,6 +560,7 @@ export const channelViewSchema = z
       .max(200)
       .optional(),
     availableChannelsState: z.enum(['complete', 'empty', 'partial', 'error']).optional(),
+    v2Meta: v2MetaSchema.optional(),
   })
   .strict();
 export const channelDetailViewSchema = z

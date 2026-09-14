@@ -5,6 +5,15 @@ import type {
 } from './sub2api-adapter.js';
 
 export type V2FailureKind = 'missing' | 'auth' | 'temporary';
+export interface V2SnapshotMeta {
+  dataThrough?: string;
+  coverageComplete?: boolean;
+  refreshIntervalSeconds?: number;
+  bootstrapActive?: boolean;
+  bootstrapProgressPercent?: number;
+  successRate?: number;
+  cacheRate?: number;
+}
 
 export type V2NormalizeResult =
   | {
@@ -13,6 +22,7 @@ export type V2NormalizeResult =
       details: Record<string, NormalizedChannelDetail>;
       coveragePartial: boolean;
       dataThrough?: string;
+      meta: V2SnapshotMeta;
     }
   | { ok: false };
 
@@ -61,6 +71,9 @@ export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
     const platform = stringOrUndefined(item.platform) ?? '';
     const timeline = normalizeBuckets(item.buckets, dataThrough);
     const successRate = numberOrUndefined(metrics.success_rate);
+    const cacheRate = numberOrUndefined(metrics.cache_rate);
+    const durationMs = numberOrUndefined(asRecord(metrics.duration)?.avg_ms);
+    const v2Buckets = normalizeV2Buckets(item.buckets, dataThrough);
     const channel: NormalizedChannelSummary = {
       id,
       name,
@@ -72,6 +85,18 @@ export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
       ...(latencyMs !== undefined ? { latencyMs } : {}),
       ...(successRate !== undefined ? { availability7d: successRate * 100 } : {}),
       timeline,
+      v2: {
+        ...(cacheRate !== undefined ? { cacheRate } : {}),
+        ...(successRate !== undefined ? { successRate } : {}),
+        ...(latencyMs !== undefined ? { ttftMs: latencyMs } : {}),
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(numberOrUndefined(metrics.request_count) !== undefined
+          ? { requestCount: numberOrUndefined(metrics.request_count) }
+          : {}),
+        coveragePartial,
+        ...(dataThrough ? { dataThrough } : {}),
+        buckets: v2Buckets,
+      },
     };
     channels.push(channel);
     details[id] = {
@@ -86,6 +111,18 @@ export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
           ...(latencyMs !== undefined ? { latestLatencyMs: latencyMs } : {}),
         },
       ],
+      v2: {
+        ...(cacheRate !== undefined ? { cacheRate } : {}),
+        ...(successRate !== undefined ? { successRate } : {}),
+        ...(latencyMs !== undefined ? { ttftMs: latencyMs } : {}),
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(numberOrUndefined(metrics.request_count) !== undefined
+          ? { requestCount: numberOrUndefined(metrics.request_count) }
+          : {}),
+        coveragePartial,
+        ...(dataThrough ? { dataThrough } : {}),
+        buckets: v2Buckets,
+      },
     };
   }
   return {
@@ -94,7 +131,75 @@ export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
     details,
     coveragePartial,
     ...(dataThrough ? { dataThrough } : {}),
+    meta: normalizeV2SnapshotMeta(data),
   };
+}
+
+export function normalizeV2SnapshotMeta(raw: unknown): V2SnapshotMeta {
+  const root = asRecord(raw);
+  const data = asRecord(root?.data) ?? root ?? {};
+  const coverage = asRecord(data.coverage) ?? {};
+  const bootstrap = asRecord(coverage.bootstrap) ?? {};
+  const trend = Array.isArray(data.trend) ? data.trend : [];
+  const latestTrend = [...trend]
+    .reverse()
+    .map(asRecord)
+    .find((entry) => asRecord(entry?.metrics));
+  const metrics = asRecord(latestTrend?.metrics) ?? asRecord(data.metrics) ?? {};
+  return {
+    ...(stringOrUndefined(coverage.data_through)
+      ? { dataThrough: stringOrUndefined(coverage.data_through) }
+      : {}),
+    ...(typeof coverage.coverage_complete === 'boolean'
+      ? { coverageComplete: coverage.coverage_complete }
+      : {}),
+    ...(numberOrUndefined(data.refresh_interval_seconds) !== undefined
+      ? { refreshIntervalSeconds: numberOrUndefined(data.refresh_interval_seconds) }
+      : {}),
+    ...(typeof bootstrap.active === 'boolean' ? { bootstrapActive: bootstrap.active } : {}),
+    ...(numberOrUndefined(bootstrap.progress_percent) !== undefined
+      ? { bootstrapProgressPercent: numberOrUndefined(bootstrap.progress_percent) }
+      : {}),
+    ...(numberOrUndefined(metrics.success_rate) !== undefined
+      ? { successRate: numberOrUndefined(metrics.success_rate) }
+      : {}),
+    ...(numberOrUndefined(metrics.cache_rate) !== undefined
+      ? { cacheRate: numberOrUndefined(metrics.cache_rate) }
+      : {}),
+  };
+}
+
+function normalizeV2Buckets(value: unknown, dataThrough?: string) {
+  if (!Array.isArray(value)) return [];
+  const ceiling = dataThrough ? Date.parse(dataThrough) : Number.NaN;
+  return value.flatMap((entry) => {
+    const bucket = asRecord(entry);
+    const checkedAt = stringOrUndefined(bucket?.bucket_start);
+    if (!bucket || !checkedAt) return [];
+    const start = Date.parse(checkedAt);
+    if (Number.isFinite(ceiling) && Number.isFinite(start) && start > ceiling) return [];
+    const metrics = asRecord(bucket.metrics) ?? {};
+    const health = asRecord(bucket.health) ?? {};
+    const ttft = asRecord(metrics.ttft) ?? {};
+    const requestCount = numberOrUndefined(metrics.request_count);
+    const noTraffic = metrics.has_requests === false || requestCount === 0;
+    return [
+      {
+        checkedAt,
+        status: noTraffic ? 'unknown' : mapHealth(health.overall),
+        ...(numberOrUndefined(metrics.cache_rate) !== undefined
+          ? { cacheRate: numberOrUndefined(metrics.cache_rate) }
+          : {}),
+        ...(numberOrUndefined(metrics.success_rate) !== undefined
+          ? { successRate: numberOrUndefined(metrics.success_rate) }
+          : {}),
+        ...((numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms)) !== undefined
+          ? { ttftMs: numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms) }
+          : {}),
+        ...(requestCount !== undefined ? { requestCount } : {}),
+      },
+    ];
+  });
 }
 
 function isV2Contract(data: Record<string, unknown>): boolean {

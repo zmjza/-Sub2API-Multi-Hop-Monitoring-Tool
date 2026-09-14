@@ -1244,6 +1244,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       );
     if (request.method === 'POST' && url === '/v1/chat/completions')
       return response.end(JSON.stringify({ choices: [{ message: { content: 'pong' } }] }));
+    if (request.method === 'GET' && url === '/v1/models') {
+      modelsRequestCount += 1;
+      return response.end(JSON.stringify({ data: [{ id: 'test-model' }] }));
+    }
     if (request.method === 'PUT' && url === '/api/v1/keys/101') {
       managedKeyGroupId = '202';
       return response.end(JSON.stringify({ data: { id: 101 } }));

@@ -61,6 +61,7 @@ export function RateChannelSummary(props: {
   const availability = model?.availability7d ?? props.channel.availability7d;
   const detailFailed = props.detailState?.state === 'error';
   const timeline = channelTimelineForDisplay(props.channel.timeline ?? [], Date.now(), 20);
+  const v2 = props.channel.v2;
 
   return (
     <div className={`rate-inline-channel is-${status}`} aria-label={`${props.groupName} 当前渠道`}>
@@ -115,9 +116,23 @@ export function RateChannelSummary(props: {
         更新于 {formatChannelFetchedAt(props.fetchedAt)}
       </time>
       <div className="rate-inline-channel-metrics">
-        <span>
-          7 天可用 <b>{formatAvailability(availability)}</b>
-        </span>
+        {v2 ? (
+          <>
+            <span>
+              可用率 <b>{formatRate(v2.successRate)}</b>
+            </span>
+            <span>
+              缓存率 <b>{formatRate(v2.cacheRate)}</b>
+            </span>
+            <span>
+              首 Token <b>{formatMilliseconds(v2.ttftMs)}</b>
+            </span>
+          </>
+        ) : (
+          <span>
+            7 天可用 <b>{formatAvailability(availability)}</b>
+          </span>
+        )}
         {props.detailState?.state === 'loading' && <RefreshCw size={12} className="spin" />}
         {detailFailed && (
           <button
@@ -183,4 +198,12 @@ function formatAvailability(value: number | undefined): string {
   return value === undefined || !Number.isFinite(value) || value < 0 || value > 100
     ? '待查询'
     : `${value.toFixed(2)}%`;
+}
+
+function formatRate(value: number | undefined): string {
+  return value === undefined ? '未知' : (value * 100).toFixed(2) + '%';
+}
+
+function formatMilliseconds(value: number | undefined): string {
+  return value === undefined ? '未知' : Math.round(value) + ' ms';
 }

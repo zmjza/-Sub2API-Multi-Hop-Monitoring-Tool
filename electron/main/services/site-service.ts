@@ -1070,6 +1070,7 @@ export class SiteService {
       ...(result.availableChannelsState
         ? { availableChannelsState: result.availableChannelsState }
         : {}),
+      ...(result.v2Meta ? { v2Meta: result.v2Meta } : {}),
       fetchedAt: Date.now(),
       stale: false,
     };

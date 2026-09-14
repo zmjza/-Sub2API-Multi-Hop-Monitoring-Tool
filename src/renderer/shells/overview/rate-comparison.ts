@@ -40,6 +40,12 @@ export interface RateChannelSnapshot {
   status: 'normal' | 'degraded' | 'failed' | 'unknown';
   availability7d?: number;
   timeline?: Array<{ status: 'normal' | 'degraded' | 'failed' | 'unknown'; checkedAt?: string }>;
+  v2?: {
+    cacheRate?: number;
+    successRate?: number;
+    ttftMs?: number;
+    buckets: Array<{ status: 'normal' | 'degraded' | 'failed' | 'unknown'; checkedAt: string }>;
+  };
 }
 
 export interface PlatformRateComparison {

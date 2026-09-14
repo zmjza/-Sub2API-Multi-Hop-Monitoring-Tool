@@ -26,6 +26,7 @@ import './channels.css';
 export function ChannelsPage(props: ChannelsProps) {
   const runtime = Boolean(window.sub2apiDesktop);
   const [period, setPeriod] = useState<7 | 15 | 30>(7);
+  const [v2Range, setV2Range] = useState<'90m' | '24h' | '7d' | '30d'>('90m');
   const refreshListenerRef = useRef(props.onRefreshChannels);
   const pollingRunningRef = useRef(false);
   refreshListenerRef.current = props.onRefreshChannels;
@@ -129,25 +130,49 @@ export function ChannelsPage(props: ChannelsProps) {
           </span>
         </div>
         <div className="period-tabs">
-          {[7, 15, 30].map((days) => (
-            <button
-              className={period === days ? 'active' : ''}
-              key={days}
-              onClick={() => setPeriod(days as 7 | 15 | 30)}
-            >
-              {days} 天
-            </button>
-          ))}
+          {monitorSource === 'v2'
+            ? (['90m', '24h', '7d', '30d'] as const).map((range) => (
+                <button
+                  className={v2Range === range ? 'active' : ''}
+                  key={range}
+                  onClick={() => setV2Range(range)}
+                >
+                  {range}
+                </button>
+              ))
+            : [7, 15, 30].map((days) => (
+                <button
+                  className={period === days ? 'active' : ''}
+                  key={days}
+                  onClick={() => setPeriod(days as 7 | 15 | 30)}
+                >
+                  {days} 天
+                </button>
+              ))}
         </div>
         <div className="detail-stats">
-          <span>
-            <Clock3 size={16} />
-            平均延迟 <b>{formatMilliseconds(detailLatency)}</b>
-          </span>
-          <span>
-            <Activity size={16} />
-            可用率 <b>{formatAvailability(detailAvailability)}</b>
-          </span>
+          {monitorSource === 'v2' ? (
+            <>
+              <span>
+                <Activity size={16} /> 可用率 <b>{formatRate(selectedItem?.v2?.successRate)}</b>
+              </span>
+              <span>
+                <Activity size={16} /> 缓存率 <b>{formatRate(selectedItem?.v2?.cacheRate)}</b>
+              </span>
+              <span>
+                <Clock3 size={16} /> 首 Token <b>{formatMilliseconds(selectedItem?.v2?.ttftMs)}</b>
+              </span>
+            </>
+          ) : (
+            <>
+              <span>
+                <Clock3 size={16} /> 平均延迟 <b>{formatMilliseconds(detailLatency)}</b>
+              </span>
+              <span>
+                <Activity size={16} /> 可用率 <b>{formatAvailability(detailAvailability)}</b>
+              </span>
+            </>
+          )}
         </div>
       </div>
       {unsupported ? (
@@ -180,7 +205,8 @@ export function ChannelsPage(props: ChannelsProps) {
                     <div>
                       <h3 title={item.name}>{item.name}</h3>
                       <span>
-                        <b>{item.platform || '平台待查询'}</b> · {item.primaryModel || '模型待查询'}
+                        <b>{item.platform || '平台待查询'}</b>
+                        {monitorSource === 'v1' ? ' · ' + (item.primaryModel || '模型待查询') : ''}
                       </span>
                     </div>
                   </div>
@@ -191,46 +217,96 @@ export function ChannelsPage(props: ChannelsProps) {
                   </div>
                 </div>
                 <div className="channel-metrics">
-                  <div>
-                    <span>
-                      <Zap size={14} />
-                      对话延迟
-                    </span>
-                    <strong>{formatMilliseconds(item.latencyMs)}</strong>
-                  </div>
-                  <div>
-                    <span>
-                      <Globe2 size={14} />
-                      端点 PING
-                    </span>
-                    <strong>{formatMilliseconds(item.pingMs)}</strong>
-                  </div>
+                  {monitorSource === 'v2' ? (
+                    <>
+                      <div>
+                        <span>
+                          <Activity size={14} /> 缓存率
+                        </span>
+                        <strong>{formatRate(item.v2?.cacheRate)}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          <Zap size={14} /> 首 Token
+                        </span>
+                        <strong>{formatMilliseconds(item.v2?.ttftMs)}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          <Activity size={14} /> 可用率
+                        </span>
+                        <strong>{formatRate(item.v2?.successRate)}</strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <span>
+                          <Zap size={14} /> 对话延迟
+                        </span>
+                        <strong>{formatMilliseconds(item.latencyMs)}</strong>
+                      </div>
+                      <div>
+                        <span>
+                          <Globe2 size={14} /> 端点 PING
+                        </span>
+                        <strong>{formatMilliseconds(item.pingMs)}</strong>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="availability">
-                  <div>
-                    <span>可用性 · 7 天</span>
-                    <strong>{formatAvailability(item.availability7d)}</strong>
-                  </div>
-                  {displayTimeline.length ? (
-                    <div className="sparkline">
-                      {displayTimeline.map((point, index) => (
-                        <i
-                          className={statusClass(point.status)}
-                          key={`${point.checkedAt}-${index}`}
-                        />
-                      ))}
-                    </div>
+                  {monitorSource === 'v2' ? (
+                    <>
+                      <div>
+                        <span>矩阵 · {v2Range}</span>
+                        <strong>{formatRate(item.v2?.successRate)}</strong>
+                      </div>
+                      {item.v2?.buckets.length ? (
+                        <div className="sparkline">
+                          {item.v2.buckets.map((point, index) => (
+                            <i
+                              className={statusClass(point.status)}
+                              key={point.checkedAt + index}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="timeline-empty">暂无矩阵记录</div>
+                      )}
+                      <small>
+                        {item.v2?.coveragePartial ? '部分覆盖 · ' : ''}近{' '}
+                        {item.v2?.buckets.length ?? 0} 个桶
+                      </small>
+                    </>
                   ) : (
-                    <div className="timeline-empty">暂无状态记录</div>
+                    <>
+                      <div>
+                        <span>可用性 · 7 天</span>
+                        <strong>{formatAvailability(item.availability7d)}</strong>
+                      </div>
+                      {displayTimeline.length ? (
+                        <div className="sparkline">
+                          {displayTimeline.map((point, index) => (
+                            <i
+                              className={statusClass(point.status)}
+                              key={`${point.checkedAt}-${index}`}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="timeline-empty">暂无状态记录</div>
+                      )}
+                      <small>
+                        近 {displayTimeline.length} 次记录{' '}
+                        <em>{formatCheckedAt(displayTimeline.at(-1)?.checkedAt)}</em>
+                      </small>
+                      <div className="timeline-label">
+                        <span>PAST</span>
+                        <span>NOW</span>
+                      </div>
+                    </>
                   )}
-                  <small>
-                    近 {displayTimeline.length} 次记录{' '}
-                    <em>{formatCheckedAt(displayTimeline.at(-1)?.checkedAt)}</em>
-                  </small>
-                  <div className="timeline-label">
-                    <span>PAST</span>
-                    <span>NOW</span>
-                  </div>
                 </div>
               </article>
             );
@@ -277,6 +353,10 @@ function formatMilliseconds(value: number | undefined) {
 
 function formatAvailability(value: number | undefined) {
   return value === undefined ? '待查询' : `${value.toFixed(2)}%`;
+}
+
+function formatRate(value: number | undefined) {
+  return value === undefined ? '未知' : (value * 100).toFixed(2) + '%';
 }
 
 function formatCheckedAt(value: string | undefined) {
