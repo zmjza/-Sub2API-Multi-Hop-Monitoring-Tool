@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { readChannelItems } from './ChannelsPage';
+import { formatV2BucketTip, readChannelItems } from './ChannelsPage';
 
 describe('readChannelItems', () => {
   it('keeps normalized live metrics and never merges static preview values', () => {
@@ -107,5 +107,16 @@ describe('readChannelItems', () => {
     expect(popover).toContain('rate-channel-association-button');
     expect(popover).toContain('已关联');
     expect(popover).toContain('toggleChannelAssociation');
+  });
+
+  it('formats V2 matrix hover with availability, cache rate and first token', () => {
+    expect(
+      formatV2BucketTip({
+        checkedAt: '2026-09-14T07:10:00Z',
+        successRate: 0.624,
+        cacheRate: 0.786,
+        ttftMs: 13500,
+      }),
+    ).toMatch(/可用率 62.4% · 缓存率 78.6% · 首 Token 13.5s$/);
   });
 });

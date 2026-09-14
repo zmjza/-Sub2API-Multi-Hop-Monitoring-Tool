@@ -404,3 +404,43 @@ Electron E2E 读取每个 footer 的计算样式、三个子控件坐标、scrol
 **验证方式**
 
 覆盖未提供状态、unsupported、支持但多渠道歧义和明确异常四类测试，确认只有前两类以待核验候选参与，且不会标记为稳定。
+
+## V2 矩阵桶必须按可用率和首 Token 重算颜色
+
+**现象**
+
+V2 渠道卡片已有可用率、缓存率和首 Token，但底部 18 个矩阵桶全是灰色，状态胶囊长期显示“状态待查询”；hover 也没有可用率/缓存率/首 Token。
+
+**根因**
+
+归一化直接使用 API `health.overall`。真实 matrix 桶常常只有 `success_rate`/`cache_rate`/`ttft`，没有 health，于是全部变成 `unknown`。同时 `.sparkline i:nth-child(3n)` 把等高状态格做成假柱状图。
+
+**正确做法**
+
+前端重算：无流量为 unknown；可用率 <30% critical、<70% warning、否则 healthy；首 Token ≥30s critical、<10s healthy、否则 warning；卡片和每个桶都取较差值。不要用 health.overall 覆盖。矩阵使用等高校，无流量为红色虚线，hover 用原生 title 显示时间、可用率、缓存率和首 Token。
+
+**验证方式**
+
+运行 `npx vitest run electron/main/adapters/channel-monitor-v2.test.ts src/renderer/shells/channels/ChannelsPage.test.ts`，确认无 health 的桶按成功率着色，hover 文案含可用率/缓存率/首 Token。
+
+**禁止事项**
+
+不要把缺少 health.overall 的桶画成灰条；不要用 CSS nth-child 伪造高度；不要把 V2 状态胶囊继续显示成 V1 的“运行正常/状态待查询”。
+
+**相关文件或命令**
+
+- `electron/main/adapters/channel-monitor-v2.ts`
+- `src/renderer/shells/channels/ChannelsPage.tsx`
+- `src/renderer/shells/channels/channels.css`
+
+**适用范围**
+
+Sub2API channel-monitor-v2 渠道状态页矩阵桶、状态胶囊和悬停提示。
+
+**补充确认（2026-09-14）**
+
+真实应用日志确认，站点曾缓存为 V2 后会直接跳过 V1；V2 返回 403 时因此看不到可用的 V1 状态。另有真实 V2 桶只返回 \`success_rate\`/\`error_rate\` 而没有请求计数，若只用计数判断流量会把有数据桶误判为 unknown。完整探测现改为每次先重验 V1，速率字段也参与有流量判断。
+
+**验证**
+
+\`npx vitest run electron/main/adapters/channel-monitor-v2.test.ts electron/main/services/site-service.integration.test.ts src/renderer/shells/channels/ChannelsPage.test.ts\`：40 项通过。

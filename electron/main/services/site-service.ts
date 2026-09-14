@@ -1033,13 +1033,9 @@ export class SiteService {
     const site = this.db.listSites().find((candidate) => candidate.id === siteId);
     const credential = site ? this.vault.read(site.id) : undefined;
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
-    const known = this.channelApiVersion.get(siteId);
-    return this.loadChannels(
-      siteId,
-      site,
-      credential.accessToken,
-      known === 'v1' ? 'v1' : known === 'v2' ? 'v2' : 'auto',
-    );
+    // The cached protocol is only a refresh optimization; every complete probe
+    // must revalidate V1 before deciding whether V2 is needed.
+    return this.loadChannels(siteId, site, credential.accessToken, 'auto');
   }
 
   private async loadChannels(

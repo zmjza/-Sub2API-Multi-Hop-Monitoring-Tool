@@ -41,6 +41,25 @@ export function classifyV2Failure(error: unknown): V2FailureKind {
   return 'temporary';
 }
 
+export function deriveV2Status(metrics: {
+  hasRequests?: boolean;
+  requestCount?: number;
+  successRequests?: number;
+  errorRequests?: number;
+  successRate?: number;
+  errorRate?: number;
+  ttftMs?: number;
+}): NormalizedChannelStatus {
+  if (isV2NoTraffic(metrics)) return 'unknown';
+  const availability =
+    metrics.successRate ?? (metrics.errorRate === undefined ? undefined : 1 - metrics.errorRate);
+  const rank = Math.max(availabilityRank(availability), ttftRank(metrics.ttftMs));
+  if (rank < 0) return 'unknown';
+  if (rank >= 2) return 'failed';
+  if (rank === 1) return 'degraded';
+  return 'normal';
+}
+
 export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
   const root = asRecord(raw);
   const data = asRecord(root?.data) ?? (Array.isArray(asRecord(root)?.items) ? root : undefined);
@@ -57,21 +76,14 @@ export function normalizeV2Matrix(raw: unknown): V2NormalizeResult {
     const id = stringOrUndefined(item.group_id) ?? stringOrUndefined(item.id);
     if (!id) continue;
     const metrics = asRecord(item.metrics) ?? {};
-    const health = asRecord(item.health) ?? {};
-    const ttft = asRecord(metrics.ttft) ?? {};
-    const noTraffic =
-      metrics.has_requests === false ||
-      (numberOrUndefined(metrics.request_count) === 0 && metrics.has_requests !== true);
-    const status = noTraffic ? 'unknown' : mapHealth(health.overall ?? metrics.status);
-    const latencyMs =
-      numberOrUndefined(ttft.trimmed_avg_ms) ??
-      numberOrUndefined(ttft.avg_ms) ??
-      numberOrUndefined(asRecord(metrics.duration)?.avg_ms);
+    const fields = v2Fields(metrics);
+    const status = fields.status;
+    const latencyMs = fields.ttftMs;
     const name = stringOrUndefined(item.group_name) ?? stringOrUndefined(item.name) ?? id;
     const platform = stringOrUndefined(item.platform) ?? '';
     const timeline = normalizeBuckets(item.buckets, dataThrough);
-    const successRate = numberOrUndefined(metrics.success_rate);
-    const cacheRate = numberOrUndefined(metrics.cache_rate);
+    const successRate = fields.successRate;
+    const cacheRate = fields.cacheRate;
     const durationMs = numberOrUndefined(asRecord(metrics.duration)?.avg_ms);
     const v2Buckets = normalizeV2Buckets(item.buckets, dataThrough);
     const channel: NormalizedChannelSummary = {
@@ -179,24 +191,15 @@ function normalizeV2Buckets(value: unknown, dataThrough?: string) {
     const start = Date.parse(checkedAt);
     if (Number.isFinite(ceiling) && Number.isFinite(start) && start > ceiling) return [];
     const metrics = asRecord(bucket.metrics) ?? {};
-    const health = asRecord(bucket.health) ?? {};
-    const ttft = asRecord(metrics.ttft) ?? {};
-    const requestCount = numberOrUndefined(metrics.request_count);
-    const noTraffic = metrics.has_requests === false || requestCount === 0;
+    const fields = v2Fields(metrics);
     return [
       {
         checkedAt,
-        status: noTraffic ? 'unknown' : mapHealth(health.overall),
-        ...(numberOrUndefined(metrics.cache_rate) !== undefined
-          ? { cacheRate: numberOrUndefined(metrics.cache_rate) }
-          : {}),
-        ...(numberOrUndefined(metrics.success_rate) !== undefined
-          ? { successRate: numberOrUndefined(metrics.success_rate) }
-          : {}),
-        ...((numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms)) !== undefined
-          ? { ttftMs: numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms) }
-          : {}),
-        ...(requestCount !== undefined ? { requestCount } : {}),
+        status: fields.status,
+        ...(fields.cacheRate !== undefined ? { cacheRate: fields.cacheRate } : {}),
+        ...(fields.successRate !== undefined ? { successRate: fields.successRate } : {}),
+        ...(fields.ttftMs !== undefined ? { ttftMs: fields.ttftMs } : {}),
+        ...(fields.requestCount !== undefined ? { requestCount: fields.requestCount } : {}),
       },
     ];
   });
@@ -224,28 +227,82 @@ function normalizeBuckets(
     const start = Date.parse(checkedAt);
     if (Number.isFinite(ceiling) && Number.isFinite(start) && start > ceiling) return [];
     const metrics = asRecord(bucket.metrics) ?? {};
-    const health = asRecord(bucket.health) ?? {};
-    const ttft = asRecord(metrics.ttft) ?? {};
-    const noTraffic =
-      metrics.has_requests === false || numberOrUndefined(metrics.request_count) === 0;
+    const fields = v2Fields(metrics);
     return [
       {
-        status: noTraffic ? 'unknown' : mapHealth(health.overall),
-        ...((numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms))
-          ? { latencyMs: numberOrUndefined(ttft.trimmed_avg_ms) ?? numberOrUndefined(ttft.avg_ms) }
-          : {}),
+        status: fields.status,
+        ...(fields.ttftMs !== undefined ? { latencyMs: fields.ttftMs } : {}),
         checkedAt,
       },
     ];
   });
 }
 
-export function mapHealth(value: unknown): NormalizedChannelStatus {
-  const status = String(value ?? '').toLowerCase();
-  if (['operational', 'normal', 'healthy', 'success', 'ok'].includes(status)) return 'normal';
-  if (['degraded', 'warning', 'partial'].includes(status)) return 'degraded';
-  if (['failed', 'error', 'down', 'unavailable', 'critical'].includes(status)) return 'failed';
-  return 'unknown';
+function v2Fields(metrics: Record<string, unknown>) {
+  const ttftMs = readTtftMs(asRecord(metrics.ttft));
+  const requestCount = numberOrUndefined(metrics.request_count);
+  const successRate = numberOrUndefined(metrics.success_rate);
+  const cacheRate = numberOrUndefined(metrics.cache_rate);
+  const errorRate = numberOrUndefined(metrics.error_rate);
+  return {
+    ttftMs,
+    requestCount,
+    successRate,
+    cacheRate,
+    status: deriveV2Status({
+      hasRequests: typeof metrics.has_requests === 'boolean' ? metrics.has_requests : undefined,
+      requestCount,
+      successRequests: numberOrUndefined(metrics.success_requests),
+      errorRequests: numberOrUndefined(metrics.error_requests),
+      successRate,
+      errorRate,
+      ttftMs,
+    }),
+  };
+}
+
+function readTtftMs(ttft: Record<string, unknown> | undefined): number | undefined {
+  const trimmed = numberOrUndefined(ttft?.trimmed_avg_ms);
+  if (trimmed !== undefined) return trimmed;
+  if (ttft?.display_source === 'recent_100_trimmed_mean') return undefined;
+  return numberOrUndefined(ttft?.p50_ms) ?? numberOrUndefined(ttft?.avg_ms);
+}
+
+function isV2NoTraffic(metrics: {
+  hasRequests?: boolean;
+  requestCount?: number;
+  successRequests?: number;
+  errorRequests?: number;
+  successRate?: number;
+  errorRate?: number;
+}): boolean {
+  if (metrics.hasRequests === false) return true;
+  if (metrics.hasRequests === true) return false;
+  return (
+    !isPositive(metrics.requestCount) &&
+    !isPositive(metrics.successRequests) &&
+    !isPositive(metrics.errorRequests) &&
+    !isPositive(metrics.successRate) &&
+    !isPositive(metrics.errorRate)
+  );
+}
+
+function availabilityRank(rate: number | undefined): number {
+  if (rate === undefined) return -1;
+  if (rate < 0.3) return 2;
+  if (rate < 0.7) return 1;
+  return 0;
+}
+
+function ttftRank(ms: number | undefined): number {
+  if (ms === undefined) return -1;
+  if (ms >= 30_000) return 2;
+  if (ms >= 10_000) return 1;
+  return 0;
+}
+
+function isPositive(value: number | undefined): boolean {
+  return value !== undefined && value > 0;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
