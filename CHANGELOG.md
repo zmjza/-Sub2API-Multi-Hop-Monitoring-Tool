@@ -13,6 +13,9 @@
 - Vitest：62 个测试文件、479 项通过；悬浮窗 flex 填满约束已覆盖。
 - Windows 只做 x64 交叉构建证据，不代表 Windows 真机通过。
 
+- macOS DMG SHA-256：`0c69c514939d779fdfecfc0d2b5e3221e83c1951b3615b2b30d3147d3d3e2e6d`
+- Windows EXE SHA-256：`ca3ad11b64896ce204ac70e48f28b92448dbfc4456e8594c319dd3330aa765aa`
+
 ## 3.1.0 - 2026-09-17
 
 ### 真机更新测试专用

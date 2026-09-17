@@ -1482,7 +1482,7 @@ UpdateService 先请求 api.github.com/repos/.../releases/latest。该 API 在�
 
 **验证方式**
 
-运行 npm test -- electron/main/services/update-service.test.ts，断言检查 URL 不含 api.github.com 且含 latest/download/update-manifest.json。再用真实 latest/download 确认 HTTP 200。3.0.1 修复后 latest 为 3.0.1；3.1.0 为 testOnly 探测版，latest/download 已返回 3.1.0。
+运行 npm test -- electron/main/services/update-service.test.ts，断言检查 URL 不含 api.github.com 且含 latest/download/update-manifest.json。再用真实 latest/download 确认 HTTP 200。3.0.1 修复后 latest 为 3.0.1；3.1.0 为 testOnly 探测版；当前 latest 为 3.1.1。
 
 **禁止事项**
 
