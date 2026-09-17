@@ -1,5 +1,19 @@
 # 更新说明
 
+## 3.0.1 - 2026-09-17
+
+### 修复 Windows 检查更新 HTTP_403
+
+- 在线更新不再请求 `api.github.com/releases/latest`。
+- 改为直接读取 GitHub Release 资产 `releases/latest/download/update-manifest.json`，并带 `User-Agent: sub2api-multi-hub-monitor` 与 `cacheBust`。
+- 3.0.0 Windows 客户端仍会卡在旧的 API 检查上，需要手动安装一次 3.0.1；之后即可继续应用内更新。
+
+### 验证
+
+- Vitest：62 个测试文件、478 项通过。
+- 本机 `github.com/.../releases/latest/download/update-manifest.json` 返回 HTTP 200，当前 latest 为 3.0.0。
+- Windows 只做 x64 交叉构建证据，不代表 Windows 真机通过。
+
 ## 3.0.0 - 2026-09-17
 
 ### 渠道状态、API 密钥与交互优化

@@ -35,21 +35,8 @@ describe('update service', () => {
   });
   it('validates stable manifest and returns an available update', async () => {
     expect(updateManifestSchema.parse(manifest).testOnly).toBe(true);
-    const fetchImpl = async (url: RequestInfo | URL) =>
-      new Response(
-        url.toString().includes('api.github.com')
-          ? JSON.stringify({
-              assets: [
-                {
-                  name: 'update-manifest.json',
-                  browser_download_url:
-                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
-                },
-              ],
-            })
-          : JSON.stringify(manifest),
-        { status: 200 },
-      );
+    const fetchImpl = async (_url: RequestInfo | URL) =>
+      new Response(JSON.stringify(manifest), { status: 200 });
     const service = new UpdateService(
       '1.4.5',
       { get: (_key, fallback) => fallback, set: () => undefined },
@@ -59,22 +46,8 @@ describe('update service', () => {
   });
   it('recognizes the published 1.5.2 manifest from a 1.5.1 client', async () => {
     const published = { ...manifest, version: '1.5.2', testOnly: false };
-    const fetchImpl = async (url: RequestInfo | URL) =>
-      new Response(
-        url.toString().includes('api.github.com')
-          ? JSON.stringify({
-              tag_name: '1.5.2',
-              assets: [
-                {
-                  name: 'update-manifest.json',
-                  browser_download_url:
-                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.5.2/update-manifest.json',
-                },
-              ],
-            })
-          : JSON.stringify(published),
-        { status: 200 },
-      );
+    const fetchImpl = async (_url: RequestInfo | URL) =>
+      new Response(JSON.stringify(published), { status: 200 });
     const service = new UpdateService(
       '1.5.1',
       { get: (_key, fallback) => fallback, set: () => undefined },
@@ -89,18 +62,7 @@ describe('update service', () => {
     const requestUrls: string[] = [];
     const fetchImpl = async (url: RequestInfo | URL) => {
       requestUrls.push(url.toString());
-      return new Response(
-        JSON.stringify({
-          assets: [
-            {
-              name: 'update-manifest.json',
-              browser_download_url:
-                'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
-            },
-          ],
-        }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify(manifest), { status: 200 });
     };
     const service = new UpdateService(
       '1.4.5',
@@ -108,7 +70,10 @@ describe('update service', () => {
       fetchImpl,
     );
     await service.check();
-    expect(requestUrls[0]).toMatch(/releases\/latest\?cacheBust=\d+/);
+    expect(requestUrls[0]).toMatch(
+      /releases\/latest\/download\/update-manifest\.json\?cacheBust=\d+/,
+    );
+    expect(requestUrls[0]).not.toContain('api.github.com');
   });
   it('uses single-flight for concurrent checks', async () => {
     let calls = 0;
@@ -139,20 +104,7 @@ describe('update service', () => {
       ['update:remindVersion', '1.4.6'],
       ['update:remindAt', Date.now() + 60_000],
     ]);
-    const fetchImpl = async (url: RequestInfo | URL) =>
-      new Response(
-        url.toString().includes('api.github.com')
-          ? JSON.stringify({
-              assets: [
-                {
-                  name: 'update-manifest.json',
-                  browser_download_url:
-                    'https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/download/1.4.6/update-manifest.json',
-                },
-              ],
-            })
-          : JSON.stringify(manifest),
-      );
+    const fetchImpl = async (_url: RequestInfo | URL) => new Response(JSON.stringify(manifest));
     const service = new UpdateService(
       '1.4.5',
       {
@@ -241,5 +193,26 @@ describe('update service', () => {
     expect(attempts).toBe(2);
     await service.cleanup();
     expect(result.filePath).toMatch(/sub2api-update-1\.4\.6\.dmg$/);
+  });
+
+  it('reads the latest manifest from GitHub downloads instead of api.github.com', async () => {
+    const requestUrls: string[] = [];
+    const fetchImpl = async (url: RequestInfo | URL, init?: RequestInit) => {
+      requestUrls.push(url.toString());
+      const headers = new Headers(init?.headers);
+      expect(headers.get('User-Agent')).toMatch(/sub2api-multi-hub-monitor/);
+      if (url.toString().includes('api.github.com'))
+        return new Response('blocked', { status: 403 });
+      return new Response(JSON.stringify(manifest), { status: 200 });
+    };
+    const service = new UpdateService(
+      '1.4.5',
+      { get: (_key, fallback) => fallback, set: () => undefined },
+      fetchImpl,
+    );
+    await expect(service.check()).resolves.toMatchObject({ status: 'available', manifest });
+    expect(requestUrls).toHaveLength(1);
+    expect(requestUrls[0]).toContain('/releases/latest/download/update-manifest.json');
+    expect(requestUrls[0]).not.toContain('api.github.com');
   });
 });

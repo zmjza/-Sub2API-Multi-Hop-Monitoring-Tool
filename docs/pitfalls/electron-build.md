@@ -1464,3 +1464,35 @@ Computer Use 启动或读取打包应用连续超时，系统同时存在 `/Appl
 **适用范围**
 
 所有需要 Computer Use 或系统窗口定位的 Electron macOS 打包应用验收。
+
+## 在线更新不能请求 api.github.com
+
+**现象**
+
+Windows 安装包点击检查更新后显示“检查更新失败：HTTP_403”。
+
+**根因**
+
+UpdateService 先请求 api.github.com/repos/.../releases/latest。该 API 在国内/部分 Windows 网络下常返回 403，且旧实现未带 User-Agent。UI 把失败码显示为 HTTP_${status}，因此用户看到 HTTP_403。客户端实际只需要 update-manifest.json，不必走 GitHub Releases API。
+
+**正确做法**
+
+只请求 https://github.com/<owner>/<repo>/releases/latest/download/update-manifest.json，校验 https + github.com，发送 User-Agent: sub2api-multi-hub-monitor 和 cacheBust。不要用 ghproxy，也不要把发布脚本的 api.github.com 调用套到客户端。
+
+**验证方式**
+
+运行 npm test -- electron/main/services/update-service.test.ts，断言检查 URL 不含 api.github.com 且含 latest/download/update-manifest.json。再用真实 latest/download 确认 HTTP 200。
+
+**禁止事项**
+
+不要把客户端检查改回 api.github.com；不要把 3.0.0 旧客户端的 403 当成 3.0.1 仍失败；不要把 Windows 交叉构建写成 Windows 真机通过。已安装的旧版本无法应用内自更新到本修复，必须手动安装一次。
+
+**相关文件或命令**
+
+- `electron/main/services/update-service.ts`
+- `electron/main/services/update-service.test.ts`
+- `npm test -- electron/main/services/update-service.test.ts`
+
+**适用范围**
+
+所有 GitHub Release 在线更新检查。发布脚本仍可使用带 Token 的 api.github.com。

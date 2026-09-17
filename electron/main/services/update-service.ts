@@ -121,24 +121,9 @@ export class UpdateService {
 
   private async checkInternal(): Promise<UpdateCheckResult> {
     try {
-      const response = await this.fetchWithTimeout(
-        `https://api.github.com/repos/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/latest?cacheBust=${Date.now()}`,
-        {
-          headers: {
-            Accept: 'application/vnd.github+json',
-            'Cache-Control': 'no-cache',
-          },
-        },
+      const manifestUrl = new URL(
+        `https://github.com/zmjza/-Sub2API-Multi-Hop-Monitoring-Tool/releases/latest/download/update-manifest.json?cacheBust=${Date.now()}`,
       );
-      if (!response.ok) throw new Error(`HTTP_${response.status}`);
-      const release = (await response.json()) as {
-        assets?: Array<{ name?: string; browser_download_url?: string }>;
-      };
-      const asset = release.assets?.find(
-        (item) => item.name === 'update-manifest.json' && item.browser_download_url,
-      );
-      if (!asset?.browser_download_url) throw new Error('MANIFEST_NOT_FOUND');
-      const manifestUrl = new URL(asset.browser_download_url);
       if (manifestUrl.protocol !== 'https:' || manifestUrl.hostname !== 'github.com')
         throw new Error('MANIFEST_HOST_NOT_ALLOWED');
       const manifestResponse = await this.fetchWithTimeout(manifestUrl);
@@ -166,7 +151,10 @@ export class UpdateService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      return await this.fetchImpl(input, { ...init, signal: controller.signal });
+      const headers = new Headers(init?.headers);
+      if (!headers.has('User-Agent')) headers.set('User-Agent', 'sub2api-multi-hub-monitor');
+      if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'no-cache');
+      return await this.fetchImpl(input, { ...init, headers, signal: controller.signal });
     } finally {
       clearTimeout(timer);
     }
