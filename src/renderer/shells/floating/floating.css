@@ -1,11 +1,17 @@
+html:has(.floating-window),
+html:has(.floating-window) body,
+html:has(.floating-window) #root {
+  height: 100%;
+  min-height: 0;
+}
 body:has(.floating-window) {
   overflow: hidden;
   background: transparent;
 }
 .floating-window {
   box-sizing: border-box;
-  width: 380px;
-  height: 260px;
+  width: 100%;
+  height: 100%;
   padding: 0;
   position: relative;
   display: flex;
@@ -248,17 +254,21 @@ body:has(.floating-window) {
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
   gap: 18px;
-  align-content: stretch;
+  align-items: stretch;
   margin: 0;
   color: #64748b;
   font-size: 12px;
 }
 .floating-metrics span,
 .floating-metrics button {
-  display: grid;
-  gap: 2px;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  height: 100%;
 }
 .floating-metrics button {
   appearance: none;
@@ -273,7 +283,10 @@ body:has(.floating-window) {
 }
 .floating-metrics b {
   color: #1e1b4b;
-  font-size: 16px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .floating-window footer {
   box-sizing: border-box;

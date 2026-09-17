@@ -2690,7 +2690,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
             footer &&
             metrics.top - channel.bottom <= 16 &&
             footer.top - metrics.bottom <= 16 &&
-            metrics.height >= 48,
+            metrics.height >= 64,
           ),
           speedInFooter: Boolean(
             speed &&

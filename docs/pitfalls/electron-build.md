@@ -1415,6 +1415,7 @@ GitHub Release 安装包较大，下载过程中遇到 CDN 瞬时断连或连接
 **正确做法**
 
 固定窗口使用纵向 flex：页脚 `box-sizing: border-box` 固定 49px 且 `flex-shrink: 0`，不要绝对定位。渠道卡回到文档流，指标区 `flex: 1` 吃掉渠道行到页脚的剩余高度。辅助详情仍用受限高度覆盖层并允许内部滚动。对 380×260 真实 Electron 窗口同时断言内容与页脚不相交，且指标区填满剩余空隙。
+卡片本身必须 `width/height: 100%` 铺满 BrowserWindow；指标网格用 `grid-template-rows: 1fr`，按钮 `height: 100%`，否则剩余高度只在容器上、数字仍挤在一角。只看 260px 固定盒不够，要用源码 Electron 量 `getBoundingClientRect()`。
 
 **验证方式**
 

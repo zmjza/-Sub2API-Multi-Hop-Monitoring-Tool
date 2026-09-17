@@ -151,8 +151,10 @@ describe('floating window transparency', () => {
     );
     expect(windowRule).toContain('display: flex');
     expect(windowRule).toContain('flex-direction: column');
+    expect(windowRule).toContain('height: 100%');
     expect(mainRule).toContain('flex: 1');
     expect(metricsRule).toContain('flex: 1');
+    expect(metricsRule).toContain('grid-template-rows: 1fr');
     expect(metricsRule).not.toContain('position: absolute');
     expect(channelRule).not.toContain('position: absolute');
   });
