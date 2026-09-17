@@ -1,5 +1,36 @@
 # Electron 构建避坑
 
+## 不要把 asar 里的 package.json 抽到仓库根目录
+
+**现象**
+
+源码 `package.json` 突然只剩 name/version/dependencies，scripts、devDependencies 和 build 字段消失，`npm run release:publish` 报 Missing script。
+
+**根因**
+
+electron-builder 打进 app.asar 的是过滤后的生产 `package.json`。`asar extract-file <asar> package.json` 若未给出明确输出路径，会写到当前工作区根目录的 `package.json`，覆盖完整源文件。
+
+**正确做法**
+
+抽取时必须写到临时文件，例如 `/tmp/asar-pkg.json`，禁止输出到仓库根 `package.json`。
+
+**验证方式**
+
+抽取后检查仓库根 `package.json` 仍包含 `scripts.release:publish` 和 `build.artifactName`。
+
+**禁止事项**
+
+不要用 asar 的生产 package.json 提交或发布。
+
+**相关文件或命令**
+
+- package.json
+- release/*/resources/app.asar
+
+**适用范围**
+
+所有需要从打包 asar 读取版本或入口的发布/验收步骤。
+
 ## 内嵌页不能一律 deny 用户手势安全外链
 
 **现象**
