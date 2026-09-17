@@ -8,6 +8,8 @@ body:has(.floating-window) {
   height: 260px;
   padding: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(18px);
@@ -22,6 +24,7 @@ body:has(.floating-window) {
   align-items: center;
   text-align: center;
   min-height: 48px;
+  flex-shrink: 0;
   padding: 8px 20px;
   border-bottom: 1px solid #f1f5f9;
   -webkit-app-region: drag;
@@ -50,13 +53,32 @@ body:has(.floating-window) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.floating-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px;
+}
+.floating-top {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.floating-top-left {
+  flex: 1;
+  min-width: 0;
 }
 .floating-balance {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin: 5px 20px 0;
-  max-width: 165px;
+  margin: 0;
   overflow: hidden;
 }
 .floating-balance span {
@@ -78,8 +100,9 @@ body:has(.floating-window) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 150px;
-  margin: 0 20px;
+  width: auto;
+  min-width: 0;
+  margin: 0;
 }
 .floating-speed {
   width: max-content;
@@ -113,10 +136,7 @@ body:has(.floating-window) {
 }
 .floating-channel-card {
   box-sizing: border-box;
-  position: absolute;
-  z-index: 10;
-  right: 20px;
-  top: 116px;
+  flex: 0 0 172px;
   width: 172px;
   height: 42px;
   padding: 7px 10px;
@@ -131,10 +151,6 @@ body:has(.floating-window) {
   text-align: left;
   cursor: pointer;
   -webkit-app-region: no-drag;
-}
-.floating-window:has(.query-status) .floating-channel-card {
-  top: 118px;
-  height: 42px;
 }
 .floating-channel-card:hover {
   border-color: #94a3b8;
@@ -228,13 +244,12 @@ body:has(.floating-window) {
   justify-self: end;
 }
 .floating-metrics {
-  position: absolute;
-  right: 20px;
-  bottom: 58px;
-  left: 20px;
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
+  align-content: stretch;
   margin: 0;
   color: #64748b;
   font-size: 12px;
@@ -243,6 +258,7 @@ body:has(.floating-window) {
 .floating-metrics button {
   display: grid;
   gap: 2px;
+  align-content: center;
 }
 .floating-metrics button {
   appearance: none;
@@ -261,8 +277,7 @@ body:has(.floating-window) {
 }
 .floating-window footer {
   box-sizing: border-box;
-  position: absolute;
-  inset: auto 0 0;
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: 32px minmax(32px, 1fr) auto auto;
   gap: 6px;
@@ -443,6 +458,7 @@ body:has(.floating-window) {
   gap: 6px;
   color: #4f46e5;
   font-size: 11px;
+  flex-shrink: 0;
 }
 .query-status.error {
   color: #b91c1c;

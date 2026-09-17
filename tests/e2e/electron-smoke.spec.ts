@@ -2684,6 +2684,14 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
             channel.bottom <= metrics.top &&
             metrics.bottom <= footer.top,
           ),
+          bodyFillsHeight: Boolean(
+            channel &&
+            metrics &&
+            footer &&
+            metrics.top - channel.bottom <= 16 &&
+            footer.top - metrics.bottom <= 16 &&
+            metrics.height >= 48,
+          ),
           speedInFooter: Boolean(
             speed &&
             footer &&
@@ -2709,6 +2717,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
       }),
     ).toEqual({
       bodyNoOverlap: true,
+      bodyFillsHeight: true,
       speedInFooter: true,
       dialogContained: true,
       adjacent: true,

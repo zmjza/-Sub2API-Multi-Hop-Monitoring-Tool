@@ -1414,15 +1414,15 @@ GitHub Release 安装包较大，下载过程中遇到 CDN 瞬时断连或连接
 
 **正确做法**
 
-固定窗口页脚使用明确的 `box-sizing: border-box` 和固定高度，主指标区按页脚上边界定位；辅助详情使用受限高度的覆盖层并允许内部滚动。对 380×260 真实 Electron 窗口同时断言内容与页脚几何不相交。
+固定窗口使用纵向 flex：页脚 `box-sizing: border-box` 固定 49px 且 `flex-shrink: 0`，不要绝对定位。渠道卡回到文档流，指标区 `flex: 1` 吃掉渠道行到页脚的剩余高度。辅助详情仍用受限高度覆盖层并允许内部滚动。对 380×260 真实 Electron 窗口同时断言内容与页脚不相交，且指标区填满剩余空隙。
 
 **验证方式**
 
-运行 Electron E2E，读取 `.floating-metrics` 与 `.floating-window footer` 的 `getBoundingClientRect()`，确认 `metrics.bottom <= footer.top`，并人工检查展开渠道详情后的截图。
+运行 Electron E2E，读取 `.floating-metrics` 与 `.floating-window footer` 的 `getBoundingClientRect()`，确认 `metrics.bottom <= footer.top`，渠道到指标、指标到页脚间隙不超过 16px，且 `metrics.height >= 48`。并人工检查展开渠道详情后的截图。
 
 **禁止事项**
 
-不要把 `min-height` 当成包含 padding 的最终高度；不要只在大窗口或未加载数据状态下检查悬浮窗；不要让可展开详情改变固定窗口整体高度。
+不要把 `min-height` 当成包含 padding 的最终高度；不要把指标区和页脚改回 `position: absolute` 贴底留白；不要只在大窗口或未加载数据状态下检查悬浮窗；不要让可展开详情改变固定窗口整体高度。
 
 **相关文件或命令**
 

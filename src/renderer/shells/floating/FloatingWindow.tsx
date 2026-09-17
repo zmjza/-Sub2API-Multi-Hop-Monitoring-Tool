@@ -184,72 +184,78 @@ export function FloatingWindow(props: FloatingProps) {
           保留上次成功数据 · {props.state}
         </div>
       )}
-      <section className="floating-balance">
-        <span>
-          {displayedBalance !== undefined
-            ? `$${displayedBalance.toFixed(2)}`
-            : runtime
-              ? '—'
-              : data.balance}
-        </span>
-        <em>
-          {props.selectedSite?.rate !== undefined
-            ? `${props.selectedSite.rate}x`
-            : runtime
-              ? '倍率不可用'
-              : data.rate}
-        </em>
-      </section>
-      <small className="floating-key">
-        {props.selectedSite?.defaultKeyLabel ?? (runtime ? '尚未选择站点' : data.keyLabel)}
-      </small>
-      {primaryChannel && canOpenChannelDialog ? (
-        <button
-          type="button"
-          ref={channelTriggerRef}
-          className={`floating-channel-card is-${primaryChannel.status}`}
-          aria-label={`${primaryChannel.name}，查看全部关联渠道`}
-          aria-haspopup="dialog"
-          aria-expanded={channelDialogOpen}
-          onClick={() => setChannelDialogOpen(true)}
-        >
-          <ChannelTimeline health={primaryChannelHealth} />
-          <time
-            className="floating-channel-updated-at"
-            dateTime={
-              channelView.fetchedAt ? new Date(channelView.fetchedAt).toISOString() : undefined
-            }
-          >
-            更新于 {formatChannelFetchedAt(channelView.fetchedAt)}
-          </time>
-        </button>
-      ) : (
-        <div className="floating-channel-card is-message" aria-label="当前渠道状态">
-          <span>{channelSummary}</span>
-          <small>更新于 {formatChannelFetchedAt(channelView.fetchedAt)}</small>
+      <div className="floating-main">
+        <div className="floating-top">
+          <div className="floating-top-left">
+            <section className="floating-balance">
+              <span>
+                {displayedBalance !== undefined
+                  ? `$${displayedBalance.toFixed(2)}`
+                  : runtime
+                    ? '—'
+                    : data.balance}
+              </span>
+              <em>
+                {props.selectedSite?.rate !== undefined
+                  ? `${props.selectedSite.rate}x`
+                  : runtime
+                    ? '倍率不可用'
+                    : data.rate}
+              </em>
+            </section>
+            <small className="floating-key">
+              {props.selectedSite?.defaultKeyLabel ?? (runtime ? '尚未选择站点' : data.keyLabel)}
+            </small>
+          </div>
+          {primaryChannel && canOpenChannelDialog ? (
+            <button
+              type="button"
+              ref={channelTriggerRef}
+              className={`floating-channel-card is-${primaryChannel.status}`}
+              aria-label={`${primaryChannel.name}，查看全部关联渠道`}
+              aria-haspopup="dialog"
+              aria-expanded={channelDialogOpen}
+              onClick={() => setChannelDialogOpen(true)}
+            >
+              <ChannelTimeline health={primaryChannelHealth} />
+              <time
+                className="floating-channel-updated-at"
+                dateTime={
+                  channelView.fetchedAt ? new Date(channelView.fetchedAt).toISOString() : undefined
+                }
+              >
+                更新于 {formatChannelFetchedAt(channelView.fetchedAt)}
+              </time>
+            </button>
+          ) : (
+            <div className="floating-channel-card is-message" aria-label="当前渠道状态">
+              <span>{channelSummary}</span>
+              <small>更新于 {formatChannelFetchedAt(channelView.fetchedAt)}</small>
+            </div>
+          )}
         </div>
-      )}
-      <div className="floating-metrics">
-        <button type="button" aria-label="打开今日 Token 使用记录" onDoubleClick={openTodayUsage}>
-          今日 Token
-          <b>
-            {keyTodayTokens !== undefined
-              ? formatTokenCount(keyTodayTokens)
-              : runtime
-                ? '—'
-                : data.todayTokens}
-          </b>
-        </button>
-        <button type="button" aria-label="打开今日消费使用记录" onDoubleClick={openTodayUsage}>
-          今日消费
-          <b>
-            {keyTodayCost !== undefined
-              ? `$${keyTodayCost.toFixed(4)}`
-              : runtime
-                ? '—'
-                : data.todayCost}
-          </b>
-        </button>
+        <div className="floating-metrics">
+          <button type="button" aria-label="打开今日 Token 使用记录" onDoubleClick={openTodayUsage}>
+            今日 Token
+            <b>
+              {keyTodayTokens !== undefined
+                ? formatTokenCount(keyTodayTokens)
+                : runtime
+                  ? '—'
+                  : data.todayTokens}
+            </b>
+          </button>
+          <button type="button" aria-label="打开今日消费使用记录" onDoubleClick={openTodayUsage}>
+            今日消费
+            <b>
+              {keyTodayCost !== undefined
+                ? `$${keyTodayCost.toFixed(4)}`
+                : runtime
+                  ? '—'
+                  : data.todayCost}
+            </b>
+          </button>
+        </div>
       </div>
       <footer>
         <details className="floating-settings">

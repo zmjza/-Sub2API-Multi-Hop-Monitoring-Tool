@@ -127,6 +127,36 @@ describe('floating window transparency', () => {
     expect(css).toContain('-webkit-app-region: no-drag');
   });
 
+  it('fills leftover height between the channel row and footer', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./FloatingWindow.tsx', import.meta.url)),
+      'utf8',
+    );
+    const css = readFileSync(fileURLToPath(new URL('./floating.css', import.meta.url)), 'utf8');
+
+    expect(source).toContain('className="floating-main"');
+    expect(source).toContain('className="floating-top"');
+    const windowRule = css.slice(
+      css.indexOf('.floating-window {'),
+      css.indexOf('.floating-header'),
+    );
+    const mainRule = css.slice(css.indexOf('.floating-main {'), css.indexOf('.floating-top {'));
+    const metricsRule = css.slice(
+      css.indexOf('.floating-metrics {'),
+      css.indexOf('.floating-metrics span'),
+    );
+    const channelRule = css.slice(
+      css.indexOf('.floating-channel-card {'),
+      css.indexOf('.floating-channel-card:hover'),
+    );
+    expect(windowRule).toContain('display: flex');
+    expect(windowRule).toContain('flex-direction: column');
+    expect(mainRule).toContain('flex: 1');
+    expect(metricsRule).toContain('flex: 1');
+    expect(metricsRule).not.toContain('position: absolute');
+    expect(channelRule).not.toContain('position: absolute');
+  });
+
   it('renders twenty slots while keeping the latest-twelve percentage in the channel card', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingWindow, {
