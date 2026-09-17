@@ -8,6 +8,9 @@
 - 仅用于验证 3.0.1 客户端能否从 GitHub `latest/download/update-manifest.json` 检查到新版本并完成自动更新。
 - Windows 只做 x64 交叉构建证据，不代表 Windows 真机通过。
 
+- macOS DMG SHA-256：`30659a77b6b1ae178472c5549c2cc575e9e7b953dc8a1df6bbd9bbe5f2e5bc04`
+- Windows EXE SHA-256：`efb23b87cfc4870ac8e805e00a0b31620cbfcdaa3cc0bd301aa699e63d56af20`
+
 ## 3.0.1 - 2026-09-17
 
 ### 修复 Windows 检查更新 HTTP_403
