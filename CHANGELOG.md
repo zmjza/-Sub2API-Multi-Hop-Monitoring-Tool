@@ -14,6 +14,9 @@
 - Vitest：62 个测试文件、479 项通过。
 - Windows 只做 x64 交叉构建证据，不代表 Windows 真机通过。
 
+- macOS DMG SHA-256：`7dcd37461ce02cce180ee7af9b6e731519f39722718e0e48afbf7b729a54aaf5`
+- Windows EXE SHA-256：`2c86965a426bec5f0ade3676f17b06a04968a0a99a261af1f88a3620312eabf8`
+
 ## 3.1.1 - 2026-09-17
 
 ### 悬浮窗指标区填满剩余高度
