@@ -11,8 +11,11 @@
 ### 验证
 
 - Vitest：62 个测试文件、478 项通过。
-- 本机 `github.com/.../releases/latest/download/update-manifest.json` 返回 HTTP 200，当前 latest 为 3.0.0。
+- 本机 `github.com/.../releases/latest/download/update-manifest.json` 返回 HTTP 200，latest 为 3.0.1。
 - Windows 只做 x64 交叉构建证据，不代表 Windows 真机通过。
+
+- macOS DMG SHA-256：`d5eabdd1b554827df0cf3699b1952da7616de20ce44f090ff4aa764d727eb1ab`
+- Windows EXE SHA-256：`42438b6c71cff82d1df5be0139e430c0779a2427d2e2e287bed1ddf51299329b`
 
 ## 3.0.0 - 2026-09-17
 
