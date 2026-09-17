@@ -4,28 +4,29 @@
 
 **现象**
 
-源码 `package.json` 突然只剩 name/version/dependencies，scripts、devDependencies 和 build 字段消失，`npm run release:publish` 报 Missing script。
+源码 `package.json` 突然只剩 name/version/dependencies，scripts、devDependencies 和 build 字段消失，`npm run release:publish` 报 Missing script。3.0.1 发布核验时真实发生过，由提交 `4cc7dca` 恢复。
 
 **根因**
 
-electron-builder 打进 app.asar 的是过滤后的生产 `package.json`。`asar extract-file <asar> package.json` 若未给出明确输出路径，会写到当前工作区根目录的 `package.json`，覆盖完整源文件。
+electron-builder 打进 app.asar 的是过滤后的生产 `package.json`。`asar extract-file <archive> package.json` 只有两个参数，没有输出路径参数，始终写入当前工作目录的 `package.json`。在仓库根执行就会覆盖完整源文件。
 
 **正确做法**
 
-抽取时必须写到临时文件，例如 `/tmp/asar-pkg.json`，禁止输出到仓库根 `package.json`。
+先进入临时目录再抽取：`cd /tmp/<隔离目录> && asar extract-file "$ASAR" package.json`。禁止在仓库根执行该命令。
 
 **验证方式**
 
-抽取后检查仓库根 `package.json` 仍包含 `scripts.release:publish` 和 `build.artifactName`。
+抽取后检查仓库根 `package.json` 仍包含 `scripts.release:publish` 和完整 scripts（当前含 `release:publish`）。
 
 **禁止事项**
 
-不要用 asar 的生产 package.json 提交或发布。
+不要用 asar 的生产 package.json 提交或发布；不要假设 `asar extract-file` 接受第三个输出路径参数。
 
 **相关文件或命令**
 
 - package.json
 - release/*/resources/app.asar
+- asar extract-file
 
 **适用范围**
 
@@ -1481,11 +1482,11 @@ UpdateService 先请求 api.github.com/repos/.../releases/latest。该 API 在�
 
 **验证方式**
 
-运行 npm test -- electron/main/services/update-service.test.ts，断言检查 URL 不含 api.github.com 且含 latest/download/update-manifest.json。再用真实 latest/download 确认 HTTP 200。
+运行 npm test -- electron/main/services/update-service.test.ts，断言检查 URL 不含 api.github.com 且含 latest/download/update-manifest.json。再用真实 latest/download 确认 HTTP 200。3.0.1 修复后 latest 为 3.0.1；3.1.0 为 testOnly 探测版，latest/download 已返回 3.1.0。
 
 **禁止事项**
 
-不要把客户端检查改回 api.github.com；不要把 3.0.0 旧客户端的 403 当成 3.0.1 仍失败；不要把 Windows 交叉构建写成 Windows 真机通过。已安装的旧版本无法应用内自更新到本修复，必须手动安装一次。
+不要把客户端检查改回 api.github.com；不要用 ghproxy；不要把 3.0.0 旧客户端的 403 当成 3.0.1 仍失败；不要把 Windows 交叉构建写成 Windows 真机通过。已安装的 3.0.0 无法应用内自更新到 3.0.1，必须手动安装一次。3.0.1 之后才能测 3.1.0 自动更新。
 
 **相关文件或命令**
 

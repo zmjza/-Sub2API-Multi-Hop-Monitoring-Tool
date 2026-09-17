@@ -1,0 +1,46 @@
+{
+  "task_id": "REQ-260915-channel-status-visual-polish",
+  "artifact_task_ids": ["REQ-260915-channel-status-visual-polish"],
+  "goal_stage": "archive",
+  "acceptance_owner": "Codex 真机测试",
+  "source_state": "真机测试通过",
+  "archive_state": "已归档",
+  "final_state": "已完成",
+  "source_goal_status": "reclaimed",
+  "archive_goal_status": "reclaimed",
+  "archive_goal_counted": false,
+  "source_goal_index": 2,
+  "source_goal_count": 2,
+  "user_archive_confirmation": true,
+  "archive_confirmation_evidence": "搞完就归档。",
+  "unresolved_states": [],
+  "known_limitations": [
+    "macOS 多项 RT/TC 为部分通过，未逐项点开的边界未改写成通过",
+    "Windows 仅 x64 交叉构建与结构验证，不代表 Windows 真机通过",
+    "3.0.1 到 3.1.0 自动更新待用户在 Windows 上点检查更新",
+    "NSIS 安装器外壳是 PE32 stub，unpacked 主程序才是 PE32+ x86-64"
+  ],
+  "cleanup_performed": true,
+  "other_active_tasks_preserved": true,
+  "current_index_valid": true,
+  "completed_residue_absent": true,
+  "active_task_ids_before": [
+    "REQ-260915-channel-status-visual-polish",
+    "REQ-260904-usage-navigation-motion"
+  ],
+  "active_task_ids_after": ["REQ-260904-usage-navigation-motion"],
+  "requirements_path": "/Users/liran/Documents/中转站悬浮窗/liran_docs/requirements/REQ-260915-channel-status-visual-polish-需求整理.md",
+  "archive_path": "/Users/liran/Documents/中转站悬浮窗/liran_docs/archive/REQ-260915-channel-status-visual-polish",
+  "confirmation_message": "搞完就归档。",
+  "confirmation_date": "2026-09-17",
+  "steps": [
+    "长期事实已更新",
+    "归档已创建",
+    "归档内容已校验",
+    "归档索引已更新",
+    "活动区已按任务 ID 清理",
+    "其他活动任务未受影响",
+    "当前索引有效",
+    "活动区无已完成残留"
+  ]
+}

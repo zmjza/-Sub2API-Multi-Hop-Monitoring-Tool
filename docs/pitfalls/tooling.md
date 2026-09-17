@@ -343,15 +343,15 @@ GitHub Release 需要可解析的版本标签；本项目更新服务还要求�
 
 **正确做法**
 
-使用 `npm run release:publish -- --notes "..."`。命令要求工作区干净，读取 `package.json`/`CHANGELOG.md`，构建 macOS ARM64 与 Windows x64，校验五个资产，自动推送同名 Git 标签，从 Keychain 读取令牌并上传后复核远端资产。GitHub Release 使用单文件上传，不需要分片。
+当前标准流程：工作区干净 → `package.json` SemVer 与 `CHANGELOG.md` 必须有 `## x.y.z` → 提交源码 → `git push github HEAD` 与 `git push origin HEAD` → `npm run release:publish -- --notes "..."`。无业务探测版加 `--test-only`。命令构建 macOS ARM64 DMG 与 Windows x64 NSIS，校验五个资产（mac-arm64.dmg、对应 blockmap、win-x64.exe、对应 blockmap、update-manifest.json），先把当前 HEAD 的同名标签推到 github，再从 Keychain `sub2api-github-release-token` 上传并复核。`createRelease` 的 `target_commitish: main` 可忽略，因为标签已经指向当前 HEAD。发布后下载远端包核 SHA，客户端走 latest/download，不走 api.github.com。本地 dmg/exe 发布后清理。Windows NSIS 安装器外壳是 PE32 stub，unpacked 主程序才是 PE32+ x86-64；Windows 只记交叉构建，不写真机通过。抽取 asar 的 package.json 必须先 cd 到临时目录。
 
 **验证方式**
 
-先运行 `node scripts/publish-release.mjs --notes "检查" --dry-run`，再运行发布命令；发布完成后检查 GitHub Release 同时包含 `mac-arm64.dmg`、`win-x64.exe`、两个 blockmap 和 `update-manifest.json`。
+先运行 `node scripts/publish-release.mjs --notes "检查" --dry-run`，再运行发布命令；发布完成后检查 GitHub Release 同时包含五个资产，下载远端 DMG/EXE 的 SHA-256 与 manifest 一致。Windows 用 file/PE 头确认安装器是 PE32、主程序是 PE32+ x86-64，不得写成真机通过。
 
 **禁止事项**
 
-不要把 Token 写入仓库、`.env`、日志或文档；不要只上传单平台资产；不要复用旧版本文件冒充当前版本；不要在未提交源码时创建版本标签。
+不要把 Token 写入仓库、`.env`、日志或文档；不要只上传单平台资产；不要复用旧版本文件冒充当前版本；不要在未提交源码时创建版本标签；不要用 ghproxy；不要在仓库根执行 `asar extract-file`；不要把 Windows 交叉构建写成真机通过。
 
 **相关文件或命令**
 
