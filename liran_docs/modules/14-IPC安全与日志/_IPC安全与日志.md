@@ -1,5 +1,11 @@
 # IPC、安全与日志脱敏
 
+## 2026-09-15 REQ-260915 外开与凭据边界
+
+- 渠道、快捷充值和系统浏览器外开地址不得携带 Cookie、Token、API Key、用户名、密码或原始 headers。
+- 完整凭据不进入 Renderer 新状态、日志、截图、测试夹具。认证窗口继续全部拒绝新窗口。
+- Chrome 打开复用 chromeExecutableCandidates，禁止认证调试 Chrome。
+
 ## 2026-08-05 1.7.9 Chrome CDP 与身份边界
 
 - Chrome 认证只在主进程执行，同源顶层导航和令牌字段白名单由策略层限制；Renderer 不接收 Cookie、验证码结果、完整存储或密码。

@@ -12,6 +12,7 @@ import {
   BadgePercent,
   Activity,
   Play,
+  Wallet,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatTokenCount } from '../../lib/format';
@@ -743,6 +744,7 @@ export function OverviewPage(props: OverviewProps) {
                       <button
                         type="button"
                         className="view-rates-button"
+                        aria-label="查看倍率"
                         onClick={(event) => {
                           event.stopPropagation();
                           setRatePopover({ siteId: site.id, anchor: event.currentTarget });
@@ -753,7 +755,7 @@ export function OverviewPage(props: OverviewProps) {
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
                         <BadgePercent size={14} />
-                        查看倍率
+                        <span className="site-card-action-label">查看倍率</span>
                       </button>
                       <button
                         type="button"
@@ -769,7 +771,7 @@ export function OverviewPage(props: OverviewProps) {
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
                         <Activity size={14} />
-                        查看渠道状态
+                        <span className="site-card-action-label">查看渠道状态</span>
                       </button>
                       <button
                         type="button"
@@ -782,7 +784,19 @@ export function OverviewPage(props: OverviewProps) {
                         onDoubleClick={(event) => event.stopPropagation()}
                       >
                         <Play size={14} />
-                        测试连通性
+                        <span className="site-card-action-label">测试连通性</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="site-purchase-button"
+                        aria-label={`打开 ${site.name} 充值页`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void props.onOpenPurchase?.(site.id);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                      >
+                        <Wallet size={16} />
                       </button>
                     </div>
                   </div>

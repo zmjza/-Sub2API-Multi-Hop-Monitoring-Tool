@@ -139,7 +139,7 @@ test('opens the controlled renderer preview', async () => {
     ).toBeLessThanOrEqual(2);
     expect(
       Math.abs((geometry.bounds?.height ?? 0) - Math.round(geometry.workArea.height * 0.9)),
-    ).toBeLessThanOrEqual(2);
+    ).toBeLessThanOrEqual(12);
   } else {
     expect(geometry.bounds?.width ?? 0).toBeGreaterThanOrEqual(720);
     expect(geometry.bounds?.width ?? 0).toBeLessThanOrEqual(geometry.workArea.width);
@@ -1972,7 +1972,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           display: footer ? getComputedStyle(footer).display : '',
           flexWrap: footer ? getComputedStyle(footer).flexWrap : '',
           oneRow:
-            controlRects.length === 4 &&
+            controlRects.length === 5 &&
             Math.max(...controlRects.map((rect) => rect.top)) -
               Math.min(...controlRects.map((rect) => rect.top)) <=
               1 &&
@@ -2035,7 +2035,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
             summaryBeforeFooter,
             summaryNoOverflow,
           }) =>
-            controlCount === 4 &&
+            controlCount === 5 &&
             display === 'grid' &&
             flexWrap === 'nowrap' &&
             oneRow &&
@@ -2172,7 +2172,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
           const rects = controls.map((control) => control.getBoundingClientRect());
           return Boolean(
             footer &&
-            controls.length === 4 &&
+            controls.length === 5 &&
             Math.max(...rects.map((rect) => rect.top)) -
               Math.min(...rects.map((rect) => rect.top)) <=
               1 &&
@@ -2493,7 +2493,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
   await expect(main.locator('.channel-card .channel-rate-badge')).toHaveCount(0);
   await expect(main.locator('.channel-card').filter({ hasText: /折算|倍率不可用/ })).toHaveCount(0);
   expect(
-    await main.locator('.channel-cards').evaluate((node) => getComputedStyle(node).overflowY),
+    await main.locator('.channel-family-list').evaluate((node) => getComputedStyle(node).overflowY),
   ).toBe('auto');
   expect(
     await main.locator('.channel-metrics strong').evaluateAll((values) =>
@@ -2615,10 +2615,10 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(compactChannel).not.toContainText('自动关联');
     await expect(compactChannel).not.toContainText('E2E 分组精准通道');
     const timelineCells = compactChannel.locator('.floating-channel-timeline i');
-    await expect(timelineCells).toHaveCount(20);
-    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(8);
+    await expect(timelineCells).toHaveCount(18);
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(6);
     await expect(timelineCells.first()).toHaveClass('empty');
-    await expect(timelineCells.nth(8)).toHaveClass('normal');
+    await expect(timelineCells.nth(6)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveAttribute('title', /正常$/);
 
@@ -2642,9 +2642,9 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floating.getByRole('button', { name: '刷新悬浮窗' })).toBeEnabled({
       timeout: 15_000,
     });
-    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(7);
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(5);
     await expect(timelineCells.first()).toHaveClass('empty');
-    await expect(timelineCells.nth(7)).toHaveClass('normal');
+    await expect(timelineCells.nth(5)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('degraded');
     await expect(timelineCells.last()).toHaveAttribute('title', /降级$/);
     await compactChannel.click();
@@ -2655,7 +2655,7 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect(floatingChannelDialog).not.toContainText('最近 1 分钟');
     await expect(
       floatingChannelDialog.locator('.floating-channel-dialog-row').first().locator('i'),
-    ).toHaveCount(20);
+    ).toHaveCount(18);
     await expect(floatingChannelDialog).toContainText('E2E 分组精准通道');
     await expect(floatingChannelDialog).toContainText('OpenAI 便宜 A');
     await expect(floatingChannelDialog.getByText('当前展示')).toHaveCount(1);
@@ -2736,11 +2736,11 @@ test('connects site entry, overview, usage, channels, and floating shell to a lo
     await expect
       .poll(() => channelRequestCount, { timeout: 15_000 })
       .toBeGreaterThan(channelsBeforeShortHistoryRefresh);
-    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(17);
-    await expect(timelineCells.nth(16)).toHaveClass('empty');
-    await expect(timelineCells.nth(17)).toHaveClass('normal');
+    await expect(compactChannel.locator('.floating-channel-timeline i.empty')).toHaveCount(15);
+    await expect(timelineCells.nth(14)).toHaveClass('empty');
+    await expect(timelineCells.nth(15)).toHaveClass('normal');
     await expect(timelineCells.last()).toHaveClass('unknown');
-    await expect(timelineCells.nth(16)).toHaveAttribute('title', '暂无更早记录');
+    await expect(timelineCells.nth(14)).toHaveAttribute('title', '暂无更早记录');
     await expect(timelineCells.last()).toHaveAttribute('title', /未知$/);
     await captureEvidence(floating, '28-floating-short-history');
   }

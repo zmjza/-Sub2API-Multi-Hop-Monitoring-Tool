@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { session, type BrowserWindow, WebContentsView } from 'electron';
+import { session, shell, type BrowserWindow, WebContentsView } from 'electron';
 import type { AppDatabase } from '../storage/database.js';
+import { decideEmbeddedWindowOpen } from './external-url.js';
 import {
   SUB2API_SERVER_LIMIT,
   isAllowedSub2ApiServerNavigation,
@@ -204,7 +205,14 @@ export class Sub2ApiServerManager {
     const onDidStartLoading = () => syncState();
     const onDidStopLoading = () => syncState();
 
-    view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    view.webContents.setWindowOpenHandler((details) => {
+      const decision = decideEmbeddedWindowOpen({
+        url: details.url,
+        disposition: details.disposition,
+      });
+      if (decision.openExternal) void shell.openExternal(decision.openExternal);
+      return { action: 'deny' };
+    });
     view.webContents.on('will-navigate', rejectExternalNavigation);
     view.webContents.on('will-redirect', rejectExternalNavigation);
     view.webContents.on('will-attach-webview', onWillAttachWebview);

@@ -106,6 +106,47 @@ describe('ApiKeysPage', () => {
     expect(html).toContain('aria-label="第 2 页"');
   });
 
+  it('shows the OpenAI channel pane by default without an all-family tab', () => {
+    const html = renderToStaticMarkup(
+      createElement(ApiKeysPage, {
+        ...baseProps,
+        channelsData: {
+          state: 'supported',
+          monitorSource: 'v1',
+          channels: [
+            {
+              id: 'ch-openai',
+              name: 'GPT Plus',
+              platform: 'openai',
+              groupName: '默认分组',
+              primaryModel: 'gpt-5',
+              extraModels: [],
+              status: 'normal',
+              timeline: [],
+            },
+            {
+              id: 'ch-grok',
+              name: 'Grok Heavy',
+              platform: 'grok',
+              groupName: 'Grok纯血',
+              primaryModel: 'grok-4',
+              extraModels: [],
+              status: 'normal',
+              timeline: [],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain('api-keys-channel-pane');
+    expect(html).toContain('api-keys-family-tab family-openai is-active');
+    expect(html).toContain('GPT Plus');
+    expect(html).not.toContain('Grok Heavy');
+    expect(html).not.toContain('api-keys-family-tab family-all');
+    expect(html).not.toContain('<small>默认分组</small>');
+  });
+
   it('only disables the group control for the writing row and keeps partial data visible', () => {
     const secondKey = {
       ...baseProps.keys[0],
@@ -163,5 +204,9 @@ describe('ApiKeysPage', () => {
     expect(css).toContain('flex: 1 1 auto');
     expect(css).toContain('overflow: auto');
     expect(css).toContain('#4f46e5');
+    expect(css).toContain('@media (max-width: 1279px)');
+    expect(css).toContain('.api-keys-channel-pane');
+    expect(css).toContain('min-width: 1020px');
+    expect(css).toContain('scrollbar-width: none');
   });
 });

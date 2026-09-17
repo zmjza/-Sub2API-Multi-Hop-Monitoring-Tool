@@ -15,7 +15,12 @@ import type {
   ChannelViewPayload,
 } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
-import { channelTimelineForDisplay, toggleChannelAssociation } from '../channels/channel-ranking';
+import {
+  groupChannelsByPlatformFamily,
+  toggleChannelAssociation,
+} from '../channels/channel-ranking';
+import { ChannelFamilyHeader, ChannelSparkline } from '../channels/ChannelStatusCard';
+import '../channels/channels.css';
 
 type Channel = ChannelViewPayload['channels'][number];
 
@@ -252,12 +257,7 @@ export function ChannelStatusPopover(props: {
   const monitorSource = props.cache?.channels?.monitorSource ?? 'v1';
   const model = detail?.models[0];
   const v2 = selected?.v2;
-  const displayTimeline = selected
-    ? channelTimelineForDisplay(selected.timeline ?? [], Date.now(), 20)
-    : [];
-  const displayChannelTimeline = (channel: Channel) =>
-    channelTimelineForDisplay(channel.timeline ?? [], Date.now(), 20);
-  const checkedAt = displayTimeline.at(-1)?.checkedAt;
+  const checkedAt = selected?.timeline?.at(-1)?.checkedAt;
   const toggleAssociation = async (channelId: string) => {
     const groupId = props.associationGroupId;
     if (!groupId || !props.onAssociationSave || associationBusyId) return;
@@ -424,87 +424,100 @@ export function ChannelStatusPopover(props: {
           <div className="rate-channel-timeline">
             <div>
               <span>状态时间线</span>
-              <small>近 {displayTimeline.length} 次记录</small>
+              <small>近 18 次记录</small>
             </div>
-            {displayTimeline.length ? (
-              <div className="rate-channel-sparkline">
-                {displayTimeline.map((point, index) => (
-                  <i className={point.status} key={`${point.checkedAt}-${index}`} />
-                ))}
-              </div>
-            ) : (
-              <div className="rate-channel-timeline-empty">暂无状态记录</div>
-            )}
+            <ChannelSparkline
+              className="rate-channel-sparkline"
+              timeline={selected?.timeline}
+              rawStatus
+            />
             <div className="rate-channel-timeline-label">
               <span>PAST</span>
               <span>NOW</span>
             </div>
           </div>
           <div className="rate-channel-list" aria-label="全部渠道状态">
-            {channels.map((channel) => {
-              const associated = associatedChannelIds.includes(channel.id);
-              return (
-                <article
-                  className={`rate-channel-list-card ${channel.id === selected.id ? 'selected' : ''}`}
-                  key={channel.id}
+            {groupChannelsByPlatformFamily(channels)
+              .filter((group) => group.items.length > 0)
+              .map((group) => (
+                <section
+                  className={`rate-channel-family family-${group.family}`}
+                  key={group.family}
                 >
-                  <button
-                    type="button"
-                    className="rate-channel-list-select"
-                    aria-label={`查看 ${channel.name} 渠道详情`}
-                    onClick={() =>
-                      cacheRef.current?.channels &&
-                      void loadDetail(channel, cacheRef.current.channels)
-                    }
-                  >
-                    <span className="rate-channel-list-head">
-                      <b title={channel.name}>{channel.name}</b>
-                      <em className={`rate-channel-status ${channel.status}`}>
-                        {statusLabel(channel.status)}
-                      </em>
-                    </span>
-                    <small>
-                      {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
-                    </small>
-                    <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
-                      {[channel.primaryModel, ...channel.extraModels].filter(Boolean).join('、') ||
-                        '模型待查询'}
-                    </small>
-                    <span className="rate-channel-list-metrics">
-                      <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
-                      <small>Ping {formatMilliseconds(channel.pingMs)}</small>
-                      <small>可用率 {formatAvailability(channel.availability7d)}</small>
-                    </span>
-                    <span className="rate-channel-sparkline" aria-label="渠道状态时间线">
-                      {displayChannelTimeline(channel).length ? (
-                        displayChannelTimeline(channel).map((point, index) => (
-                          <i className={point.status} key={`${point.checkedAt}-${index}`} />
-                        ))
-                      ) : (
-                        <small>暂无状态记录</small>
-                      )}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`rate-channel-association-button ${associated ? 'associated' : ''}`}
-                    aria-label={`${associated ? '取消关联' : '关联'} ${channel.name}`}
-                    aria-pressed={associated}
-                    disabled={
-                      !props.associationGroupId ||
-                      !props.onAssociationSave ||
-                      associationBusyId !== undefined
-                    }
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void toggleAssociation(channel.id);
-                    }}
-                  >
-                    {associationBusyId === channel.id ? '保存中…' : associated ? '已关联' : '关联'}
-                  </button>
-                </article>
-              );
-            })}
+                  <ChannelFamilyHeader
+                    family={group.family}
+                    count={group.items.length}
+                    label={group.label}
+                    compact
+                  />
+                  {group.items.map((channel) => {
+                    const associated = associatedChannelIds.includes(channel.id);
+                    return (
+                      <article
+                        className={`rate-channel-list-card ${channel.id === selected.id ? 'selected' : ''}`}
+                        key={channel.id}
+                      >
+                        <button
+                          type="button"
+                          className="rate-channel-list-select"
+                          aria-label={`查看 ${channel.name} 渠道详情`}
+                          onClick={() =>
+                            cacheRef.current?.channels &&
+                            void loadDetail(channel, cacheRef.current.channels)
+                          }
+                        >
+                          <span className="rate-channel-list-head">
+                            <b title={channel.name}>{channel.name}</b>
+                            <em className={`rate-channel-status ${channel.status}`}>
+                              {statusLabel(channel.status)}
+                            </em>
+                          </span>
+                          <small>
+                            {channel.groupName || '分组待查询'} · {channel.platform || '平台待查询'}
+                          </small>
+                          <small title={[channel.primaryModel, ...channel.extraModels].join('、')}>
+                            {[channel.primaryModel, ...channel.extraModels]
+                              .filter(Boolean)
+                              .join('、') || '模型待查询'}
+                          </small>
+                          <span className="rate-channel-list-metrics">
+                            <small>延迟 {formatMilliseconds(channel.latencyMs)}</small>
+                            <small>Ping {formatMilliseconds(channel.pingMs)}</small>
+                            <small>可用率 {formatAvailability(channel.availability7d)}</small>
+                          </span>
+                          <ChannelSparkline
+                            className="rate-channel-sparkline"
+                            timeline={channel.timeline}
+                            ariaLabel="近 18 次记录"
+                            rawStatus
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          className={`rate-channel-association-button ${associated ? 'associated' : ''}`}
+                          aria-label={`${associated ? '取消关联' : '关联'} ${channel.name}`}
+                          aria-pressed={associated}
+                          disabled={
+                            !props.associationGroupId ||
+                            !props.onAssociationSave ||
+                            associationBusyId !== undefined
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleAssociation(channel.id);
+                          }}
+                        >
+                          {associationBusyId === channel.id
+                            ? '保存中…'
+                            : associated
+                              ? '已关联'
+                              : '关联'}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </section>
+              ))}
           </div>
           {associationMessage && (
             <div className="rate-channel-association-message" role="status">

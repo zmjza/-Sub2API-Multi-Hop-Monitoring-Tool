@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   channelSyncPresentation,
   channelTimelineForDisplay,
+  CHANNEL_TIMELINE_SLOT_COUNT,
+  channelTimelineSlotsForDisplay,
+  groupChannelsByPlatformFamily,
+  normalizeChannelPlatformFamily,
+  v2MatrixBuckets,
+  V2_MATRIX_SLOT_COUNT,
   currentKeyGroup,
   currentKeyGroupName,
   detailForDisplayedChannel,
@@ -24,7 +30,7 @@ import {
 } from './channel-ranking';
 
 describe('summarizeLatestChannelChecks', () => {
-  it('sorts real checks, keeps twenty for display and the latest twelve for percentage', () => {
+  it('sorts real checks, keeps eighteen for display and the latest twelve for percentage', () => {
     const timeline = Array.from({ length: 22 }, (_, index) => ({
       status: index === 0 || index === 13 ? 'failed' : 'normal',
       checkedAt: new Date(Date.parse('2026-08-07T12:00:00.000Z') + index * 1_000).toISOString(),
@@ -32,8 +38,8 @@ describe('summarizeLatestChannelChecks', () => {
 
     const summary = summarizeLatestChannelChecks(timeline);
 
-    expect(summary.points).toHaveLength(20);
-    expect(summary.points[0]?.checkedAt).toBe(Date.parse('2026-08-07T12:00:02.000Z'));
+    expect(summary.points).toHaveLength(18);
+    expect(summary.points[0]?.checkedAt).toBe(Date.parse('2026-08-07T12:00:04.000Z'));
     expect(summary.points.at(-1)).toEqual({
       status: 'normal',
       checkedAt: Date.parse('2026-08-07T12:00:21.000Z'),
@@ -92,6 +98,81 @@ describe('channelTimelineForDisplay', () => {
       { status: 'normal' as const, checkedAt: '2026-07-20T09:59:00Z' },
     ];
     expect(channelTimelineForDisplay(points, now, 3)).toEqual([points[2], points[3]]);
+  });
+
+  it('defaults to 18 slots, pads empty cells on the left and keeps the newest on the right', () => {
+    const now = Date.parse('2026-07-20T10:00:00Z');
+    expect(CHANNEL_TIMELINE_SLOT_COUNT).toBe(18);
+    const slots = channelTimelineSlotsForDisplay(
+      [
+        { status: 'failed' as const, checkedAt: '2026-07-20T09:58:00Z' },
+        { status: 'normal' as const, checkedAt: '2026-07-20T09:59:00Z' },
+        { status: 'unknown' as const, checkedAt: 'not-a-date' },
+        { status: 'normal' as const, checkedAt: '2026-07-20T10:01:00Z' },
+      ],
+      now,
+    );
+    expect(slots).toHaveLength(18);
+    expect(slots.filter((slot) => slot.empty)).toHaveLength(16);
+    expect(slots.slice(0, 16).every((slot) => slot.empty)).toBe(true);
+    expect(slots.at(-2)).toEqual({
+      empty: false,
+      point: { status: 'failed', checkedAt: '2026-07-20T09:58:00Z' },
+    });
+    expect(slots.at(-1)).toEqual({
+      empty: false,
+      point: { status: 'normal', checkedAt: '2026-07-20T09:59:00Z' },
+    });
+  });
+
+  it('keeps V2 90m/24h/7d/30d matrices at 18 buckets with left padding', () => {
+    expect(V2_MATRIX_SLOT_COUNT).toBe(18);
+    const buckets = Array.from({ length: 5 }, (_, index) => ({
+      checkedAt: `2026-09-14T0${index}:00:00Z`,
+      status: 'normal' as const,
+    }));
+    for (const range of ['90m', '24h', '7d', '30d'] as const) {
+      const matrix = v2MatrixBuckets(buckets, range);
+      expect(matrix).toHaveLength(18);
+      expect(matrix.slice(0, 13).every((item) => item.status === 'empty')).toBe(true);
+      expect(matrix.at(-1)?.checkedAt).toBe('2026-09-14T04:00:00Z');
+    }
+  });
+});
+
+describe('channel platform families', () => {
+  it('normalizes aliases into five families in a fixed order', () => {
+    expect(normalizeChannelPlatformFamily('OpenAI')).toBe('openai');
+    expect(normalizeChannelPlatformFamily('open_ai')).toBe('openai');
+    expect(normalizeChannelPlatformFamily('ChatGPT')).toBe('openai');
+    expect(normalizeChannelPlatformFamily('ChatGPT-Plus 【特惠】')).toBe('openai');
+    expect(normalizeChannelPlatformFamily('claude')).toBe('anthropic');
+    expect(normalizeChannelPlatformFamily('Claude-Max 【满血】')).toBe('anthropic');
+    expect(normalizeChannelPlatformFamily('Anthropic')).toBe('anthropic');
+    expect(normalizeChannelPlatformFamily('xai')).toBe('grok');
+    expect(normalizeChannelPlatformFamily('Grok')).toBe('grok');
+    expect(normalizeChannelPlatformFamily('google_gemini')).toBe('gemini');
+    expect(normalizeChannelPlatformFamily('google')).toBe('gemini');
+    expect(normalizeChannelPlatformFamily('Gemini-反重力 【稳定】')).toBe('gemini');
+    expect(normalizeChannelPlatformFamily('Local-Lab')).toBe('other');
+    expect(normalizeChannelPlatformFamily(undefined)).toBe('other');
+    const groups = groupChannelsByPlatformFamily([
+      { id: '1', platform: 'chatgpt', name: 'A' },
+      { id: '2', platform: 'claude', name: 'B' },
+      { id: '3', platform: 'xai', name: 'C' },
+      { id: '4', platform: 'gemini', name: 'D' },
+      { id: '5', platform: 'local', name: 'E' },
+      { id: '6', platform: 'deepseek', name: 'F' },
+    ]);
+    expect(groups.map((group) => group.family)).toEqual([
+      'openai',
+      'anthropic',
+      'grok',
+      'gemini',
+      'other',
+    ]);
+    expect(groups[4]?.label).toBe('其他');
+    expect(groups[4]?.items.map((item) => item.name)).toEqual(['E', 'F']);
   });
 });
 

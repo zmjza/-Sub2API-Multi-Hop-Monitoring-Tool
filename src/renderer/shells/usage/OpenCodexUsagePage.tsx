@@ -27,6 +27,8 @@ import {
 import { firstTokenClass, formatAverageSample } from './UsagePage';
 import { formatCacheRate } from './cache-rate';
 import './usage.css';
+import { DateTimeRangeField } from './DateTimeRangeField';
+import { isInvertedDateTimeRange } from '../../../../electron/shared/usage-datetime';
 
 const PAGE_SIZE = 20;
 
@@ -44,6 +46,8 @@ const EMPTY_FILTERS: OpenCodexFilters = {
   status: '',
   startDate: '',
   endDate: '',
+  startHour: 0,
+  endHour: 23,
   sort: 'desc',
 };
 
@@ -71,6 +75,9 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
       activeFilters.period,
       activeFilters.startDate,
       activeFilters.endDate,
+      Date.now(),
+      activeFilters.startHour ?? 0,
+      activeFilters.endHour ?? 23,
     );
     const query = {
       ...(activeFilters.provider ? { provider: activeFilters.provider } : {}),
@@ -268,22 +275,25 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
         </div>
         {filters.period === 'custom' && (
           <div className="custom-date-range">
-            <label>
-              开始日期
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(event) => changeFilters({ startDate: event.target.value })}
-              />
-            </label>
-            <label>
-              结束日期
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(event) => changeFilters({ endDate: event.target.value })}
-              />
-            </label>
+            <DateTimeRangeField
+              startDate={filters.startDate}
+              endDate={filters.endDate}
+              startHour={filters.startHour}
+              endHour={filters.endHour}
+              onChange={(next) => changeFilters(next)}
+            />
+            {filters.startDate &&
+            filters.endDate &&
+            isInvertedDateTimeRange(
+              filters.startDate,
+              filters.endDate,
+              filters.startHour,
+              filters.endHour,
+            ) ? (
+              <p className="usage-range-error" role="alert">
+                结束时间不能早于开始时间
+              </p>
+            ) : null}
           </div>
         )}
         <div className="filter-grid">

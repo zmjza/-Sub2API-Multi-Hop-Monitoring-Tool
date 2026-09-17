@@ -67,6 +67,7 @@ import type {
   FloatingSettings,
   RateContexts,
   ApiKeyManagementPayload,
+  UsageJumpRequest,
 } from '../../electron/shared/contracts';
 import { type RadarEntry, type RadarEmbedState } from '../../electron/shared/radar';
 import {
@@ -116,6 +117,7 @@ export function App() {
   const [writingKeyIds, setWritingKeyIds] = useState<Set<string>>(() => new Set());
   const [apiKeyMessage, setApiKeyMessage] = useState('');
   const [channelsData, setChannelsData] = useState<unknown>();
+  const [usageJump, setUsageJump] = useState<UsageJumpRequest & { token: number }>();
   const [channelAssociations, setChannelAssociations] = useState<ChannelAssociation[]>([]);
   const [channelAssociationsBySite, setChannelAssociationsBySite] = useState<
     Record<string, ChannelAssociation[]>
@@ -489,6 +491,7 @@ export function App() {
     setUsageMode((current) => (current === 'sub2api' ? 'opencodex' : 'sub2api'));
   context.latestUsageRecord = latestUsageRecord;
   context.channelsData = channelsData;
+  context.usageJump = usageJump;
   context.channelStatusBySite = channelStatusBySite;
   context.channelAssociations = channelAssociations;
   context.channelAssociationsBySite = channelAssociationsBySite;
@@ -767,6 +770,17 @@ export function App() {
     }
   };
   context.onRefreshFloating = refreshSelected;
+  context.onOpenPurchase = async (siteId) => {
+    try {
+      await window.sub2apiDesktop?.sites.openPurchase(siteId);
+    } catch (error) {
+      notify({
+        id: 'open-purchase',
+        kind: 'error',
+        message: safeRendererError(error, '无法打开充值页'),
+      });
+    }
+  };
   context.onSelectChannel = (channelId) => {
     if (!selectedSite) return;
     const siteId = selectedSite.id;
@@ -1033,7 +1047,7 @@ export function App() {
       setUsageData(undefined);
       setUsageStats(undefined);
     }
-    if (shell === 'channels') void loadChannels(selectedSite.id);
+    if (shell === 'channels' || shell === 'api-keys') void loadChannels(selectedSite.id);
   }, [selectedSite?.id, shell]);
   useEffect(() => {
     if (initialLocation.surface !== 'floating' || !selectedSite || !window.sub2apiDesktop) return;
@@ -1241,6 +1255,16 @@ export function App() {
   useEffect(() => {
     document.querySelector<HTMLElement>('.content-scroll')?.scrollTo({ top: 0, left: 0 });
   }, [shell]);
+  useEffect(() => {
+    if (initialLocation.surface === 'floating') return;
+    const unsubscribe = window.sub2apiDesktop?.sites.onOpenUsagePage((jump) => {
+      selectSite(jump.siteId);
+      setUsageMode('sub2api');
+      changeShell('usage');
+      setUsageJump({ ...jump, token: Date.now() });
+    });
+    return () => unsubscribe?.();
+  }, []);
   if (initialLocation.surface === 'floating')
     return <FloatingWindow {...context} onStateChange={setState} />;
   const apiKeysPage = (
@@ -1343,6 +1367,12 @@ export function App() {
           });
       }}
       onOpenSiteManagement={() => changeShell('sites')}
+      channelsData={channelsData}
+      onSelectChannelGroup={(groupId) => {
+        const next = { ...apiKeyFilters, groupId, page: 1 };
+        setApiKeyFilters(next);
+        if (selectedSite) void loadApiKeys(selectedSite.id, next);
+      }}
     />
   );
   const pages = {

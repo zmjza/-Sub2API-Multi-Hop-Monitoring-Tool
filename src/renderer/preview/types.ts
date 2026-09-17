@@ -87,10 +87,14 @@ export interface PreviewContext {
     startDate?: string;
     endDate?: string;
     requestType?: string;
+    startHour?: number;
+    endHour?: number;
     billingType?: string;
     billingMode?: string;
     sort?: 'asc' | 'desc';
   }) => void;
+  usageJump?: { siteId: string; apiKeyId?: string; period: 'today'; token: number };
+  onOpenPurchase?: (siteId: string) => Promise<void> | void;
   onKeyPreferenceChange?: (
     siteId: string,
     value: { mode: 'auto' | 'manual'; keyId?: string },

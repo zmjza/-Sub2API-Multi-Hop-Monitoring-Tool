@@ -100,9 +100,12 @@ describe('electron-builder manifest', () => {
     expect(mainSource).toContain('contextIsolation: true');
     expect(mainSource).toContain('sandbox: true');
     expect(mainSource).toContain('nodeIntegration: false');
-    expect(mainSource).toContain(
-      "view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))",
-    );
+    expect(mainSource).toContain('view.webContents.setWindowOpenHandler(embedWindowOpenHandler())');
+    expect(mainSource).toContain("action: 'deny' as const");
+    expect(mainSource).toContain('sites:open-purchase');
+    expect(mainSource).toContain('window:open-usage');
+    expect(mainSource).toContain('chromeLaunchArgsForUrl');
+    expect(mainSource).not.toMatch(/launchPurchaseUrl[\s\S]*remote-debugging/);
     expect(mainSource).toContain("view.webContents.on('will-navigate'");
     expect(mainSource).toContain("view.webContents.on('will-redirect'");
     expect(mainSource).toContain("view.webContents.on('before-input-event'");
@@ -138,5 +141,25 @@ describe('electron-builder manifest', () => {
     expect(bridgeSource).not.toContain('sub2api-servers:discover-menus');
     expect(bridgeTypes).not.toContain('listMenus(id: string)');
     expect(bridgeTypes).not.toContain('discoverMenus(id: string)');
+  });
+
+  it('opens user-gesture embedded links in the system browser and keeps auth windows denied', () => {
+    const sub2api = readFileSync('electron/main/services/sub2api-server-manager.ts', 'utf8');
+    const favorites = readFileSync('electron/main/services/favorite-websites-manager.ts', 'utf8');
+    const auth = readFileSync('electron/main/services/interactive-auth-window.ts', 'utf8');
+    const bridgeSource = readFileSync('electron/preload/bridge.cts', 'utf8');
+    const bridgeTypes = readFileSync('electron/preload/index.ts', 'utf8');
+
+    for (const source of [sub2api, favorites]) {
+      expect(source).toContain('decideEmbeddedWindowOpen');
+      expect(source).toContain("action: 'deny'");
+      expect(source).not.toContain("action: 'allow'");
+    }
+    expect(auth).toContain("setWindowOpenHandler(() => ({ action: 'deny' }))");
+    expect(auth).not.toContain('decideEmbeddedWindowOpen');
+    expect(bridgeSource).toContain("ipcRenderer.invoke('sites:open-purchase'");
+    expect(bridgeSource).toContain("ipcRenderer.send('window:open-usage'");
+    expect(bridgeTypes).toContain('openPurchase(siteId: string)');
+    expect(bridgeTypes).toContain('openUsagePage(');
   });
 });

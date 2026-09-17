@@ -120,6 +120,9 @@ describe('controlled UI shell preview', () => {
     expect(notificationStyles).toContain('.app-notification-viewport');
     expect(styles).not.toContain('.update-toast');
     expect(styles).toContain('.update-modal-backdrop');
+    expect(styles).toContain('--motion-fast');
+    expect(styles).toContain('--motion-page');
+    expect(styles).toContain('prefers-reduced-motion');
   });
 
   it('uses the packaged Sub2API logo in the application brand lockup', () => {
@@ -145,5 +148,17 @@ describe('controlled UI shell preview', () => {
         /TODO\((?:ui-shell|codex-connect|codex-state|codex-validate|codex-route)\)/,
       );
     }
+  });
+});
+
+describe('REQ-260915 app wiring', () => {
+  it('loads channels on the API key page and listens for usage jumps on the main surface', () => {
+    const app = readFileSync(fileURLToPath(new URL('../App.tsx', import.meta.url)), 'utf8');
+    expect(app).toContain("shell === 'channels' || shell === 'api-keys'");
+    expect(app).toContain('channelsData={channelsData}');
+    expect(app).toContain('onSelectChannelGroup');
+    expect(app).toContain('onOpenUsagePage');
+    expect(app).toContain('openPurchase');
+    expect(app).toContain('usageJump');
   });
 });

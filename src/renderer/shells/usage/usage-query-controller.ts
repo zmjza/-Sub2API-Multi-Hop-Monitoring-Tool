@@ -6,6 +6,8 @@ export interface UsageAutoQuery {
   groupId?: string;
   startDate?: string;
   endDate?: string;
+  startHour?: number;
+  endHour?: number;
   requestType?: string;
   billingType?: string;
   billingMode?: string;

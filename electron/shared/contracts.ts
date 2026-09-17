@@ -42,6 +42,8 @@ export const usageQuerySchema = z
     groupId: z.string().max(128).optional(),
     startDate: z.string().max(40).optional(),
     endDate: z.string().max(40).optional(),
+    startHour: z.number().int().min(0).max(23).optional(),
+    endHour: z.number().int().min(0).max(23).optional(),
     requestType: z.enum(['unknown', 'sync', 'stream', 'ws_v2', 'cyber']).optional(),
     billingType: z.enum(['0', '1']).optional(),
     billingMode: z.enum(['token', 'per_request', 'image', 'video']).optional(),
@@ -55,6 +57,13 @@ export type UsageQuery = Omit<ParsedUsageQuery, 'requestType' | 'billingType' | 
   billingMode?: string;
 };
 export type SiteNoteInput = z.infer<typeof siteNoteSchema>;
+export const purchaseRequestSchema = z.object({ siteId: siteIdSchema });
+export const usageJumpSchema = z.object({
+  siteId: siteIdSchema,
+  apiKeyId: z.string().max(128).optional(),
+  period: z.literal('today').default('today'),
+});
+export type UsageJumpRequest = z.infer<typeof usageJumpSchema>;
 export const keyPreferenceSchema = z
   .object({ mode: z.enum(['auto', 'manual']), keyId: z.string().min(1).max(128).optional() })
   .superRefine((value, context) => {

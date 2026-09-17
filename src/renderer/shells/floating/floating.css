@@ -239,9 +239,21 @@ body:has(.floating-window) {
   color: #64748b;
   font-size: 12px;
 }
-.floating-metrics span {
+.floating-metrics span,
+.floating-metrics button {
   display: grid;
   gap: 2px;
+}
+.floating-metrics button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 .floating-metrics b {
   color: #1e1b4b;

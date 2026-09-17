@@ -2,7 +2,7 @@ import { Activity, AlertTriangle, RefreshCw } from 'lucide-react';
 import type { ChannelDetailPayload } from '../../../../electron/shared/contracts';
 import type { RateChannelSnapshot } from './rate-comparison';
 import type { InlineChannelRefreshState } from './OverviewPage';
-import { channelTimelineForDisplay } from '../channels/channel-ranking';
+import { ChannelSparkline } from '../channels/ChannelStatusCard';
 import { formatChannelFetchedAt } from './channel-time';
 
 type Channel = RateChannelSnapshot;
@@ -60,7 +60,6 @@ export function RateChannelSummary(props: {
   const status = model?.status ?? props.channel.status;
   const availability = model?.availability7d ?? props.channel.availability7d;
   const detailFailed = props.detailState?.state === 'error';
-  const timeline = channelTimelineForDisplay(props.channel.timeline ?? [], Date.now(), 20);
   const v2 = props.channel.v2;
 
   return (
@@ -145,15 +144,12 @@ export function RateChannelSummary(props: {
           </button>
         )}
       </div>
-      <div className="rate-inline-channel-timeline" aria-label="7 天渠道状态时间线">
-        {timeline.length ? (
-          timeline.map((point, index) => (
-            <i className={point.status} key={`${point.checkedAt ?? 'unknown'}-${index}`} />
-          ))
-        ) : (
-          <span>暂无状态记录</span>
-        )}
-      </div>
+      <ChannelSparkline
+        className="rate-inline-channel-timeline"
+        timeline={props.channel.timeline}
+        ariaLabel="近 18 次记录"
+        rawStatus
+      />
       {detailFailed && (
         <small className="rate-inline-channel-error" role="alert">
           详情加载失败

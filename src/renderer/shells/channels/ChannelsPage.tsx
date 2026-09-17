@@ -1,13 +1,5 @@
 import { useRef, useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
-  Globe2,
-  RefreshCw,
-  Zap,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Clock3, RefreshCw } from 'lucide-react';
 import type {
   ChannelDetailPayload,
   ChannelViewPayload,
@@ -15,12 +7,14 @@ import type {
 import type { ChannelsProps } from './types';
 import {
   channelSyncPresentation,
-  channelTimelineForDisplay,
   currentKeyGroup,
+  groupChannelsByPlatformFamily,
   isChannelDataStale,
   rankChannels,
   usageModelsForGroup,
 } from './channel-ranking';
+import { ChannelFamilyHeader, ChannelStatusCard } from './ChannelStatusCard';
+export { formatV2BucketTip } from './ChannelStatusCard';
 import { channels } from './data';
 import './channels.css';
 export function ChannelsPage(props: ChannelsProps) {
@@ -188,135 +182,33 @@ export function ChannelsPage(props: ChannelsProps) {
           <span>余额和用量查询仍可正常使用。</span>
         </div>
       ) : (
-        <div className="channel-cards">
-          {rankedChannels.map((item) => {
-            const displayTimeline = channelTimelineForDisplay(item.timeline, Date.now(), 20);
-            const matrixBuckets = v2MatrixBuckets(item.v2?.buckets ?? [], v2Range);
-            return (
-              <article
-                className={`channel-card ${item.status} ${item.id === props.selectedChannelId ? 'selected' : ''}`}
-                key={item.id}
-                onClick={() => props.onSelectChannel?.(item.id)}
+        <div className="channel-family-list">
+          {groupChannelsByPlatformFamily(rankedChannels)
+            .filter((group) => group.items.length > 0)
+            .map((group) => (
+              <section
+                className={`channel-family-section family-${group.family}`}
+                key={group.family}
               >
-                <div className="channel-card-head">
-                  <div className="channel-title">
-                    <div className="channel-icon">
-                      <Activity size={20} />
-                    </div>
-                    <div>
-                      <h3 title={item.name}>{item.name}</h3>
-                      <span>
-                        <b>{item.platform || '平台待查询'}</b>
-                        {monitorSource === 'v1' ? ' · ' + (item.primaryModel || '模型待查询') : ''}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="channel-card-status-stack">
-                    <span className={`status-pill ${statusClass(item.status)}`}>
-                      {statusLabel(item.status, monitorSource)}
-                    </span>
-                  </div>
+                <ChannelFamilyHeader
+                  family={group.family}
+                  count={group.items.length}
+                  label={group.label}
+                />
+                <div className="channel-cards">
+                  {group.items.map((item) => (
+                    <ChannelStatusCard
+                      key={item.id}
+                      item={item}
+                      selected={item.id === props.selectedChannelId}
+                      monitorSource={monitorSource}
+                      v2Range={v2Range}
+                      onSelect={props.onSelectChannel}
+                    />
+                  ))}
                 </div>
-                <div className="channel-metrics">
-                  {monitorSource === 'v2' ? (
-                    <>
-                      <div>
-                        <span>
-                          <Activity size={14} /> 缓存率
-                        </span>
-                        <strong>{formatRate(item.v2?.cacheRate)}</strong>
-                      </div>
-                      <div>
-                        <span>
-                          <Zap size={14} /> 首 Token
-                        </span>
-                        <strong className={ttftTone(item.v2?.ttftMs)}>
-                          {formatHoverTtft(item.v2?.ttftMs)}
-                        </strong>
-                      </div>
-                      <div>
-                        <span>
-                          <Activity size={14} /> 可用率
-                        </span>
-                        <strong className={rateTone(item.v2?.successRate)}>
-                          {formatRate(item.v2?.successRate)}
-                        </strong>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <span>
-                          <Zap size={14} /> 对话延迟
-                        </span>
-                        <strong>{formatMilliseconds(item.latencyMs)}</strong>
-                      </div>
-                      <div>
-                        <span>
-                          <Globe2 size={14} /> 端点 PING
-                        </span>
-                        <strong>{formatMilliseconds(item.pingMs)}</strong>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="availability">
-                  {monitorSource === 'v2' ? (
-                    <>
-                      <div>
-                        <span>近 {matrixBuckets.length} 次记录</span>
-                        <span>{item.v2?.coveragePartial ? '部分覆盖' : `矩阵 · ${v2Range}`}</span>
-                      </div>
-                      {matrixBuckets.length ? (
-                        <div className="sparkline">
-                          {matrixBuckets.map((point, index) => (
-                            <i
-                              className={statusClass(point.status)}
-                              key={`${point.checkedAt}-${index}`}
-                              title={formatV2BucketTip(point)}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="timeline-empty">暂无矩阵记录</div>
-                      )}
-                      <div className="timeline-label">
-                        <span>PAST</span>
-                        <span>NOW</span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <span>可用性 · 7 天</span>
-                        <strong>{formatAvailability(item.availability7d)}</strong>
-                      </div>
-                      {displayTimeline.length ? (
-                        <div className="sparkline">
-                          {displayTimeline.map((point, index) => (
-                            <i
-                              className={statusClass(point.status)}
-                              key={`${point.checkedAt}-${index}`}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="timeline-empty">暂无状态记录</div>
-                      )}
-                      <small>
-                        近 {displayTimeline.length} 次记录{' '}
-                        <em>{formatCheckedAt(displayTimeline.at(-1)?.checkedAt)}</em>
-                      </small>
-                      <div className="timeline-label">
-                        <span>PAST</span>
-                        <span>NOW</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </article>
-            );
-          })}
+              </section>
+            ))}
         </div>
       )}
     </section>
@@ -355,13 +247,6 @@ function statusLabel(
   return '状态待查询';
 }
 
-function statusClass(status: ChannelViewPayload['channels'][number]['status']) {
-  if (status === 'normal') return 'good';
-  if (status === 'degraded') return 'warn';
-  if (status === 'failed') return 'bad';
-  return 'unknown';
-}
-
 function formatMilliseconds(value: number | undefined) {
   return value === undefined ? '待查询' : `${value.toLocaleString()} ms`;
 }
@@ -374,54 +259,8 @@ function formatRate(value: number | undefined) {
   return value === undefined ? '未知' : (value * 100).toFixed(2) + '%';
 }
 
-const V2_MATRIX_LENGTH = { '90m': 18, '24h': 24, '7d': 14, '30d': 30 } as const;
-
-type V2Bucket = NonNullable<ChannelViewPayload['channels'][number]['v2']>['buckets'][number];
-
-function v2MatrixBuckets(buckets: V2Bucket[], range: keyof typeof V2_MATRIX_LENGTH) {
-  const length = V2_MATRIX_LENGTH[range];
-  const visible = buckets.slice(-length);
-  if (visible.length >= length) return visible;
-  return [
-    ...Array.from({ length: length - visible.length }, () => ({
-      checkedAt: '',
-      status: 'unknown' as const,
-    })),
-    ...visible,
-  ];
-}
-
-export function formatV2BucketTip(point: {
-  checkedAt?: string;
-  successRate?: number;
-  cacheRate?: number;
-  ttftMs?: number;
-}) {
-  const when = formatCheckedAt(point.checkedAt);
-  const prefix = when === '待查询' ? '当前' : when;
-  return `${prefix} · 可用率 ${formatHoverRate(point.successRate)} · 缓存率 ${formatHoverRate(point.cacheRate)} · 首 Token ${formatHoverTtft(point.ttftMs)}`;
-}
-
-function formatHoverRate(value: number | undefined) {
-  return value === undefined ? '—' : (value * 100).toFixed(1) + '%';
-}
-
 function formatHoverTtft(value: number | undefined) {
   return value === undefined ? '—' : (value / 1000).toFixed(1) + 's';
-}
-
-function rateTone(value: number | undefined) {
-  if (value === undefined) return 'unknown';
-  if (value < 0.3) return 'bad';
-  if (value < 0.7) return 'warn';
-  return 'good';
-}
-
-function ttftTone(value: number | undefined) {
-  if (value === undefined) return 'unknown';
-  if (value >= 30_000) return 'bad';
-  if (value >= 10_000) return 'warn';
-  return 'good';
 }
 
 function formatCheckedAt(value: string | undefined) {

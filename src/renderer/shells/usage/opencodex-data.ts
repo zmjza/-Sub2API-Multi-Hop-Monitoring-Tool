@@ -199,6 +199,8 @@ export interface OpenCodexFilters {
   status: string;
   startDate: string;
   endDate: string;
+  startHour?: number;
+  endHour?: number;
   sort: 'asc' | 'desc';
 }
 
@@ -207,12 +209,16 @@ export function openCodexTimeRange(
   startDate = '',
   endDate = '',
   now = Date.now(),
+  startHour = 0,
+  endHour = 23,
 ): [number, number] {
   if (period === 'custom') {
     const start = startDate
-      ? new Date(startDate + 'T00:00:00').getTime()
+      ? new Date(startDate + 'T' + String(startHour).padStart(2, '0') + ':00:00').getTime()
       : Number.NEGATIVE_INFINITY;
-    const end = endDate ? new Date(endDate + 'T23:59:59.999').getTime() : Number.POSITIVE_INFINITY;
+    const end = endDate
+      ? new Date(endDate + 'T' + String(endHour).padStart(2, '0') + ':59:59.999').getTime()
+      : Number.POSITIVE_INFINITY;
     return [
       Number.isFinite(start) ? start : Number.NEGATIVE_INFINITY,
       Number.isFinite(end) ? end : Number.POSITIVE_INFINITY,
@@ -229,7 +235,14 @@ export function filterOpenCodexRows(
   rows: OpenCodexRow[],
   filters: OpenCodexFilters,
 ): OpenCodexRow[] {
-  const [start, end] = openCodexTimeRange(filters.period, filters.startDate, filters.endDate);
+  const [start, end] = openCodexTimeRange(
+    filters.period,
+    filters.startDate,
+    filters.endDate,
+    Date.now(),
+    filters.startHour ?? 0,
+    filters.endHour ?? 23,
+  );
   const filtered = rows.filter((row) => {
     if (row.timestamp < start || row.timestamp > end) return false;
     if (filters.provider && row.provider !== filters.provider) return false;

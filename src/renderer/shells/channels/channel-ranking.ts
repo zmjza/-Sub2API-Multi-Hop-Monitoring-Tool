@@ -279,7 +279,7 @@ export function summarizeLatestChannelChecks(
         : [];
     })
     .sort((left, right) => left.checkedAt - right.checkedAt)
-    .slice(-20);
+    .slice(-CHANNEL_TIMELINE_SLOT_COUNT);
   if (!points.length) return { availabilityPercent: undefined, points: [] };
   const denominator = Math.min(12, points.length);
   const percentPoints = points.slice(-denominator);
@@ -551,7 +551,7 @@ export function latestTimelinePoint<T extends { checkedAt?: string }>(
 export function channelTimelineForDisplay<T extends { checkedAt?: unknown }>(
   timeline: T[],
   now = Date.now(),
-  limit = 20,
+  limit = CHANNEL_TIMELINE_SLOT_COUNT,
 ): T[] {
   return timeline
     .flatMap((point) => {
@@ -564,6 +564,99 @@ export function channelTimelineForDisplay<T extends { checkedAt?: unknown }>(
       return leftTime - rightTime;
     })
     .slice(-Math.max(1, Math.floor(limit)));
+}
+
+export const CHANNEL_TIMELINE_SLOT_COUNT = 18;
+export const V2_MATRIX_SLOT_COUNT = 18;
+
+export type TimelineSlot<T> = { empty: true } | { empty: false; point: T };
+
+export function channelTimelineSlotsForDisplay<T extends { checkedAt?: unknown }>(
+  timeline: T[],
+  now = Date.now(),
+  limit = CHANNEL_TIMELINE_SLOT_COUNT,
+): TimelineSlot<T>[] {
+  const points = channelTimelineForDisplay(timeline, now, limit);
+  return [
+    ...Array.from({ length: Math.max(0, limit - points.length) }, () => ({ empty: true as const })),
+    ...points.map((point) => ({ empty: false as const, point })),
+  ];
+}
+
+export type V2MatrixRange = '90m' | '24h' | '7d' | '30d';
+
+export function v2MatrixBuckets<T extends { checkedAt?: string; status?: string }>(
+  buckets: T[],
+  _range: V2MatrixRange,
+): Array<T | { checkedAt: string; status: 'empty' }> {
+  const visible = buckets.slice(-V2_MATRIX_SLOT_COUNT);
+  return [
+    ...Array.from({ length: Math.max(0, V2_MATRIX_SLOT_COUNT - visible.length) }, () => ({
+      checkedAt: '',
+      status: 'empty' as const,
+    })),
+    ...visible,
+  ];
+}
+
+export type ChannelPlatformFamily = 'openai' | 'anthropic' | 'grok' | 'gemini' | 'other';
+
+const PLATFORM_ALIASES: Record<string, ChannelPlatformFamily> = {
+  openai: 'openai',
+  open_ai: 'openai',
+  chatgpt: 'openai',
+  anthropic: 'anthropic',
+  claude: 'anthropic',
+  grok: 'grok',
+  xai: 'grok',
+  gemini: 'gemini',
+  google: 'gemini',
+  google_gemini: 'gemini',
+};
+
+export const CHANNEL_PLATFORM_ORDER: ChannelPlatformFamily[] = [
+  'openai',
+  'anthropic',
+  'grok',
+  'gemini',
+  'other',
+];
+
+export function normalizeChannelPlatformFamily(platform?: string): ChannelPlatformFamily {
+  const key = (platform ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (PLATFORM_ALIASES[key]) return PLATFORM_ALIASES[key];
+  if (key.includes('chatgpt') || key.includes('openai') || key.includes('open_ai')) return 'openai';
+  if (key.includes('anthropic') || key.includes('claude')) return 'anthropic';
+  if (key.includes('grok') || key.includes('xai')) return 'grok';
+  if (key.includes('gemini') || key.includes('google')) return 'gemini';
+  return 'other';
+}
+
+export function channelPlatformFamilyLabel(family: ChannelPlatformFamily): string {
+  if (family === 'openai') return 'OpenAI';
+  if (family === 'anthropic') return 'Anthropic';
+  if (family === 'grok') return 'Grok';
+  if (family === 'gemini') return 'Gemini';
+  return '其他';
+}
+
+export function groupChannelsByPlatformFamily<T extends { platform?: string }>(
+  items: T[],
+): Array<{ family: ChannelPlatformFamily; label: string; items: T[] }> {
+  const buckets = new Map<ChannelPlatformFamily, T[]>();
+  for (const family of CHANNEL_PLATFORM_ORDER) buckets.set(family, []);
+  for (const item of items) {
+    const family = normalizeChannelPlatformFamily(item.platform);
+    buckets.get(family)?.push(item);
+  }
+  return CHANNEL_PLATFORM_ORDER.map((family) => ({
+    family,
+    label: channelPlatformFamilyLabel(family),
+    items: buckets.get(family) ?? [],
+  }));
 }
 
 export function isChannelDataStale(value: unknown, now = Date.now()): boolean {

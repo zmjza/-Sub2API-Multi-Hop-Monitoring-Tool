@@ -21,6 +21,7 @@ import {
 import {
   currentKeyGroup,
   resolveChannelPresentation,
+  resolveCurrentKey,
   summarizeLatestChannelChecks,
 } from '../channels/channel-ranking';
 import './floating.css';
@@ -52,6 +53,20 @@ export function FloatingWindow(props: FloatingProps) {
     currentKeyStats?.state === 'success' && keyAvailableCredit !== undefined
       ? keyAvailableCredit
       : undefined;
+  const currentKey = resolveCurrentKey(
+    props.keyOptions ?? [],
+    props.keyPreference,
+    props.selectedSite?.defaultKeyLabel,
+  );
+  const openTodayUsage = () => {
+    const siteId = props.selectedSite?.id;
+    if (!siteId) return;
+    window.sub2apiDesktop?.sites.openUsagePage({
+      siteId,
+      ...(currentKey?.id ? { apiKeyId: currentKey.id } : {}),
+      period: 'today',
+    });
+  };
   const tokensPerSecond = calculateTokensPerSecond(
     props.latestUsageRecord?.outputTokens,
     props.latestUsageRecord?.durationMs,
@@ -215,7 +230,7 @@ export function FloatingWindow(props: FloatingProps) {
         </div>
       )}
       <div className="floating-metrics">
-        <span>
+        <button type="button" aria-label="打开今日 Token 使用记录" onDoubleClick={openTodayUsage}>
           今日 Token
           <b>
             {keyTodayTokens !== undefined
@@ -224,8 +239,8 @@ export function FloatingWindow(props: FloatingProps) {
                 ? '—'
                 : data.todayTokens}
           </b>
-        </span>
-        <span>
+        </button>
+        <button type="button" aria-label="打开今日消费使用记录" onDoubleClick={openTodayUsage}>
           今日消费
           <b>
             {keyTodayCost !== undefined
@@ -234,7 +249,7 @@ export function FloatingWindow(props: FloatingProps) {
                 ? '—'
                 : data.todayCost}
           </b>
-        </span>
+        </button>
       </div>
       <footer>
         <details className="floating-settings">
@@ -412,9 +427,9 @@ function ChannelTimeline({ health }: { health: RecentHealth }) {
           </>
         )}
       </small>
-      <span className="floating-channel-timeline" aria-label="最近 20 次渠道状态时间线">
-        {Array.from({ length: 20 }, (_, index) => {
-          const point = health.points[index - (20 - health.points.length)];
+      <span className="floating-channel-timeline" aria-label="近 18 次渠道状态时间线">
+        {Array.from({ length: 18 }, (_, index) => {
+          const point = health.points[index - (18 - health.points.length)];
           const label = point ? channelPointLabel(point) : '暂无更早记录';
           return (
             <i

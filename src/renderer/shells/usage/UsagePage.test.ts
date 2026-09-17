@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
+  compactFilters,
   firstTokenClass,
   formatAverageDuration,
   readUsagePagination,
@@ -8,6 +11,7 @@ import {
   USAGE_COLUMNS,
   usageResetQuery,
 } from './UsagePage';
+import { DateTimeRangeField } from './DateTimeRangeField';
 
 describe('usage columns', () => {
   it('keeps cache rate in a dedicated column after Token', () => {
@@ -153,5 +157,66 @@ describe('readUsageStats', () => {
     expect(formatAverageDuration(readUsageStats({ ...base, averageDurationSampleCount: 0 }))).toBe(
       '—',
     );
+  });
+});
+
+describe('compactFilters', () => {
+  it('keeps startHour 0 when a custom date is present', () => {
+    expect(
+      compactFilters({
+        apiKeyId: '',
+        model: '',
+        groupId: '',
+        requestType: '',
+        billingType: '',
+        billingMode: '',
+        startDate: '2026-09-16',
+        endDate: '2026-09-16',
+        startHour: 0,
+        endHour: 23,
+      }),
+    ).toEqual({
+      startDate: '2026-09-16',
+      endDate: '2026-09-16',
+      startHour: 0,
+      endHour: 23,
+    });
+  });
+
+  it('omits hours when no custom dates are selected', () => {
+    expect(
+      compactFilters({
+        apiKeyId: 'key-1',
+        model: '',
+        groupId: '',
+        requestType: '',
+        billingType: '',
+        billingMode: '',
+        startDate: '',
+        endDate: '',
+        startHour: 0,
+        endHour: 23,
+      }),
+    ).toEqual({ apiKeyId: 'key-1' });
+  });
+});
+
+describe('DateTimeRangeField', () => {
+  it('renders a Chinese date panel with whole-hour options', () => {
+    const html = renderToStaticMarkup(
+      createElement(DateTimeRangeField, {
+        startDate: '2026-09-16',
+        endDate: '2026-09-16',
+        startHour: 0,
+        endHour: 23,
+        onChange() {},
+      }),
+    );
+    expect(html).toContain('2026年9月16日');
+    expect(html).toContain('00:00');
+    expect(html).toContain('aria-label="结束日期小时"');
+    expect(html).toContain('value="23" selected="">23:59:59');
+    expect(html).toContain('开始日期小时');
+    expect(html).not.toContain('September');
   });
 });

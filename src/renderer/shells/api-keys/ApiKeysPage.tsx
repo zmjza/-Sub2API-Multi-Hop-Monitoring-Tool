@@ -17,6 +17,15 @@ import {
 } from 'lucide-react';
 import type { ApiKeyPagination, ApiKeysPageProps, ApiKeysPageState, ApiKeyStatus } from './types';
 import './api-keys.css';
+import type { ChannelViewPayload } from '../../../../electron/shared/contracts';
+import {
+  CHANNEL_PLATFORM_ORDER,
+  channelPlatformFamilyLabel,
+  groupChannelsByPlatformFamily,
+  type ChannelPlatformFamily,
+} from '../channels/channel-ranking';
+import { ChannelFamilyHeader, ChannelStatusCard } from '../channels/ChannelStatusCard';
+import '../channels/channels.css';
 
 const statusOptions: Array<{ value: '' | ApiKeyStatus; label: string }> = [
   { value: '', label: '全部状态' },
@@ -34,6 +43,10 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
   const pagination = normalizeApiKeyPagination(props.pagination);
   const hasRows = props.keys.length > 0;
   const blockingState = !hasRows && props.state !== 'success' && props.state !== 'refreshing';
+  const [family, setFamily] = useState<ChannelPlatformFamily>('openai');
+  const channelPane = channelPaneModel(props.channelsData);
+  const familyGroups = groupChannelsByPlatformFamily(channelPane.items);
+  const familyItems = familyGroups.find((group) => group.family === family)?.items ?? [];
 
   if (props.sites.length === 0) {
     return (
@@ -78,206 +91,247 @@ export function ApiKeysPage(props: ApiKeysPageProps) {
         </label>
       </header>
 
-      <section className="api-keys-panel">
-        <div className="api-keys-toolbar">
-          <label className="api-keys-search">
-            <Search size={16} aria-hidden="true" />
-            <input
-              aria-label="搜索名称或完整 API Key"
-              placeholder="搜索名称或完整 API Key"
-              value={props.search}
-              onChange={(event) => props.onSearchChange?.(event.target.value)}
-            />
-          </label>
-          <label className="api-keys-filter">
-            <span className="api-keys-visually-hidden">按分组筛选</span>
-            <select
-              aria-label="按分组筛选"
-              value={props.groupFilter}
-              onChange={(event) => props.onGroupFilterChange?.(event.target.value)}
-            >
-              <option value="">全部分组</option>
-              {props.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {groupOptionLabel(group)}
-                </option>
+      <div className="api-keys-body">
+        <aside className="api-keys-channel-pane" aria-label="当前平台渠道状态">
+          <nav className="api-keys-family-tabs" aria-label="渠道分类">
+            {CHANNEL_PLATFORM_ORDER.map((item) => {
+              const count = familyGroups.find((group) => group.family === item)?.items.length ?? 0;
+              return (
+                <button
+                  type="button"
+                  key={item}
+                  className={`api-keys-family-tab family-${item}${family === item ? ' is-active' : ''}`}
+                  aria-pressed={family === item}
+                  onClick={() => setFamily(item)}
+                >
+                  {channelPlatformFamilyLabel(item)}
+                  <em>{count}</em>
+                </button>
+              );
+            })}
+          </nav>
+          <ChannelFamilyHeader family={family} count={familyItems.length} />
+          {familyItems.length === 0 ? (
+            <p className="api-keys-channel-empty">当前分类暂无渠道</p>
+          ) : (
+            <div className="channel-cards">
+              {familyItems.map((item) => (
+                <ChannelStatusCard
+                  key={item.id}
+                  item={item}
+                  monitorSource={channelPane.source}
+                  onSelect={() => {
+                    const group = props.groups.find(
+                      (candidate) => candidate.name === item.groupName,
+                    );
+                    if (group) props.onSelectChannelGroup?.(group.id);
+                  }}
+                />
               ))}
-            </select>
-          </label>
-          <label className="api-keys-filter">
-            <span className="api-keys-visually-hidden">按状态筛选</span>
-            <select
-              aria-label="按状态筛选"
-              value={props.statusFilter}
-              onChange={(event) =>
-                props.onStatusFilterChange?.(event.target.value as '' | ApiKeyStatus)
-              }
+            </div>
+          )}
+        </aside>
+        <section className="api-keys-panel">
+          <div className="api-keys-toolbar">
+            <label className="api-keys-search">
+              <Search size={16} aria-hidden="true" />
+              <input
+                aria-label="搜索名称或完整 API Key"
+                placeholder="搜索名称或完整 API Key"
+                value={props.search}
+                onChange={(event) => props.onSearchChange?.(event.target.value)}
+              />
+            </label>
+            <label className="api-keys-filter">
+              <span className="api-keys-visually-hidden">按分组筛选</span>
+              <select
+                aria-label="按分组筛选"
+                value={props.groupFilter}
+                onChange={(event) => props.onGroupFilterChange?.(event.target.value)}
+              >
+                <option value="">全部分组</option>
+                {props.groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {groupOptionLabel(group)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="api-keys-filter">
+              <span className="api-keys-visually-hidden">按状态筛选</span>
+              <select
+                aria-label="按状态筛选"
+                value={props.statusFilter}
+                onChange={(event) =>
+                  props.onStatusFilterChange?.(event.target.value as '' | ApiKeyStatus)
+                }
+              >
+                {statusOptions.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="api-keys-refresh"
+              type="button"
+              title="强制刷新"
+              aria-label="强制刷新 API 密钥"
+              disabled={props.state === 'loading' || props.state === 'refreshing'}
+              onClick={props.onRefresh}
             >
-              {statusOptions.map((option) => (
-                <option key={option.value || 'all'} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="api-keys-refresh"
-            type="button"
-            title="强制刷新"
-            aria-label="强制刷新 API 密钥"
-            disabled={props.state === 'loading' || props.state === 'refreshing'}
-            onClick={props.onRefresh}
-          >
-            <RefreshCw
-              className={props.state === 'refreshing' ? 'api-keys-spin' : undefined}
-              size={17}
-              aria-hidden="true"
-            />
-            刷新
-          </button>
-        </div>
+              <RefreshCw
+                className={props.state === 'refreshing' ? 'api-keys-spin' : undefined}
+                size={17}
+                aria-hidden="true"
+              />
+              刷新
+            </button>
+          </div>
 
-        <div className="api-keys-feedback" aria-live="polite">
-          {apiKeyStateMessage(props.state) || copyError || props.successMessage || ''}
-        </div>
+          <div className="api-keys-feedback" aria-live="polite">
+            {apiKeyStateMessage(props.state) || copyError || props.successMessage || ''}
+          </div>
 
-        {blockingState ? (
-          <ApiKeysState state={props.state} errorMessage={props.errorMessage} />
-        ) : props.state === 'empty' || !hasRows ? (
-          <ApiKeysState state="empty" />
-        ) : (
-          <>
-            <div className="api-keys-table-wrap" tabIndex={0} aria-label="API 密钥列表">
-              <table className="api-keys-table">
-                <thead>
-                  <tr>
-                    <th>名称</th>
-                    <th>API 密钥</th>
-                    <th>分组</th>
-                    <th>平台</th>
-                    <th>有效倍率</th>
-                    <th>当前并发</th>
-                    <th>消费</th>
-                    <th>状态</th>
-                    <th>创建时间</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {props.keys.map((key) => {
-                    const isWriting = props.writingKeyIds?.includes(key.id) ?? false;
-                    return (
-                      <tr key={key.id} className={isWriting ? 'api-keys-row-writing' : undefined}>
-                        <td className="api-keys-truncate api-keys-name-cell" title={key.name}>
-                          {key.name}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="api-keys-copy-key"
-                            title="点击复制完整 API Key"
-                            aria-label={`复制${key.name}的 API Key`}
-                            onClick={async () => {
-                              try {
-                                setCopyError('');
-                                await props.onCopyKey?.(key.id);
-                                setCopiedKeyId(key.id);
-                                window.setTimeout(
-                                  () =>
-                                    setCopiedKeyId((current) =>
-                                      current === key.id ? undefined : current,
-                                    ),
-                                  1600,
-                                );
-                              } catch {
-                                setCopiedKeyId(undefined);
-                                setCopyError('复制失败，请稍后重试');
-                              }
-                            }}
-                          >
-                            <code
-                              className="api-keys-full-key"
-                              title={key.apiKey ?? '完整 Key 待查询'}
-                            >
-                              {key.apiKey ?? '待查询'}
-                            </code>
-                            {copiedKeyId === key.id ? (
-                              <Check size={15} aria-hidden="true" />
-                            ) : (
-                              <Copy size={15} aria-hidden="true" />
-                            )}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="api-keys-group-cell">
-                            <GroupSelect
-                              ariaLabel={`切换${key.name}的分组`}
-                              currentGroupId={key.groupId}
-                              currentGroupName={key.groupName}
-                              currentPlatform={key.platform}
-                              currentRate={key.effectiveRate}
-                              groups={props.groups}
-                              disabled={isWriting}
-                              onChange={(nextGroupId) => {
-                                if (shouldRequestGroupChange(key.groupId, nextGroupId, isWriting)) {
-                                  props.onGroupChange?.(key.id, nextGroupId);
+          {blockingState ? (
+            <ApiKeysState state={props.state} errorMessage={props.errorMessage} />
+          ) : props.state === 'empty' || !hasRows ? (
+            <ApiKeysState state="empty" />
+          ) : (
+            <>
+              <div className="api-keys-table-wrap" tabIndex={0} aria-label="API 密钥列表">
+                <table className="api-keys-table">
+                  <thead>
+                    <tr>
+                      <th>名称</th>
+                      <th>API 密钥</th>
+                      <th>分组</th>
+                      <th>平台</th>
+                      <th>有效倍率</th>
+                      <th>当前并发</th>
+                      <th>消费</th>
+                      <th>状态</th>
+                      <th>创建时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {props.keys.map((key) => {
+                      const isWriting = props.writingKeyIds?.includes(key.id) ?? false;
+                      return (
+                        <tr key={key.id} className={isWriting ? 'api-keys-row-writing' : undefined}>
+                          <td className="api-keys-name-cell" title={key.name}>
+                            <span className="api-keys-truncate">{key.name}</span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="api-keys-copy-key"
+                              title="点击复制完整 API Key"
+                              aria-label={`复制${key.name}的 API Key`}
+                              onClick={async () => {
+                                try {
+                                  setCopyError('');
+                                  await props.onCopyKey?.(key.id);
+                                  setCopiedKeyId(key.id);
+                                  window.setTimeout(
+                                    () =>
+                                      setCopiedKeyId((current) =>
+                                        current === key.id ? undefined : current,
+                                      ),
+                                    1600,
+                                  );
+                                } catch {
+                                  setCopiedKeyId(undefined);
+                                  setCopyError('复制失败，请稍后重试');
                                 }
                               }}
-                            />
-                            <small>
-                              {isWriting ? '正在确认远程分组…' : (key.groupName ?? '待查询')}
-                            </small>
-                          </div>
-                        </td>
-                        <td>{platformBadge(key.platform)}</td>
-                        <td>{rateBadge(key.effectiveRate)}</td>
-                        <td>{formatOptionalNumber(key.currentConcurrency)}</td>
-                        <td className="api-keys-cost">
-                          <div className="api-keys-cost-stack">
-                            <span>
-                              <small>今日</small>
-                              {formatCost(key.todayActualCost)}
+                            >
+                              <code
+                                className="api-keys-full-key"
+                                title={key.apiKey ?? '完整 Key 待查询'}
+                              >
+                                {key.apiKey ?? '待查询'}
+                              </code>
+                              {copiedKeyId === key.id ? (
+                                <Check size={15} aria-hidden="true" />
+                              ) : (
+                                <Copy size={15} aria-hidden="true" />
+                              )}
+                            </button>
+                          </td>
+                          <td>
+                            <div className="api-keys-group-cell">
+                              <GroupSelect
+                                ariaLabel={`切换${key.name}的分组`}
+                                currentGroupId={key.groupId}
+                                currentGroupName={key.groupName}
+                                currentPlatform={key.platform}
+                                currentRate={key.effectiveRate}
+                                groups={props.groups}
+                                disabled={isWriting}
+                                onChange={(nextGroupId) => {
+                                  if (
+                                    shouldRequestGroupChange(key.groupId, nextGroupId, isWriting)
+                                  ) {
+                                    props.onGroupChange?.(key.id, nextGroupId);
+                                  }
+                                }}
+                              />
+                              {isWriting ? <small>正在确认远程分组…</small> : null}
+                            </div>
+                          </td>
+                          <td>{platformBadge(key.platform)}</td>
+                          <td>{rateBadge(key.effectiveRate)}</td>
+                          <td>{formatOptionalNumber(key.currentConcurrency)}</td>
+                          <td className="api-keys-cost">
+                            <div className="api-keys-cost-stack">
+                              <span>
+                                <small>今日</small>
+                                {formatCost(key.todayActualCost)}
+                              </span>
+                              <span>
+                                <small>30天</small>
+                                {formatCost(key.last30DaysActualCost)}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`api-keys-status api-keys-status-${key.status}`}>
+                              {statusLabel(key.status)}
                             </span>
-                            <span>
-                              <small>30天</small>
-                              {formatCost(key.last30DaysActualCost)}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className={`api-keys-status api-keys-status-${key.status}`}>
-                            {statusLabel(key.status)}
-                          </span>
-                        </td>
-                        <td>{formatDateTime(key.createdAt)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <footer className="api-keys-pagination">
-              <span>
-                共 {pagination.total.toLocaleString()} 条，当前 {pagination.rangeStart}-
-                {pagination.rangeEnd} 条
-              </span>
-              <div className="api-keys-page-buttons">
-                {pageButtons(pagination.page, pagination.pages).map((page) => (
-                  <button
-                    key={page}
-                    type="button"
-                    className={page === pagination.page ? 'api-keys-page-selected' : undefined}
-                    aria-label={`第 ${page} 页`}
-                    aria-current={page === pagination.page ? 'page' : undefined}
-                    onClick={() => props.onPageChange?.(page)}
-                  >
-                    {page}
-                  </button>
-                ))}
+                          </td>
+                          <td>{formatDateTime(key.createdAt)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </footer>
-          </>
-        )}
-      </section>
+              <footer className="api-keys-pagination">
+                <span>
+                  共 {pagination.total.toLocaleString()} 条，当前 {pagination.rangeStart}-
+                  {pagination.rangeEnd} 条
+                </span>
+                <div className="api-keys-page-buttons">
+                  {pageButtons(pagination.page, pagination.pages).map((page) => (
+                    <button
+                      key={page}
+                      type="button"
+                      className={page === pagination.page ? 'api-keys-page-selected' : undefined}
+                      aria-label={`第 ${page} 页`}
+                      aria-current={page === pagination.page ? 'page' : undefined}
+                      onClick={() => props.onPageChange?.(page)}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </div>
+              </footer>
+            </>
+          )}
+        </section>
+      </div>
     </section>
   );
 }
@@ -531,4 +585,16 @@ function statusLabel(status: ApiKeyStatus): string {
     expired: '已过期',
     unknown: '未知',
   }[status];
+}
+
+function channelPaneModel(value: unknown): {
+  items: ChannelViewPayload['channels'];
+  source: 'v1' | 'v2';
+} {
+  if (typeof value !== 'object' || value === null) return { items: [], source: 'v1' };
+  const envelope = value as Partial<ChannelViewPayload>;
+  return {
+    items: Array.isArray(envelope.channels) ? envelope.channels : [],
+    source: envelope.monitorSource === 'v2' ? 'v2' : 'v1',
+  };
 }

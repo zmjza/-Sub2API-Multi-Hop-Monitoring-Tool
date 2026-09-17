@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { session, type BrowserWindow, WebContentsView } from 'electron';
+import { session, shell, type BrowserWindow, WebContentsView } from 'electron';
 import type { AppDatabase } from '../storage/database.js';
+import { decideEmbeddedWindowOpen } from './external-url.js';
 import {
   FAVORITE_WEBSITE_LIMIT,
   favoriteWebsitesSchema,
@@ -207,7 +208,14 @@ export class FavoriteWebsitesManager {
     const onDidStartLoading = () => syncState();
     const onDidStopLoading = () => syncState();
 
-    view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    view.webContents.setWindowOpenHandler((details) => {
+      const decision = decideEmbeddedWindowOpen({
+        url: details.url,
+        disposition: details.disposition,
+      });
+      if (decision.openExternal) void shell.openExternal(decision.openExternal);
+      return { action: 'deny' };
+    });
     view.webContents.on('will-navigate', onWillNavigate);
     view.webContents.on('will-redirect', onWillNavigate);
     view.webContents.on('will-attach-webview', onWillAttachWebview);

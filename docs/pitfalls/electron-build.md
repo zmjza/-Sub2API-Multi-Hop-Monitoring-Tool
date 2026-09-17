@@ -1,5 +1,37 @@
 # Electron 构建避坑
 
+## 内嵌页不能一律 deny 用户手势安全外链
+
+**现象**
+
+Sub2API 服务器、雷达、常用网站里需要打开新页面的按钮被全部拦截，用户无法在系统浏览器查看外链，也无法同时回到本应用。
+
+**根因**
+
+三类内嵌页 setWindowOpenHandler 一律 deny。主窗 protectNavigation 已对 https 外开，但内嵌页没有同等用户手势放行。
+
+**正确做法**
+
+仅对用户手势触发的安全 http/https 且无用户名密码的链接，用系统浏览器打开新标签/窗口，主程序保持可操作。继续 deny Electron 新窗口。认证窗口仍全部拒绝。危险协议、凭据 URL、非用户手势弹窗拒绝并给中文提示。
+
+**验证方式**
+
+在三类入口点击 target=_blank、window.open 和按钮跳转，确认系统浏览器打开且可切回；认证窗口仍无法外开。
+
+**禁止事项**
+
+不要在 Electron 内新建 WebContents 标签栏；不要放开认证窗口；不要把完整 Key/Token/Cookie 拼进外开地址。
+
+**相关文件或命令**
+
+- electron/main/index.ts
+- electron/main/services/sub2api-server-manager.ts
+- electron/main/services/favorite-websites-manager.ts
+
+**适用范围**
+
+雷达、Sub2API 服务器、常用网站内嵌页的新窗口请求。interactive-auth-window 不纳入本任务。
+
 ## 源码 Electron 真机验收要隔离旧打包实例
 
 **现象**
@@ -353,7 +385,7 @@ Electron 主面板、悬浮窗及任何由 Vite 构建后通过 `file://` 加载
 
 **现象**
 
-按主显示器工作区的比例创建 `BrowserWindow` 后，macOS 自动化测试读取到的窗口外框高度可能与计算值相差 1–2px。
+按主显示器工作区的比例创建 `BrowserWindow` 后，macOS 自动化测试读取到的窗口外框高度可能与计算值相差数个像素。宽度通常仍在 2px 内，高度在部分 Retina/工作区组合下会到 9px。
 
 **根因**
 
@@ -361,7 +393,7 @@ Electron 的窗口尺寸使用设备无关像素，原生窗口边框和系统�
 
 **正确做法**
 
-产品代码分别使用 `Math.round(workArea.width * 0.6)` 和 `Math.round(workArea.height * 0.9)`；跨平台自动化断言对外框宽高允许最多 2px 误差，同时单独断言窗口保持 `resizable`。
+产品代码分别使用 `Math.round(workArea.width * 0.6)` 和 `Math.round(workArea.height * 0.9)`；跨平台自动化断言宽度最多 2px、高度最多 12px，同时单独断言窗口保持 `resizable`。不要为了消除像素差去改产品窗口公式。
 
 **验证方式**
 

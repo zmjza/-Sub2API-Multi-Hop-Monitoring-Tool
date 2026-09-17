@@ -1,0 +1,77 @@
+{
+  "target_goal_index": 2,
+  "event": "documentation 1/2 已完成，解锁 development-and-acceptance 2/2",
+  "evidence": ["受影响文档真实 diff", "全部微观任务写回", "开发追踪已更新", "验收准备已完成"],
+  "contract": {
+    "tier": "deep",
+    "pre_score": 86,
+    "goal_count": 2,
+    "base_goal_count": 2,
+    "goal_index": 1,
+    "goal_stage": "documentation",
+    "ui_goal_enabled": false,
+    "ui_route": "not-applicable",
+    "awaiting_external_input": false,
+    "acceptance_owner": "Codex 真机测试",
+    "visual_qa": "检查页面样式是否符合方案",
+    "phase": "documentation",
+    "unlocked_gates": [
+      "受影响文档真实 diff",
+      "全部微观任务写回",
+      "开发追踪已更新",
+      "验收准备已完成"
+    ],
+    "upgrade_evidence": [],
+    "task_type": "老项目新增功能",
+    "state": "待开发",
+    "entry_evidence": ["正式 PRD v1.2 已确认", "评分 86/100 深度流程", "用户确认跳过独立 UI 壳"],
+    "completed_gates": [
+      "受影响文档真实 diff",
+      "全部微观任务写回",
+      "开发追踪已更新",
+      "验收准备已完成"
+    ],
+    "pending_gates": [
+      "编码解锁",
+      "TDD 实现",
+      "内部验证回写",
+      "真机测试或待用户验收",
+      "验收结果再次回写",
+      "修改后评分"
+    ],
+    "allowed_next_actions": ["执行 development-and-acceptance 2/2"],
+    "forbidden_actions": [
+      "本 documentation 目标修改 src/electron",
+      "把 08/09 写成通过",
+      "正式归档"
+    ],
+    "summary_output": true,
+    "summary_confirmed": true,
+    "acceptance_confirmed": true,
+    "prompt_status": "提示词已解锁",
+    "artifact_audit": true,
+    "block_reason": "",
+    "task_id": "REQ-260915-channel-status-visual-polish",
+    "requirements_path": "liran_docs/requirements/REQ-260915-channel-status-visual-polish-PRD.md",
+    "archive_path": "",
+    "archive_state": "未开始",
+    "user_archive_confirmation": false,
+    "archive_confirmation_evidence": "",
+    "archive_confirmation_at": "",
+    "archive_trigger_source": "",
+    "goal_status": "active",
+    "goal_completion_evidence": [
+      "liran_docs/requirements/REQ-260915-channel-status-visual-polish-documentation-audit.md",
+      "liran_docs/requirements/REQ-260915-channel-status-visual-polish-task-breakdown.md",
+      "liran_docs/03-索引.md",
+      "liran_docs/04-开发追踪.md",
+      "liran_docs/08-测试用例.md",
+      "liran_docs/09-真机实测.md"
+    ],
+    "goal_reclaimed_at": "",
+    "task_state_after_goal": "",
+    "archive_state_after_goal": "",
+    "user_check_notification_sent": false,
+    "user_check_notification_evidence": ""
+  }
+}

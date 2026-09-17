@@ -69,4 +69,6 @@ export interface ApiKeysPageProps {
   onGroupChange?: (keyId: string, groupId: string) => void;
   onPageChange?: (page: number) => void;
   onOpenSiteManagement?: () => void;
+  channelsData?: unknown;
+  onSelectChannelGroup?: (groupId: string) => void;
 }

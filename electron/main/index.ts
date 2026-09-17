@@ -16,6 +16,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +59,14 @@ import {
   keyModelsRequestSchema,
   connectivityEventSchema,
 } from '../shared/contracts.js';
+import { purchaseRequestSchema, usageJumpSchema } from '../shared/contracts.js';
 import { opencodexLogsQuerySchema } from '../shared/opencodex.js';
+import { chromeExecutableCandidates } from './services/chrome-auth-policy.js';
+import {
+  chromeLaunchArgsForUrl,
+  decideEmbeddedWindowOpen,
+  purchaseUrlFromBase,
+} from './services/external-url.js';
 import { fetchOpenCodexLogs } from './services/opencodex-service.js';
 import { AppDatabase } from './storage/database.js';
 import { CredentialVault } from './storage/credential-vault.js';
@@ -271,7 +279,7 @@ async function openRadarView(entry: RadarEntry) {
     sendRadarState({ status: 'idle' });
   };
 
-  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  view.webContents.setWindowOpenHandler(embedWindowOpenHandler());
   view.webContents.on('will-navigate', rejectExternalNavigation);
   view.webContents.on('will-redirect', rejectExternalNavigation);
   view.webContents.on('will-attach-webview', onWillAttachWebview);
@@ -808,6 +816,21 @@ function registerIpc() {
     favoriteWebsitesManager.home();
   });
   ipcMain.on('window:open-main', showMainWindow);
+  ipcMain.handle('sites:open-purchase', (_event, input: unknown) => {
+    const { siteId } = purchaseRequestSchema.parse(input);
+    const site = siteService.listSites().sites.find((item) => item.id === siteId);
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    const target = purchaseUrlFromBase(site.baseUrl);
+    if (!target.ok) throw new Error(target.error);
+    launchPurchaseUrl(target.url);
+    return { opened: true };
+  });
+  ipcMain.on('window:open-usage', (_event, input: unknown) => {
+    const jump = usageJumpSchema.parse(input);
+    showMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+      mainWindow.webContents.send('window:open-usage', jump);
+  });
   ipcMain.on('window:minimize-main', () => {
     if (appSettingsSchema.parse(appDatabase.getAppSettings()).floatingEnabled) {
       mainWindow?.hide();
@@ -1242,4 +1265,28 @@ function saveBounds(key: string, window: BrowserWindow | undefined): void {
 
 function saveBoundsNow(key: string, window: BrowserWindow | undefined): void {
   if (window && !window.isDestroyed()) appDatabase?.setSetting(key, window.getBounds());
+}
+
+function embedWindowOpenHandler() {
+  return (details: Electron.HandlerDetails) => {
+    const decision = decideEmbeddedWindowOpen({
+      url: details.url,
+      disposition: details.disposition,
+    });
+    if (decision.openExternal) void shell.openExternal(decision.openExternal);
+    return { action: 'deny' as const };
+  };
+}
+
+function launchPurchaseUrl(url: string): void {
+  for (const exe of chromeExecutableCandidates(process.platform, os.homedir())) {
+    if (!existsSync(exe)) continue;
+    try {
+      spawn(exe, chromeLaunchArgsForUrl(url), { detached: true, stdio: 'ignore' }).unref();
+      return;
+    } catch {
+      continue;
+    }
+  }
+  void shell.openExternal(url);
 }

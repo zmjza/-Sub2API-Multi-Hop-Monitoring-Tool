@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import * as overviewPage from './OverviewPage';
 import { formatSiteBalance, quotaForSite, reduceInlineChannelRefreshState } from './OverviewPage';
 import type { OverviewProps } from './types';
@@ -150,5 +152,21 @@ describe('overview channel refresh state', () => {
       stale: false,
       failureReason: 'network',
     });
+  });
+});
+
+describe('overview purchase action', () => {
+  it('keeps the five-control action row bounded when the card is narrow', () => {
+    const css = readFileSync(fileURLToPath(new URL('./overview.css', import.meta.url)), 'utf8');
+    const source = readFileSync(
+      fileURLToPath(new URL('./OverviewPage.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(css).toContain('grid-template-columns: 34px repeat(3, minmax(0, 1fr)) 34px');
+    expect(css).toContain('overflow: hidden;');
+    expect(source).toContain('site-card-action-label');
+    expect(source).toContain('site-purchase-button');
+    expect(source).toContain('onOpenPurchase');
+    expect(source).toContain('aria-label="查看倍率"');
   });
 });

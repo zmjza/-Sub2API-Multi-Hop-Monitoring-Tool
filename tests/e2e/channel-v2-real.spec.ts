@@ -76,14 +76,14 @@ test('renders a V2 matrix from the source Electron app', async () => {
     await main.screenshot({ path: 'test-results/channel-v2-source-macos-wide.png' });
     for (const range of ['24h', '7d', '30d']) {
       await main.getByRole('button', { name: range, exact: true }).click();
-      await expect(main.locator('.channel-card .sparkline i')).toHaveCount(range === '24h' ? 24 : range === '7d' ? 14 : 30);
+      await expect(main.locator('.channel-card .sparkline i')).toHaveCount(18);
     }
     await main.screenshot({ path: 'test-results/channel-v2-source-macos-30d.png' });
     await app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows().find((window) => window.getBounds().width > 500)?.setSize(720, 800);
     });
     await expect(main.locator('.channel-card')).toBeVisible();
-    await expect(main.locator('.channel-cards')).toHaveCSS('overflow-y', 'auto');
+    await expect(main.locator('.channel-family-list')).toHaveCSS('overflow-y', 'auto');
     await main.screenshot({ path: 'test-results/channel-v2-source-macos-narrow.png' });
   } finally {
     await app.close();

@@ -1,5 +1,30 @@
 # 更新说明
 
+## 3.0.0 - 2026-09-17
+
+### 渠道状态、API 密钥与交互优化
+
+- 全入口时间线统一为近 18 次：左补空槽、最新在右；V2 的 90m/24h/7d/30d 都是 18 槽。
+- 渠道按 OpenAI / Anthropic / Grok / Gemini / 其他分类，图标分别为绿 / 橙 / 深灰 / 浅蓝 / 紫；主渠道页和 API 密钥使用完整分类头。
+- V1/V2 共用卡片外壳，指标不混用；V2 缓存率、可用率、首 Token 永远一行。
+- API 密钥宽窗口左侧显示当前分类渠道卡（默认 OpenAI，一行一张），窄窗口隐藏渠道区；九列不换行、单元格内省略，避免列重叠。
+- 使用记录自定义范围改为中文日期时间，整点小时，开始默认 00:00，结束默认 23:59:59。
+- 全局菜单/页面/控件动效覆盖旧 MOT-2608 动效规则，并支持 prefers-reduced-motion。
+- 悬浮窗双击今日 Token 或今日消费，进入当前站点中转站使用记录的今日范围。
+- 测试连通性日志按真实 started/delta/completed/failed 状态显示。
+- 全部站点卡片增加快捷充值，打开站点 origin+/purchase，优先本机 Chrome。
+- Sub2API / 雷达 / 常用网站允许用户手势安全 http/https 用系统浏览器外开，仍拒绝 Electron 新窗口和认证窗口外开。
+
+### 验证
+
+- Vitest：62 个测试文件、477 项通过。
+- typecheck、ESLint、Prettier、git diff --check 通过。
+- Electron E2E：`test-results/.last-run.json` 为 passed，failedTests 为空。
+- macOS 源码窗口已核对渠道分类头、API 密钥九列、18 格时间线、小时筛选、快捷充值和雷达外开。
+- 同一 3.0.0 提交已生成 macOS ARM64 DMG 与 Windows x64 NSIS；Windows 只做交叉构建和 PE/asar 结构证据，不代表 Windows 真机验收。
+- macOS DMG SHA-256：`9e9ae967d674724f9677d9203476604b5a8bd3d3b0fbf218600af5ea9957a912`
+- Windows EXE SHA-256：`48b1127bdb9b290f84e4b12bab517cf296aadd36c496f81508733fc4d761575b`
+
 ## 2.12.0 - 2026-09-14
 
 ### 修复 V2 矩阵状态误判

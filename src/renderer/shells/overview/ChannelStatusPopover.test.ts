@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type {
   ChannelDetailPayload,
   ChannelViewPayload,
@@ -42,5 +44,18 @@ describe('ChannelStatusPopover cache fallback', () => {
       selected: second,
       detail: detail.detail,
     });
+  });
+});
+
+describe('channel popover family grouping', () => {
+  it('groups the compact list by platform family without an all tab', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./ChannelStatusPopover.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain('groupChannelsByPlatformFamily');
+    expect(source).toContain('ChannelFamilyHeader');
+    expect(source).toContain('compact');
+    expect(source).not.toContain('family-all');
   });
 });

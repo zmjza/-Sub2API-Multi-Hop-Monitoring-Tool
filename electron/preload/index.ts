@@ -141,6 +141,11 @@ export interface DesktopBridge {
     notificationSettings(): Promise<unknown>;
     setNotificationSettings(value: unknown): Promise<unknown>;
     openMainWindow(): void;
+    openPurchase(siteId: string): Promise<{ opened: boolean }>;
+    openUsagePage(input: { siteId: string; apiKeyId?: string; period?: 'today' }): void;
+    onOpenUsagePage(
+      listener: (value: { siteId: string; apiKeyId?: string; period: 'today' }) => void,
+    ): () => void;
     minimizeMainWindow(): void;
     closeMainWindow(): void;
     hideMainWindow(): void;

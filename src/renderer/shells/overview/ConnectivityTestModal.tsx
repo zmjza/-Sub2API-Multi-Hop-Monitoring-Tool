@@ -22,6 +22,23 @@ export function canStartConnectivityTest(keyId: string, model: string, running: 
   return Boolean(keyId && model && !running);
 }
 
+export type ConnectivityPanelState =
+  'idle' | 'waiting' | 'streaming' | 'success' | 'failed' | 'timeout-failed' | 'cancelled';
+
+export function connectivityPanelState(event: {
+  type: string;
+  message?: string;
+}): ConnectivityPanelState {
+  if (event.type === 'started') return 'waiting';
+  if (event.type === 'delta') return 'streaming';
+  if (event.type === 'completed') return 'success';
+  if (event.type === 'cancelled') return 'cancelled';
+  if (event.type === 'failed' && (event.message ?? '').includes('测试超时'))
+    return 'timeout-failed';
+  if (event.type === 'failed') return 'failed';
+  return 'idle';
+}
+
 export function ConnectivityTestModal(props: {
   siteId: string;
   siteName: string;
@@ -40,6 +57,7 @@ export function ConnectivityTestModal(props: {
   const [prompt, setPrompt] = useState('hi');
   const [running, setRunning] = useState(false);
   const [lines, setLines] = useState<string[]>(['准备测试。点击“开始测试”按钮开始...']);
+  const [panelState, setPanelState] = useState<ConnectivityPanelState>('idle');
   const requestIdRef = useRef<string | undefined>(undefined);
   const logRef = useRef<HTMLPreElement>(null);
 
@@ -76,6 +94,7 @@ export function ConnectivityTestModal(props: {
     if (!desktop) return;
     return desktop.sites.onConnectivityEvent((event) => {
       if (event.requestId !== requestIdRef.current) return;
+      setPanelState(connectivityPanelState(event));
       appendEvent(event, setLines, setRunning);
     });
   }, []);
@@ -98,6 +117,7 @@ export function ConnectivityTestModal(props: {
     if (!canStartConnectivityTest(keyId, model, running)) return;
     const desktop = window.sub2apiDesktop;
     setRunning(true);
+    setPanelState('waiting');
     setLines([
       '开始测试。测试会产生一次真实请求。',
       'Key：' + (selected?.maskedLabel ?? keyId),
@@ -106,6 +126,7 @@ export function ConnectivityTestModal(props: {
     if (!desktop) {
       setLines((current) => current.concat(['预览模式，未发送真实请求。']));
       setRunning(false);
+      setPanelState('cancelled');
       return;
     }
     try {
@@ -119,6 +140,7 @@ export function ConnectivityTestModal(props: {
     } catch (error) {
       requestIdRef.current = undefined;
       setRunning(false);
+      setPanelState('failed');
       setLines((current) =>
         current.concat([error instanceof Error ? error.message : '启动测试失败']),
       );
@@ -199,7 +221,7 @@ export function ConnectivityTestModal(props: {
             onChange={(event) => setPrompt(event.target.value)}
           />
         </label>
-        <pre className="connectivity-log" ref={logRef}>
+        <pre className="connectivity-log" ref={logRef} data-state={panelState}>
           {lines.map((line, index) => (
             <span key={index}>{'▶ ' + line}</span>
           ))}

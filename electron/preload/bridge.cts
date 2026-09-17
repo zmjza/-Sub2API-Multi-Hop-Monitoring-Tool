@@ -123,6 +123,14 @@ const desktopBridge: DesktopBridge = {
     notificationSettings: () => ipcRenderer.invoke('notifications:get'),
     setNotificationSettings: (value) => ipcRenderer.invoke('notifications:set', value),
     openMainWindow: () => ipcRenderer.send('window:open-main'),
+    openPurchase: (siteId) => ipcRenderer.invoke('sites:open-purchase', { siteId }),
+    openUsagePage: (input) => ipcRenderer.send('window:open-usage', input),
+    onOpenUsagePage: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('window:open-usage', handler);
+      return () => ipcRenderer.removeListener('window:open-usage', handler);
+    },
     minimizeMainWindow: () => {
       void pendingAppSettings.then(() => ipcRenderer.send('window:minimize-main'));
     },

@@ -188,8 +188,8 @@ describe('floating window transparency', () => {
     expect(html).not.toContain('Plus【特惠通道009】很长很长的渠道名称</strong>');
     expect(html).not.toContain('floating-channel-heading');
     expect(html).toContain('aria-label="Plus【特惠通道009】很长很长的渠道名称，查看全部关联渠道"');
-    expect(html.match(/<i [^>]*class=/g)).toHaveLength(20);
-    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(17);
+    expect(html.match(/<i [^>]*class=/g)).toHaveLength(18);
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(15);
     expect(html.indexOf('class="empty"')).toBeLessThan(html.indexOf('class="normal"'));
     expect(html.indexOf('class="normal"')).toBeLessThan(html.indexOf('class="failed"'));
     expect(html.indexOf('class="failed"')).toBeLessThan(html.indexOf('class="unknown"'));
@@ -200,7 +200,7 @@ describe('floating window transparency', () => {
     })} 未知`;
     expect(html).toContain(`title="${latestLabel}"`);
     expect(html).toContain(`aria-label="${latestLabel}"`);
-    expect(html).toContain('aria-label="最近 20 次渠道状态时间线"');
+    expect(html).toContain('aria-label="近 18 次渠道状态时间线"');
     expect(html).not.toContain('近 1 分钟');
     expect(html).not.toContain('floating-channels');
     expect(html).not.toContain('floating-channel-panel');
@@ -280,7 +280,7 @@ describe('floating window transparency', () => {
 
     expect(html).toContain('暂无渠道记录');
     expect(html).not.toContain('0.00%');
-    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(20);
+    expect(html.match(/<i [^>]*class="empty"/g)).toHaveLength(18);
   });
 
   it('does not flash the site total balance when the current key credit is unavailable', () => {
@@ -335,6 +335,38 @@ describe('floating window transparency', () => {
     expect(html).toContain('class="floating-channel-card is-message"');
     expect(html).toContain('渠道查询失败');
     expect(html).not.toContain('aria-label="查看全部关联渠道"');
+  });
+});
+
+describe('floating usage jump', () => {
+  it('double-click targets the full today token and cost blocks', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingWindow, {
+        state: 'success',
+        theme: 'light',
+        reducedTransparency: false,
+        highContrast: false,
+        onStateChange: () => undefined,
+        selectedSite: {
+          id: 'site-1',
+          name: '站点',
+          baseUrl: 'https://example.invalid',
+          balance: 1,
+          status: 'success',
+          source: 'live',
+          errors: [],
+        },
+      }),
+    );
+    expect(html).toContain('aria-label="打开今日 Token 使用记录"');
+    expect(html).toContain('aria-label="打开今日消费使用记录"');
+    const source = readFileSync(
+      fileURLToPath(new URL('./FloatingWindow.tsx', import.meta.url)),
+      'utf8',
+    );
+    expect(source).toContain('onDoubleClick');
+    expect(source).toContain('openUsagePage');
+    expect(source).toContain('resolveCurrentKey');
   });
 });
 

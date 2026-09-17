@@ -6,6 +6,7 @@ import {
   OPENCODEX_COLUMNS,
   openCodexOptions,
   openCodexStatTotals,
+  openCodexTimeRange,
   type OpenCodexFilters,
 } from './opencodex-data';
 
@@ -306,5 +307,16 @@ describe('speed tier mapping', () => {
       ],
     });
     expect(rows[0]?.speedTier).toBe('unavailable');
+  });
+});
+
+describe('openCodexTimeRange', () => {
+  it('uses whole hours and covers the end hour to 59:59.999', () => {
+    const [start, end] = openCodexTimeRange('custom', '2026-09-16', '2026-09-16', Date.now(), 8, 9);
+    expect(new Date(start).getHours()).toBe(8);
+    expect(new Date(start).getMinutes()).toBe(0);
+    expect(new Date(end).getHours()).toBe(9);
+    expect(new Date(end).getMinutes()).toBe(59);
+    expect(new Date(end).getSeconds()).toBe(59);
   });
 });

@@ -506,6 +506,98 @@
   border-radius: 8px;
   padding: 0 8px;
 }
+.datetime-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  color: #5b5671;
+  font-size: 12px;
+  font-weight: 700;
+}
+.datetime-field-controls {
+  display: flex;
+  gap: 8px;
+}
+.datetime-date-trigger,
+.datetime-hour-select {
+  height: 36px;
+  border: 1px solid #d8d4e6;
+  border-radius: 10px;
+  background: #fff;
+  color: #1b1b24;
+  padding: 0 10px;
+}
+.datetime-date-trigger {
+  min-width: 148px;
+  text-align: left;
+}
+.chinese-calendar {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  padding: 12px;
+  border: 1px solid #e4e1ee;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(38, 35, 58, 0.16);
+}
+.chinese-calendar header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.chinese-calendar header button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: #f5f3ff;
+}
+.chinese-calendar-week,
+.chinese-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.chinese-calendar-week {
+  color: #9a93ad;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.chinese-calendar-grid button {
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+.chinese-calendar-grid .is-selected {
+  background: #4f46e5;
+  color: #fff;
+}
+.chinese-calendar-grid .is-muted {
+  color: #c7c4d8;
+}
+.chinese-calendar footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.chinese-calendar footer button {
+  border: 0;
+  background: transparent;
+  color: #4f46e5;
+  font-weight: 700;
+}
+.usage-range-error {
+  margin: 0;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 700;
+}
 .column-settings {
   display: flex;
   flex-wrap: wrap;

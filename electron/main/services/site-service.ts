@@ -17,6 +17,7 @@ import type {
   SiteInput,
   SiteSummary,
   UsageQuery,
+  UsagePayload,
   KeyPreference,
   NotificationSettings,
   BatchSiteInput,
@@ -30,6 +31,7 @@ import type {
   ApiKeyBatchUsage,
   InteractiveVerificationProvider,
 } from '../../shared/contracts.js';
+import { customDateTimeBounds, filterItemsByCreatedAt } from '../../shared/usage-datetime.js';
 import {
   apiKeySummarySchema,
   availableRateGroupSchema,
@@ -938,7 +940,7 @@ export class SiteService {
     if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const adapter = new Sub2ApiAdapter(client);
-    const result = await adapter.readUsage(credential.accessToken, usageUpstreamQuery(query));
+    const result = await readUsagePayload(adapter, credential.accessToken, query);
     this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageList: 'supported' });
     return result;
   }
@@ -950,6 +952,17 @@ export class SiteService {
     const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
     const adapter = new Sub2ApiAdapter(client);
     const upstream = usageUpstreamQuery(query);
+    const bounds = usageHourBounds(query);
+    if (bounds) {
+      const filtered = await collectFilteredUsageItems(
+        adapter,
+        credential.accessToken,
+        query,
+        bounds,
+      );
+      this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageStats: 'supported' });
+      return statsFromUsageItems(filtered);
+    }
     const result = await adapter.readUsageStats(credential.accessToken, upstream);
     const recent = await adapter
       .readUsage(credential.accessToken, {
@@ -984,9 +997,19 @@ export class SiteService {
   }
 
   async usageCsv(query: UsageQuery): Promise<string> {
-    const value = (await this.usage(query)) as import('../../shared/contracts.js').UsagePayload;
+    const bounds = usageHourBounds(query);
+    const items = bounds
+      ? await (async () => {
+          const site = this.db.listSites().find((candidate) => candidate.id === query.siteId);
+          const credential = site ? this.vault.read(site.id) : undefined;
+          if (!site || !credential?.accessToken) throw new Error('AUTH_REQUIRED');
+          const client = new Sub2ApiClient(`${site.baseUrl}${site.apiPrefix}`);
+          const adapter = new Sub2ApiAdapter(client);
+          return collectFilteredUsageItems(adapter, credential.accessToken, query, bounds);
+        })()
+      : ((await this.usage(query)) as UsagePayload).items;
     return buildCsv(
-      value.items.map((item) => ({
+      items.map((item) => ({
         time: item.createdAt,
         keyLabel: item.apiKeyLabel,
         model: item.model,
@@ -1500,6 +1523,76 @@ export function usageDateRange(
   const start = new Date(end);
   start.setDate(start.getDate() - (period === '30d' ? 29 : period === '7d' ? 6 : 0));
   return { startDate: formatLocalDate(start), endDate: formatLocalDate(end) };
+}
+
+function usageHourBounds(query: UsageQuery) {
+  if (query.period !== 'custom' || !query.startDate || !query.endDate) return undefined;
+  const bounds = customDateTimeBounds(
+    query.startDate,
+    query.endDate,
+    query.startHour,
+    query.endHour,
+  );
+  return bounds.ok ? bounds : undefined;
+}
+
+async function collectFilteredUsageItems(
+  adapter: Sub2ApiAdapter,
+  accessToken: string,
+  query: UsageQuery,
+  bounds: { startMs: number; endMs: number },
+): Promise<UsagePayload['items']> {
+  const upstream = usageUpstreamQuery(query);
+  const items: UsagePayload['items'] = [];
+  for (let page = 1; page <= 40; page += 1) {
+    const chunk = (await adapter.readUsage(accessToken, {
+      ...upstream,
+      page,
+      page_size: 100,
+    })) as UsagePayload;
+    items.push(...(chunk.items ?? []));
+    if ((chunk.items?.length ?? 0) < 100) break;
+  }
+  return filterItemsByCreatedAt(items, bounds.startMs, bounds.endMs);
+}
+
+async function readUsagePayload(
+  adapter: Sub2ApiAdapter,
+  accessToken: string,
+  query: UsageQuery,
+): Promise<UsagePayload> {
+  const bounds = usageHourBounds(query);
+  if (!bounds) {
+    return adapter.readUsage(accessToken, usageUpstreamQuery(query)) as Promise<UsagePayload>;
+  }
+  const items = await collectFilteredUsageItems(adapter, accessToken, query, bounds);
+  const pageSize = query.pageSize || 20;
+  const total = items.length;
+  const pages = total === 0 ? 0 : Math.ceil(total / pageSize);
+  const page = pages === 0 ? 1 : Math.min(Math.max(1, query.page || 1), pages);
+  const start = (page - 1) * pageSize;
+  return { items: items.slice(start, start + pageSize), page, pageSize, pages, total };
+}
+
+function statsFromUsageItems(items: UsagePayload['items']) {
+  const sum = (read: (item: UsagePayload['items'][number]) => number | undefined) =>
+    items.reduce((total, item) => total + (read(item) ?? 0), 0);
+  const durations = items
+    .map((item) => item.durationMs)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  return {
+    totalRequests: items.length,
+    totalTokens: sum((item) => item.totalTokens),
+    totalInputTokens: sum((item) => item.inputTokens),
+    totalOutputTokens: sum((item) => item.outputTokens),
+    totalCacheReadTokens: sum((item) => item.cacheReadTokens),
+    totalCacheCreationTokens: sum((item) => item.cacheCreationTokens),
+    totalActualCost: sum((item) => item.actualCost),
+    totalCost: sum((item) => item.totalCost),
+    averageDurationMs: durations.length
+      ? durations.reduce((total, value) => total + value, 0) / durations.length
+      : 0,
+  };
 }
 
 function usageUpstreamQuery(query: UsageQuery): Record<string, string | number | undefined> {

@@ -21,6 +21,8 @@ import { calculateTokensPerSecond, formatTokensPerSecond, usageSpeedTier } from 
 import { cacheRateTone, calculateCacheRate, formatCacheRate } from './cache-rate';
 import { OpenCodexUsagePage } from './OpenCodexUsagePage';
 import './usage.css';
+import { DateTimeRangeField } from './DateTimeRangeField';
+import { isInvertedDateTimeRange } from '../../../../electron/shared/usage-datetime';
 
 export const USAGE_COLUMNS = [
   '时间',
@@ -49,7 +51,13 @@ export function Sub2ApiUsagePage(props: UsageProps) {
     billingMode: '',
     startDate: '',
     endDate: '',
+    startHour: 0,
+    endHour: 23,
   });
+  const invertedCustomRange =
+    period === 'custom' &&
+    Boolean(filters.startDate && filters.endDate) &&
+    isInvertedDateTimeRange(filters.startDate, filters.endDate, filters.startHour, filters.endHour);
   const [showColumns, setShowColumns] = useState(false);
   const queryListenerRef = useRef(props.onUsageQuery);
   queryListenerRef.current = props.onUsageQuery;
@@ -103,6 +111,7 @@ export function Sub2ApiUsagePage(props: UsageProps) {
   const stats = readUsageStats(props.usageStats);
   const filterKey = JSON.stringify(compactFilters(filters));
   useEffect(() => {
+    if (invertedCustomRange) return;
     setPage(1);
     queryControllerRef.current?.schedule({
       period,
@@ -110,8 +119,28 @@ export function Sub2ApiUsagePage(props: UsageProps) {
       sort,
       ...compactFilters(filters),
     });
-  }, [props.selectedSite?.id, period, sort, filterKey]);
+  }, [props.selectedSite?.id, period, sort, filterKey, invertedCustomRange]);
   useEffect(() => () => queryControllerRef.current?.dispose(), []);
+  useEffect(() => {
+    const jump = props.usageJump;
+    if (!jump) return;
+    setPeriod(jump.period);
+    setPage(1);
+    setFilters((current) => ({
+      ...current,
+      apiKeyId: jump.apiKeyId ?? '',
+      startDate: '',
+      endDate: '',
+      startHour: 0,
+      endHour: 23,
+    }));
+    queryControllerRef.current?.flush({
+      period: 'today',
+      page: 1,
+      sort,
+      ...(jump.apiKeyId ? { apiKeyId: jump.apiKeyId } : {}),
+    });
+  }, [props.usageJump?.token]);
   return (
     <section className="usage-page">
       <div className="usage-summary">
@@ -208,22 +237,18 @@ export function Sub2ApiUsagePage(props: UsageProps) {
         </div>
         {period === 'custom' && (
           <div className="custom-date-range">
-            <label>
-              开始日期
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(event) => setFilters({ ...filters, startDate: event.target.value })}
-              />
-            </label>
-            <label>
-              结束日期
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(event) => setFilters({ ...filters, endDate: event.target.value })}
-              />
-            </label>
+            <DateTimeRangeField
+              startDate={filters.startDate}
+              endDate={filters.endDate}
+              startHour={filters.startHour}
+              endHour={filters.endHour}
+              onChange={(next) => setFilters({ ...filters, ...next })}
+            />
+            {invertedCustomRange ? (
+              <p className="usage-range-error" role="alert">
+                结束时间不能早于开始时间
+              </p>
+            ) : null}
           </div>
         )}
         <div className="filter-grid">
@@ -289,6 +314,8 @@ export function Sub2ApiUsagePage(props: UsageProps) {
                 billingMode: '',
                 startDate: '',
                 endDate: '',
+                startHour: 0,
+                endHour: 23,
               };
               const resetQuery = usageResetQuery();
               setFilters(cleared);
@@ -637,7 +664,7 @@ function UsageFilter({
   );
 }
 
-function compactFilters(filters: {
+export function compactFilters(filters: {
   apiKeyId: string;
   model: string;
   groupId: string;
@@ -646,10 +673,17 @@ function compactFilters(filters: {
   billingMode: string;
   startDate: string;
   endDate: string;
+  startHour?: number;
+  endHour?: number;
 }) {
-  return Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) as Partial<
-    typeof filters
-  >;
+  const hasDates = Boolean(filters.startDate || filters.endDate);
+  return Object.fromEntries(
+    Object.entries(filters).filter(([key, value]) => {
+      if (key === 'startHour' || key === 'endHour')
+        return hasDates && value !== undefined && value !== '';
+      return Boolean(value);
+    }),
+  ) as Partial<typeof filters>;
 }
 
 export function readUsageRecords(value: unknown): typeof usageRecords {
