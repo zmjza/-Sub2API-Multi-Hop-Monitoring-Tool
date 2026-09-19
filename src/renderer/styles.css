@@ -222,13 +222,47 @@ input {
   margin-right: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: #33415f;
   font-size: 13px;
   font-weight: 700;
 }
-.hvoy-ai-toolbar-label span {
+.hvoy-ai-toolbar-label > svg {
+  box-sizing: content-box;
+  padding: 8px;
+  border-radius: 10px;
+  background: #ecfdf5;
+  color: #059669;
+}
+.hvoy-ai-toolbar-label > div {
+  display: grid;
+  gap: 1px;
+}
+.hvoy-ai-toolbar-label span,
+.hvoy-ai-toolbar-label small {
   white-space: nowrap;
+}
+.hvoy-ai-toolbar-label small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+.hvoy-ai-toolbar-label strong {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.hvoy-ai-toolbar-label strong[data-status='filled'] {
+  background: #dcfce7;
+  color: #047857;
+}
+.hvoy-ai-toolbar-label strong[data-status='fill-error'],
+.hvoy-ai-toolbar-label strong[data-status='load-error'] {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 .hvoy-ai-toolbar-label em {
   overflow: hidden;
@@ -237,6 +271,32 @@ input {
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.hvoy-ai-toolbar-action {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 11px;
+  border: 1px solid #dbe4f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.hvoy-ai-toolbar-action:hover {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+.hvoy-ai-toolbar-close:hover {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
 }
 .fav-embed-toolbar-label span {
   overflow: hidden;

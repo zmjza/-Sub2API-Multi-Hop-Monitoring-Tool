@@ -1483,11 +1483,21 @@ export function App() {
             <>
               <div className="hvoy-ai-toolbar-label">
                 <Activity size={16} aria-hidden="true" />
-                <span>禾维 AI · {hvoyAiState.siteName ?? '正在打开'}</span>
+                <div>
+                  <span>禾维 AI 检测中心</span>
+                  <small>{hvoyAiState.siteName ?? '正在打开'}</small>
+                </div>
+                <strong data-status={hvoyAiState.status}>
+                  {hvoyAiState.status === 'filled'
+                    ? '已自动填入'
+                    : hvoyAiState.status === 'fill-error' || hvoyAiState.status === 'load-error'
+                      ? '需要重试'
+                      : '正在准备'}
+                </strong>
                 {hvoyAiState.message && <em>{hvoyAiState.message}</em>}
               </div>
               <button
-                className="icon-button"
+                className="hvoy-ai-toolbar-action"
                 aria-label="重新选择检测站点"
                 title="重新选择"
                 onClick={() => {
@@ -1497,22 +1507,25 @@ export function App() {
                 }}
               >
                 <ArrowLeft size={17} />
+                <span>重选</span>
               </button>
               <button
-                className="icon-button"
+                className="hvoy-ai-toolbar-action"
                 aria-label="刷新禾维 AI"
                 title="刷新"
                 onClick={() => window.sub2apiDesktop?.sites.reloadHvoyAi()}
               >
                 <RefreshCw size={17} />
+                <span>刷新</span>
               </button>
               <button
-                className="icon-button"
+                className="hvoy-ai-toolbar-action hvoy-ai-toolbar-close"
                 aria-label="关闭禾维 AI"
                 title="关闭"
                 onClick={() => window.sub2apiDesktop?.sites.closeHvoyAi()}
               >
                 <X size={18} />
+                <span>关闭</span>
               </button>
             </>
           ) : favoriteWebsiteEmbedState.status !== 'idle' ? (

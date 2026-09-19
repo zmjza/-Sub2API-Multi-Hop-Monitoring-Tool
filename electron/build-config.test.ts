@@ -34,6 +34,14 @@ describe('electron-builder manifest', () => {
     expect(mainSource).toContain("ipcMain.on('app:version'");
   });
 
+  it('uses a trusted text insertion for the interactive Hvoy key field', () => {
+    const mainSource = readFileSync('electron/main/index.ts', 'utf8');
+
+    expect(mainSource).toContain('view.webContents.insertText(context.apiKey)');
+    expect(mainSource).toContain("type: 'mouseDown'");
+    expect(mainSource).toContain("type: 'mouseUp'");
+  });
+
   it('keeps Electron as a build-time dependency', () => {
     const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as PackageManifest;
 

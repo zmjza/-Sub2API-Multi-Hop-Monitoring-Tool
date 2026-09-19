@@ -76,7 +76,7 @@ import { InteractiveVerificationRequiredError, SiteService } from './services/si
 import { ConnectivityTestRunner } from './services/connectivity-test.js';
 import { Sub2ApiServerManager } from './services/sub2api-server-manager.js';
 import { FavoriteWebsitesManager } from './services/favorite-websites-manager.js';
-import { isAllowedHvoyAiNavigation } from './services/hvoy-ai-policy.js';
+import { buildHvoyAiFillScript, isAllowedHvoyAiNavigation } from './services/hvoy-ai-policy.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
@@ -229,28 +229,43 @@ async function fillHvoyAiView(view: WebContentsView) {
   const context = hvoyAiContext;
   if (!context || hvoyAiView !== view || view.webContents.isDestroyed()) return;
   sendHvoyAiState({ status: 'loading', siteName: context.siteName });
-  const apiBaseUrl = JSON.stringify(context.apiBaseUrl);
-  const apiKey = JSON.stringify(context.apiKey);
-  const script =
-    '(async()=>{const wait=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));' +
-    'for(let attempt=0;attempt<40;attempt+=1){const inputs=[...document.querySelectorAll("input")].filter((input)=>!input.disabled);' +
-    'const text=(input)=>[input.name,input.id,input.placeholder,input.getAttribute("aria-label")].filter(Boolean).join(" ").toLowerCase();' +
-    'const urlInput=inputs.find((input)=>/api.*(url|address|地址|接口)|接口地址/.test(text(input)))||inputs.find((input)=>/^https?:/i.test(input.placeholder||""));' +
-    'const keyInput=inputs.find((input)=>/(api.*key|key.*api|密钥)/.test(text(input)))||inputs.find((input)=>/sk-/.test(input.placeholder||""));' +
-    'if(urlInput&&keyInput){const set=(input,value)=>{const descriptor=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");descriptor.set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));};' +
-    'set(urlInput,' +
-    apiBaseUrl +
-    ');set(keyInput,' +
-    apiKey +
-    ');return urlInput.value===' +
-    apiBaseUrl +
-    '&&keyInput.value===' +
-    apiKey +
-    ';}await wait(250);}return false;})()';
   try {
-    const filled = await view.webContents.executeJavaScript(script, true);
+    let result: {
+      filled?: boolean;
+      keyActivation?: { x: number; y: number };
+    } = {};
+    for (let attempt = 0; attempt < 3 && !result.filled; attempt += 1) {
+      result = (await view.webContents.executeJavaScript(
+        buildHvoyAiFillScript(context.apiBaseUrl, context.apiKey),
+        true,
+      )) as typeof result;
+      if (!result.keyActivation || result.filled) break;
+      view.webContents.focus();
+      view.webContents.sendInputEvent({
+        type: 'mouseMove',
+        x: result.keyActivation.x,
+        y: result.keyActivation.y,
+      });
+      view.webContents.sendInputEvent({
+        type: 'mouseDown',
+        x: result.keyActivation.x,
+        y: result.keyActivation.y,
+        button: 'left',
+        clickCount: 1,
+      });
+      view.webContents.sendInputEvent({
+        type: 'mouseUp',
+        x: result.keyActivation.x,
+        y: result.keyActivation.y,
+        button: 'left',
+        clickCount: 1,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      view.webContents.insertText(context.apiKey);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
     sendHvoyAiState(
-      filled
+      result.filled
         ? {
             status: 'filled',
             siteName: context.siteName,

@@ -1498,3 +1498,36 @@ UpdateService 先请求 api.github.com/repos/.../releases/latest。该 API 在�
 **适用范围**
 
 所有 GitHub Release 在线更新检查。发布脚本仍可使用带 Token 的 api.github.com。
+
+## 第三方 React Key 控件可能需要可信点击和原生文本输入
+
+**现象**
+
+禾维 AI 页面能自动填入接口地址，但 API Key 始终显示占位符；直接设置 DOM value 后短暂判定成功，重新进入编辑态时值仍为空。
+
+**根因**
+
+页面初始不渲染 Key input，只显示可点击的 div；程序化 click 不会触发其可信交互。input 挂载后又由 React 受控状态管理，只调用原型 value setter 和 input/change 事件可能没有保存到组件状态。
+
+**正确做法**
+
+受控脚本只识别稳定 label 和占位块并返回视口内安全坐标；主进程通过 WebContents sendInputEvent 发出可信鼠标点击，等待 input 挂载后使用 webContents.insertText 输入 Key。随后再次执行只返回布尔状态的验证脚本，并保持完整 Key 不进入 Renderer、URL、日志或文档。
+
+**验证方式**
+
+启动真实 Electron 源程序，选择一个已有站点打开禾维页面；确认地址为 baseUrl/v1，Key 由禾维页面脱敏显示。点击脱敏 Key 进入编辑态，只检查 input 是否有值及长度，不输出内容；刷新后重复验证，并确认开始检测按钮未自动触发。
+
+**禁止事项**
+
+不要把 DOM value 的瞬时回读当成 React 状态已保存；不要依赖程序化 element.click；不要记录完整 Key、把 Key 放入 URL 或返回 Renderer；不要自动点击开始检测。
+
+**相关文件或命令**
+
+- electron/main/services/hvoy-ai-policy.ts
+- electron/main/index.ts
+- electron/main/services/hvoy-ai-policy.test.ts
+- electron/build-config.test.ts
+
+**适用范围**
+
+第三方 React/Vue 受控敏感输入、按点击延迟挂载的 Key/Token 输入框和受限 WebContentsView 自动填入。
