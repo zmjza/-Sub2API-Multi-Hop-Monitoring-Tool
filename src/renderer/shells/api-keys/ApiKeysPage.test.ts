@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApiKeysPage,
   apiKeyStateMessage,
+  calculateGroupMenuLayout,
   normalizeApiKeyPagination,
   shouldRequestGroupChange,
 } from './ApiKeysPage';
@@ -48,6 +49,21 @@ const baseProps: ApiKeysPageProps = {
   pagination: { page: 1, pageSize: 20, pages: 2, total: 21 },
 };
 describe('API key page state model', () => {
+  it('places a group menu inside the viewport and flips above near the bottom', () => {
+    expect(
+      calculateGroupMenuLayout(
+        { left: 100, top: 700, bottom: 738, width: 220 },
+        { width: 1200, height: 760 },
+      ),
+    ).toMatchObject({ direction: 'above', left: 100, width: 220 });
+    expect(
+      calculateGroupMenuLayout(
+        { left: 100, top: 80, bottom: 118, width: 220 },
+        { width: 1200, height: 760 },
+      ),
+    ).toMatchObject({ direction: 'below', left: 100, width: 220 });
+  });
+
   it('normalizes malformed pagination without inventing rows', () => {
     expect(normalizeApiKeyPagination({ page: 9, pageSize: 0, pages: 2, total: -3 })).toEqual({
       page: 2,
@@ -199,9 +215,12 @@ describe('ApiKeysPage', () => {
     expect(css).toContain('width: max-content');
     expect(css).toContain('max-width: min(520px');
     expect(css).toContain('max-width: 1440px');
-    expect(css).toContain('min-height: calc(100vh - 128px)');
+    expect(css).toContain('height: calc(100vh - 128px)');
     expect(css).toContain('display: flex');
     expect(css).toContain('flex: 1 1 auto');
+    expect(css).toContain('height: 0;');
+    expect(css).toContain('.api-keys-channel-pane .channel-cards');
+    expect(css).not.toContain('max-height: calc(100vh - 280px)');
     expect(css).toContain('overflow: auto');
     expect(css).toContain('#4f46e5');
     expect(css).toContain('@media (max-width: 1279px)');

@@ -3,6 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   compactFilters,
+  normalizeUsageKeyFilter,
   firstTokenClass,
   formatAverageDuration,
   readUsagePagination,
@@ -161,6 +162,12 @@ describe('readUsageStats', () => {
 });
 
 describe('compactFilters', () => {
+  it('normalizes the all-key value so no stale API key reaches the query boundary', () => {
+    expect(normalizeUsageKeyFilter('')).toBeUndefined();
+    expect(normalizeUsageKeyFilter('   ')).toBeUndefined();
+    expect(normalizeUsageKeyFilter('key-1')).toBe('key-1');
+  });
+
   it('keeps startHour 0 when a custom date is present', () => {
     expect(
       compactFilters({

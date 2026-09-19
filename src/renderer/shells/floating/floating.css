@@ -283,7 +283,7 @@ body:has(.floating-window) {
 }
 .floating-metrics b {
   color: #1e1b4b;
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   Check,
@@ -366,6 +367,8 @@ function GroupSelect(props: GroupSelectProps) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuLayout, setMenuLayout] = useState<GroupMenuLayout>();
   const options =
     props.currentGroupId && !props.groups.some((group) => group.id === props.currentGroupId)
       ? [
@@ -387,10 +390,31 @@ function GroupSelect(props: GroupSelectProps) {
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (
+        !rootRef.current?.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      )
+        setOpen(false);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const trigger = rootRef.current?.querySelector('button');
+      if (!trigger) return setOpen(false);
+      const rect = trigger.getBoundingClientRect();
+      setMenuLayout(calculateGroupMenuLayout(rect, window));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -438,30 +462,75 @@ function GroupSelect(props: GroupSelectProps) {
         </span>
         <ChevronDown size={14} aria-hidden="true" />
       </button>
-      {open && options.length > 0 && (
-        <div className="api-keys-group-select-menu" role="listbox" aria-label={props.ariaLabel}>
-          {options.map((group, index) => (
-            <button
-              type="button"
-              role="option"
-              aria-selected={group.id === props.currentGroupId}
-              className={`api-keys-group-option ${index === activeIndex ? 'is-active' : ''}`}
-              key={group.id}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => choose(group.id)}
-            >
-              <span>
-                <strong>{group.name}</strong>
-                <small>{platformLabel(group.platform)}</small>
-              </span>
-              <span className="api-keys-group-option-rate">{formatRate(group.rate)}</span>
-              {group.id === props.currentGroupId && <Check size={14} aria-hidden="true" />}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        options.length > 0 &&
+        menuLayout &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="api-keys-group-select-menu"
+            role="listbox"
+            aria-label={props.ariaLabel}
+            data-direction={menuLayout.direction}
+            style={{
+              left: menuLayout.left,
+              top: menuLayout.top,
+              width: menuLayout.width,
+              maxHeight: menuLayout.maxHeight,
+            }}
+          >
+            {options.map((group, index) => (
+              <button
+                type="button"
+                role="option"
+                aria-selected={group.id === props.currentGroupId}
+                className={`api-keys-group-option ${index === activeIndex ? 'is-active' : ''}`}
+                key={group.id}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => choose(group.id)}
+              >
+                <span>
+                  <strong>{group.name}</strong>
+                  <small>{platformLabel(group.platform)}</small>
+                </span>
+                <span className="api-keys-group-option-rate">{formatRate(group.rate)}</span>
+                {group.id === props.currentGroupId && <Check size={14} aria-hidden="true" />}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
+}
+
+type GroupMenuLayout = {
+  direction: 'above' | 'below';
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+};
+
+export function calculateGroupMenuLayout(
+  rect: Pick<DOMRect, 'left' | 'top' | 'bottom' | 'width'>,
+  viewport: { innerWidth?: number; innerHeight?: number; width?: number; height?: number },
+): GroupMenuLayout {
+  const width = Math.min(Math.max(rect.width, 220), 520);
+  const viewportWidth = viewport.innerWidth ?? viewport.width ?? 0;
+  const viewportHeight = viewport.innerHeight ?? viewport.height ?? 0;
+  const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+  const below = Math.max(0, viewportHeight - rect.bottom - 8);
+  const above = Math.max(0, rect.top - 8);
+  const direction = below >= 180 || below >= above ? 'below' : 'above';
+  const maxHeight = Math.max(96, Math.min(320, direction === 'below' ? below : above));
+  return {
+    direction,
+    left,
+    top: direction === 'below' ? rect.bottom + 6 : Math.max(8, rect.top - maxHeight - 6),
+    width,
+    maxHeight,
+  };
 }
 
 export function shouldRequestGroupChange(

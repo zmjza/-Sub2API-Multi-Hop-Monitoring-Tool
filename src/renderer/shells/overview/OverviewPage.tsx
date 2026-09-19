@@ -107,6 +107,9 @@ export function OverviewPage(props: OverviewProps) {
   const [draggingSiteId, setDraggingSiteId] = useState<string>();
   const [dropSiteId, setDropSiteId] = useState<string>();
   const [noteError, setNoteError] = useState('');
+  const [hvoyPickerOpen, setHvoyPickerOpen] = useState(false);
+  const [hvoyOpeningSiteId, setHvoyOpeningSiteId] = useState<string>();
+  const [hvoyError, setHvoyError] = useState('');
   const [ratePopover, setRatePopover] = useState<{ siteId: string; anchor: HTMLElement }>();
   const [channelPopover, setChannelPopover] = useState<{
     siteId: string;
@@ -386,6 +389,76 @@ export function OverviewPage(props: OverviewProps) {
 
   return (
     <section className="overview-page">
+      <div className="hvoy-ai-entry-row">
+        <button type="button" className="hvoy-ai-entry" onClick={() => setHvoyPickerOpen(true)}>
+          <Activity size={17} aria-hidden="true" />
+          智商检测中心
+        </button>
+      </div>
+      {hvoyPickerOpen && (
+        <div
+          className="hvoy-ai-backdrop"
+          role="presentation"
+          onMouseDown={() => setHvoyPickerOpen(false)}
+        >
+          <section
+            className="hvoy-ai-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hvoy-ai-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <h2 id="hvoy-ai-title">选择要检测的中转站</h2>
+                <p>请选择一个站点，本页不会默认选择。</p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭智商检测中心"
+                onClick={() => setHvoyPickerOpen(false)}
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="hvoy-ai-site-list">
+              {buildHvoySiteChoices(props).map((choice) => (
+                <button
+                  type="button"
+                  key={choice.siteId}
+                  disabled={!choice.available || Boolean(hvoyOpeningSiteId)}
+                  onClick={async () => {
+                    setHvoyError('');
+                    setHvoyOpeningSiteId(choice.siteId);
+                    try {
+                      await window.sub2apiDesktop?.sites.openHvoyAi(choice.siteId);
+                      setHvoyPickerOpen(false);
+                    } catch {
+                      setHvoyError('无法打开禾维 AI，请刷新站点数据后重试。');
+                    } finally {
+                      setHvoyOpeningSiteId(undefined);
+                    }
+                  }}
+                >
+                  <span>
+                    <strong>{choice.name}</strong>
+                    <small>{choice.baseUrl}</small>
+                  </span>
+                  <span>
+                    <strong>{choice.maskedKey ?? '当前没有可用 API Key'}</strong>
+                    <small>{choice.reason ?? '点击后自动填入禾维 AI'}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {hvoyError && (
+              <p className="hvoy-ai-error" role="alert">
+                {hvoyError}
+              </p>
+            )}
+          </section>
+        </div>
+      )}
       <div className="overview-metrics">
         {[
           [
@@ -917,6 +990,22 @@ export function OverviewPage(props: OverviewProps) {
       )}
     </section>
   );
+}
+
+export function buildHvoySiteChoices(props: OverviewProps) {
+  return (props.dashboard?.sites ?? []).map((site) => {
+    const context = keyContextForSite(site.id, props);
+    const key = resolveEffectiveKey(context.keys, context.preference, site.defaultKeyId);
+    const available = Boolean(key && key.status === 'active' && /^https?:\/\//.test(site.baseUrl));
+    return {
+      siteId: site.id,
+      name: site.name,
+      baseUrl: site.baseUrl.replace(/^https?:\/\//, ''),
+      maskedKey: key?.maskedLabel,
+      available,
+      reason: available ? undefined : key ? '站点地址不可用' : '当前没有可用 API Key',
+    };
+  });
 }
 
 export function moveSiteBefore(ids: string[], movingId: string, targetId: string): string[] {

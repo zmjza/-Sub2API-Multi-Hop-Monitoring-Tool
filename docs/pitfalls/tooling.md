@@ -1,5 +1,69 @@
 # 工具链避坑
 
+## 可滚动表格中的下拉菜单不能只靠 z-index 逃离裁切
+
+**现象**
+
+API 密钥分组菜单在少量 Key、末行或表格滚动场景中只显示一小部分，提高 z-index 后仍被截断。
+
+**根因**
+
+菜单仍位于带 overflow 的祖先内部；z-index 只能调整层叠顺序，不能突破祖先裁切边界。
+
+**正确做法**
+
+把菜单 portal 到 document.body，使用触发器的视口坐标 fixed 定位，并按上下可用空间选择展开方向。外部点击判断同时覆盖触发器和 portal 菜单。
+
+**验证方式**
+
+组件测试覆盖上方/下方空间计算、左右边界和 portal；macOS 打包应用复核首行、末行和滚动后的菜单。
+
+**禁止事项**
+
+不要继续叠加 z-index 或取消表格滚动来掩盖裁切；不要把菜单定位绑到 Key 行数。
+
+**相关文件或命令**
+
+- src/renderer/shells/api-keys/ApiKeysPage.tsx
+- src/renderer/shells/api-keys/api-keys.css
+- npm test -- --run src/renderer/shells/api-keys/ApiKeysPage.test.ts
+
+**适用范围**
+
+所有位于滚动容器、表格或裁切卡片内部的菜单、Popover 和列表框。
+
+## 并行读取列表和统计时不能让统计失败吞掉成功列表
+
+**现象**
+
+使用记录选择“全部 API Key”时偶发空白，选择具体 Key 后又能显示。
+
+**根因**
+
+列表和统计使用 Promise.all 绑定成功；全部范围的统计请求单独失败时，成功的列表结果也被整体丢弃。
+
+**正确做法**
+
+用 Promise.allSettled 保留两个结果，以列表为页面主结果：列表失败才进入错误态；统计失败时提交列表并把统计置为不可用。继续使用 requestId 丢弃迟到请求。
+
+**验证方式**
+
+协调器测试覆盖列表成功/统计失败、列表失败和旧请求迟到；页面测试覆盖空 Key 归一化。
+
+**禁止事项**
+
+不要用一个并行 Promise 的失败清空另一个已成功的核心结果；不要移除旧请求序号保护。
+
+**相关文件或命令**
+
+- src/renderer/shells/usage/usage-load-coordinator.ts
+- src/renderer/shells/usage/UsagePage.tsx
+- npm test -- --run src/renderer/shells/usage/usage-load-coordinator.test.ts src/renderer/shells/usage/UsagePage.test.ts
+
+**适用范围**
+
+列表与附属统计、摘要或元数据并行加载的页面。
+
 ## npm 项目中临时运行 pnpm 会改写依赖安装状态
 
 **现象**

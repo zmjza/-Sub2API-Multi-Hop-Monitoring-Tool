@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Activity,
   Bell,
   ChevronDown,
   Download,
@@ -36,7 +37,7 @@ import {
   type CurrentKeyStatsState,
 } from './shells/overview/current-key-stats';
 import { desktopRateChannelStatusLoader } from './shells/overview/rate-channel-status-loader';
-import { UsagePage } from './shells/usage/UsagePage';
+import { normalizeUsageKeyFilter, UsagePage } from './shells/usage/UsagePage';
 import { ApiKeysPage } from './shells/api-keys/ApiKeysPage';
 import type { ApiKeyRow, ApiKeysPageState, ApiKeyStatus } from './shells/api-keys/types';
 import { siteDisplayName } from './site-label';
@@ -149,6 +150,11 @@ export function App() {
   const [favoriteWebsiteEmbedState, setFavoriteWebsiteEmbedState] =
     useState<FavoriteWebsiteEmbedState>({ status: 'idle' });
   const [favoriteWebsites, setFavoriteWebsites] = useState<FavoriteWebsite[]>([]);
+  const [hvoyAiState, setHvoyAiState] = useState<{
+    status: 'idle' | 'opening' | 'loading' | 'filled' | 'fill-error' | 'load-error';
+    siteName?: string;
+    message?: string;
+  }>({ status: 'idle' });
   const [floatingSettings, setFloatingSettings] = useState<FloatingSettings>({
     position: 'top-right',
     opacity: 84,
@@ -360,6 +366,7 @@ export function App() {
     servers.openShortcut(server.id, shortcut.id);
   };
   const changeShell = (nextShell: MainShell) => {
+    if (hvoyAiState.status !== 'idle') window.sub2apiDesktop?.sites.closeHvoyAi();
     if (radarEmbedState.status !== 'idle' && nextShell !== 'radar') closeEmbeddedRadar();
     if (sub2apiServerEmbedState.status !== 'idle' && nextShell !== 'sub2api-servers')
       closeEmbeddedSub2ApiServer();
@@ -397,6 +404,10 @@ export function App() {
     const unsubscribe = window.sub2apiDesktop?.favoriteWebsites.onStateChange((nextState) => {
       setFavoriteWebsiteEmbedState(nextState);
     });
+    return () => unsubscribe?.();
+  }, []);
+  useEffect(() => {
+    const unsubscribe = window.sub2apiDesktop?.sites.onHvoyAiState(setHvoyAiState);
     return () => unsubscribe?.();
   }, []);
   useEffect(() => {
@@ -859,7 +870,14 @@ export function App() {
     const siteId = selectedSite.id;
     const desktop = window.sub2apiDesktop?.sites;
     if (!desktop) return;
-    const query = { siteId, period, page, pageSize: 20, ...filters };
+    const query = {
+      siteId,
+      period,
+      page,
+      pageSize: 20,
+      ...filters,
+      apiKeyId: normalizeUsageKeyFilter(filters.apiKeyId ?? ''),
+    };
     setUsageData(undefined);
     setUsageStats(undefined);
     setState('loading');
@@ -1418,6 +1436,7 @@ export function App() {
       data-radar-embedded={radarEmbedState.status !== 'idle'}
       data-server-embedded={sub2apiServerEmbedState.status !== 'idle'}
       data-favorite-embedded={favoriteWebsiteEmbedState.status !== 'idle'}
+      data-hvoy-ai-embedded={hvoyAiState.status !== 'idle'}
     >
       <aside className="app-sidebar">
         <div className="brand-lockup">
@@ -1460,7 +1479,43 @@ export function App() {
       </aside>
       <section className="app-content">
         <header className="app-toolbar">
-          {favoriteWebsiteEmbedState.status !== 'idle' ? (
+          {hvoyAiState.status !== 'idle' ? (
+            <>
+              <div className="hvoy-ai-toolbar-label">
+                <Activity size={16} aria-hidden="true" />
+                <span>禾维 AI · {hvoyAiState.siteName ?? '正在打开'}</span>
+                {hvoyAiState.message && <em>{hvoyAiState.message}</em>}
+              </div>
+              <button
+                className="icon-button"
+                aria-label="重新选择检测站点"
+                title="重新选择"
+                onClick={() => {
+                  window.sub2apiDesktop?.sites.closeHvoyAi();
+                  setShell('overview');
+                  setHvoyAiState({ status: 'idle' });
+                }}
+              >
+                <ArrowLeft size={17} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="刷新禾维 AI"
+                title="刷新"
+                onClick={() => window.sub2apiDesktop?.sites.reloadHvoyAi()}
+              >
+                <RefreshCw size={17} />
+              </button>
+              <button
+                className="icon-button"
+                aria-label="关闭禾维 AI"
+                title="关闭"
+                onClick={() => window.sub2apiDesktop?.sites.closeHvoyAi()}
+              >
+                <X size={18} />
+              </button>
+            </>
+          ) : favoriteWebsiteEmbedState.status !== 'idle' ? (
             <>
               <div className="fav-embed-toolbar-label">
                 <Globe size={16} aria-hidden="true" />

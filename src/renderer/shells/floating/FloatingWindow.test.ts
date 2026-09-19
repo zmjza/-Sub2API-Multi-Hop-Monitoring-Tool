@@ -157,6 +157,7 @@ describe('floating window transparency', () => {
     expect(metricsRule).toContain('grid-template-rows: 1fr');
     expect(metricsRule).not.toContain('position: absolute');
     expect(channelRule).not.toContain('position: absolute');
+    expect(css).toMatch(/\.floating-metrics b \{[^}]*font-size: 20px/s);
   });
 
   it('renders twenty slots while keeping the latest-twelve percentage in the channel card', () => {

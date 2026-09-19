@@ -58,6 +58,7 @@ export type UsageQuery = Omit<ParsedUsageQuery, 'requestType' | 'billingType' | 
 };
 export type SiteNoteInput = z.infer<typeof siteNoteSchema>;
 export const purchaseRequestSchema = z.object({ siteId: siteIdSchema });
+export const hvoyAiOpenRequestSchema = z.object({ siteId: siteIdSchema }).strict();
 export const usageJumpSchema = z.object({
   siteId: siteIdSchema,
   apiKeyId: z.string().max(128).optional(),

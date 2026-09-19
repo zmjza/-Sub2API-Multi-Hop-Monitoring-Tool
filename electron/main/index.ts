@@ -58,6 +58,7 @@ import {
   connectivityTestStartSchema,
   keyModelsRequestSchema,
   connectivityEventSchema,
+  hvoyAiOpenRequestSchema,
 } from '../shared/contracts.js';
 import { purchaseRequestSchema, usageJumpSchema } from '../shared/contracts.js';
 import { opencodexLogsQuerySchema } from '../shared/opencodex.js';
@@ -75,6 +76,7 @@ import { InteractiveVerificationRequiredError, SiteService } from './services/si
 import { ConnectivityTestRunner } from './services/connectivity-test.js';
 import { Sub2ApiServerManager } from './services/sub2api-server-manager.js';
 import { FavoriteWebsitesManager } from './services/favorite-websites-manager.js';
+import { isAllowedHvoyAiNavigation } from './services/hvoy-ai-policy.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
 import { intervalInRange } from './domain/scheduler.js';
@@ -147,6 +149,8 @@ let radarView: WebContentsView | undefined;
 let radarOpenSequence = 0;
 let sub2apiServerManager: Sub2ApiServerManager;
 let favoriteWebsitesManager: FavoriteWebsitesManager;
+let hvoyAiView: WebContentsView | undefined;
+let hvoyAiContext: Awaited<ReturnType<SiteService['resolveHvoyAiContext']>> | undefined;
 const scheduledTimers: NodeJS.Timeout[] = [];
 const boundsSaveTimers = new Map<string, NodeJS.Timeout>();
 let programmaticFloatingBounds: Electron.Rectangle | undefined;
@@ -194,6 +198,119 @@ function syncRadarViewBounds() {
   if (!radarView || !mainWindow || mainWindow.isDestroyed()) return;
   const [width, height] = mainWindow.getContentSize();
   radarView.setBounds(radarViewBounds({ width, height }));
+}
+
+function sendHvoyAiState(value: {
+  status: 'idle' | 'opening' | 'loading' | 'filled' | 'fill-error' | 'load-error';
+  siteName?: string;
+  message?: string;
+}) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('hvoy-ai:state', value);
+}
+
+function syncHvoyAiBounds() {
+  if (!hvoyAiView || !mainWindow || mainWindow.isDestroyed()) return;
+  const [width, height] = mainWindow.getContentSize();
+  hvoyAiView.setBounds(radarViewBounds({ width, height }));
+}
+
+function closeHvoyAiView(notify = true) {
+  const view = hvoyAiView;
+  hvoyAiView = undefined;
+  hvoyAiContext = undefined;
+  if (view) {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.contentView.removeChildView(view);
+    if (!view.webContents.isDestroyed()) view.webContents.close({ waitForBeforeUnload: false });
+  }
+  if (notify) sendHvoyAiState({ status: 'idle' });
+}
+
+async function fillHvoyAiView(view: WebContentsView) {
+  const context = hvoyAiContext;
+  if (!context || hvoyAiView !== view || view.webContents.isDestroyed()) return;
+  sendHvoyAiState({ status: 'loading', siteName: context.siteName });
+  const apiBaseUrl = JSON.stringify(context.apiBaseUrl);
+  const apiKey = JSON.stringify(context.apiKey);
+  const script =
+    '(async()=>{const wait=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));' +
+    'for(let attempt=0;attempt<40;attempt+=1){const inputs=[...document.querySelectorAll("input")].filter((input)=>!input.disabled);' +
+    'const text=(input)=>[input.name,input.id,input.placeholder,input.getAttribute("aria-label")].filter(Boolean).join(" ").toLowerCase();' +
+    'const urlInput=inputs.find((input)=>/api.*(url|address|地址|接口)|接口地址/.test(text(input)))||inputs.find((input)=>/^https?:/i.test(input.placeholder||""));' +
+    'const keyInput=inputs.find((input)=>/(api.*key|key.*api|密钥)/.test(text(input)))||inputs.find((input)=>/sk-/.test(input.placeholder||""));' +
+    'if(urlInput&&keyInput){const set=(input,value)=>{const descriptor=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value");descriptor.set.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));};' +
+    'set(urlInput,' +
+    apiBaseUrl +
+    ');set(keyInput,' +
+    apiKey +
+    ');return urlInput.value===' +
+    apiBaseUrl +
+    '&&keyInput.value===' +
+    apiKey +
+    ';}await wait(250);}return false;})()';
+  try {
+    const filled = await view.webContents.executeJavaScript(script, true);
+    sendHvoyAiState(
+      filled
+        ? {
+            status: 'filled',
+            siteName: context.siteName,
+            message: '接口地址和 API Key 已填入，请自行点击开始检测。',
+          }
+        : {
+            status: 'fill-error',
+            siteName: context.siteName,
+            message: '未找到禾维 AI 输入框，请刷新后重试。',
+          },
+    );
+  } catch {
+    sendHvoyAiState({
+      status: 'fill-error',
+      siteName: context.siteName,
+      message: '自动填入失败，请刷新后重试。',
+    });
+  }
+}
+
+async function openHvoyAiView(siteId: string) {
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('MAIN_WINDOW_UNAVAILABLE');
+  closeHvoyAiView(false);
+  hvoyAiContext = await siteService.resolveHvoyAiContext(siteId);
+  sendHvoyAiState({ status: 'opening', siteName: hvoyAiContext.siteName });
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      partition: 'hvoy-ai-embed',
+    },
+  });
+  hvoyAiView = view;
+  const rejectNavigation = (event: Electron.Event<{ isMainFrame: boolean; url: string }>) => {
+    if (!event.isMainFrame || isAllowedHvoyAiNavigation(event.url)) return;
+    event.preventDefault();
+  };
+  view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  view.webContents.on('will-navigate', rejectNavigation);
+  view.webContents.on('will-redirect', rejectNavigation);
+  view.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  view.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false),
+  );
+  view.webContents.on('did-finish-load', () => void fillHvoyAiView(view));
+  view.webContents.on('did-fail-load', (_event, _code, _description, _url, isMainFrame) => {
+    if (isMainFrame)
+      sendHvoyAiState({
+        status: 'load-error',
+        siteName: hvoyAiContext?.siteName,
+        message: '禾维 AI 页面加载失败。',
+      });
+  });
+  mainWindow.contentView.addChildView(view);
+  syncHvoyAiBounds();
+  await view.webContents.loadURL('https://www.hvoyai.com/');
+  return { opened: true };
 }
 
 function closeRadarView(notify = true) {
@@ -825,6 +942,11 @@ function registerIpc() {
     launchPurchaseUrl(target.url);
     return { opened: true };
   });
+  ipcMain.handle('hvoy-ai:open', async (_event, input: unknown) =>
+    openHvoyAiView(hvoyAiOpenRequestSchema.parse(input).siteId),
+  );
+  ipcMain.on('hvoy-ai:close', () => closeHvoyAiView());
+  ipcMain.on('hvoy-ai:reload', () => hvoyAiView?.webContents.reload());
   ipcMain.on('window:open-usage', (_event, input: unknown) => {
     const jump = usageJumpSchema.parse(input);
     showMainWindow();
@@ -1027,6 +1149,7 @@ async function createWindows() {
   protectNavigation(mainWindow);
   mainWindow.on('close', (event) => {
     closeRadarView(false);
+    closeHvoyAiView(false);
     sub2apiServerManager.closeView(false);
     favoriteWebsitesManager.closeView(false);
     if (!isQuitting) {
@@ -1039,6 +1162,7 @@ async function createWindows() {
   if (mainBounds.x !== undefined && mainBounds.y !== undefined) mainWindow.setBounds(mainBounds);
   mainWindow.on('resize', () => {
     syncRadarViewBounds();
+    syncHvoyAiBounds();
     sub2apiServerManager.syncBounds();
     favoriteWebsitesManager.syncBounds();
     saveBounds('window:main', mainWindow);

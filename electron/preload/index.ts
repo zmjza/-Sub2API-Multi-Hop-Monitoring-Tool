@@ -142,6 +142,16 @@ export interface DesktopBridge {
     setNotificationSettings(value: unknown): Promise<unknown>;
     openMainWindow(): void;
     openPurchase(siteId: string): Promise<{ opened: boolean }>;
+    openHvoyAi(siteId: string): Promise<{ opened: boolean }>;
+    closeHvoyAi(): void;
+    reloadHvoyAi(): void;
+    onHvoyAiState(
+      listener: (value: {
+        status: 'idle' | 'opening' | 'loading' | 'filled' | 'fill-error' | 'load-error';
+        siteName?: string;
+        message?: string;
+      }) => void,
+    ): () => void;
     openUsagePage(input: { siteId: string; apiKeyId?: string; period?: 'today' }): void;
     onOpenUsagePage(
       listener: (value: { siteId: string; apiKeyId?: string; period: 'today' }) => void,

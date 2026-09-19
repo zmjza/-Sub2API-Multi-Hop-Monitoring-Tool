@@ -15,6 +15,43 @@ afterEach(async () => {
 });
 
 describe('SiteService authentication recovery', () => {
+  it('resolves the current site key for 禾维 only inside the main process', async () => {
+    const values = new Map<string, string>();
+    const vault = new CredentialVault(
+      {
+        isAvailable: () => true,
+        encrypt: (value) => Buffer.from(value),
+        decrypt: (value) => value.toString(),
+      },
+      {
+        read: (key) => values.get(key),
+        write: (key, value) => values.set(key, value),
+        remove: (key) => values.delete(key),
+      },
+    );
+    const db = new AppDatabase(new DatabaseSync(':memory:'));
+    db.migrate();
+    db.saveSite({
+      id: 'hvoy-site',
+      name: '禾维测试站',
+      baseUrl: 'https://relay.example',
+      apiPrefix: '/api/v1',
+    });
+    db.setKeyCache('hvoy-site', [
+      { id: 'key-1', name: '检测 Key', maskedLabel: '检测 Key · ••••', status: 'active' },
+    ]);
+    db.setKeyPreference('hvoy-site', { mode: 'manual', keyId: 'key-1' });
+    const service = new SiteService(db, vault);
+    service.revealApiKey = async () => 'runtime-secret-key';
+
+    await expect(service.resolveHvoyAiContext('hvoy-site')).resolves.toEqual({
+      siteId: 'hvoy-site',
+      siteName: '禾维测试站',
+      apiBaseUrl: 'https://relay.example/v1',
+      apiKey: 'runtime-secret-key',
+    });
+  });
+
   it('blocks only the same account at the same normalized site address', async () => {
     let loginRequests = 0;
     const server = createServer((request, response) => {

@@ -686,6 +686,11 @@ export function compactFilters(filters: {
   ) as Partial<typeof filters>;
 }
 
+export function normalizeUsageKeyFilter(value: string): string | undefined {
+  const normalized = value.trim();
+  return normalized || undefined;
+}
+
 export function readUsageRecords(value: unknown): typeof usageRecords {
   if (Array.isArray(value)) return value as typeof usageRecords;
   if (typeof value !== 'object' || value === null) return [];

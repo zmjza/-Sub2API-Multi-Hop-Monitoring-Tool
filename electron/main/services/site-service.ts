@@ -1235,6 +1235,26 @@ export class SiteService {
     return raw;
   }
 
+  async resolveHvoyAiContext(siteId: string) {
+    const site = this.db.listSites().find((candidate) => candidate.id === siteId);
+    if (!site) throw new Error('SITE_NOT_FOUND');
+    const keys = this.listKeys(siteId);
+    const preference = this.db.getKeyPreference(siteId);
+    const selected =
+      preference.mode === 'manual'
+        ? keys.find((key) => key.id === preference.keyId && key.status === 'active')
+        : (keys.find(
+            (key) => key.id === this.runtime.get(siteId)?.keyId && key.status === 'active',
+          ) ?? keys.find((key) => key.status === 'active'));
+    if (!selected) throw new Error('API_KEY_UNAVAILABLE');
+    return {
+      siteId,
+      siteName: site.name,
+      apiBaseUrl: new URL('v1', site.baseUrl + '/').toString().replace(/\/$/, ''),
+      apiKey: await this.revealApiKey(siteId, selected.id),
+    };
+  }
+
   updateApiKeyGroup(input: ApiKeyGroupUpdateRequest): Promise<ManagedApiKey> {
     const lockKey = `${input.siteId}:${input.keyId}`;
     if (this.apiKeyWrites.has(lockKey)) return Promise.reject(new Error('KEY_UPDATE_IN_PROGRESS'));

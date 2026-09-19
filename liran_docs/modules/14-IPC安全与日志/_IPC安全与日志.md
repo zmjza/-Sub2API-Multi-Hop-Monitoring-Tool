@@ -1,5 +1,11 @@
 # IPC、安全与日志脱敏
 
+## 2026-09-20 3.3.0 禾维 AI 内嵌安全边界
+
+- Renderer 只发送严格的 siteId 对象；完整 Key 由主进程按当前 Key 规则解析，不通过 IPC 返回。
+- 禾维视图固定允许 hvoyai.com 与 www.hvoyai.com 的 HTTPS 顶层导航，禁用 Node、preload、权限、新窗口和 webview。
+- 完整 Key 只在主进程内存和远程页面输入框中短暂存在，不进入 URL、日志、通知、文档或持久化配置；应用不自动点击检测。
+
 ## 2026-09-15 REQ-260915 外开与凭据边界
 
 - 渠道、快捷充值和系统浏览器外开地址不得携带 Cookie、Token、API Key、用户名、密码或原始 headers。

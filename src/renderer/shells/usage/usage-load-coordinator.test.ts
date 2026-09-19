@@ -10,10 +10,34 @@ function deferred<T>() {
 }
 
 describe('UsageLoadCoordinator', () => {
+  it('drops an older concrete-key request when the newer all-key request completes', async () => {
+    const oldList = deferred<string>();
+    const oldStats = deferred<string>();
+    const commits: Array<Array<string | undefined>> = [];
+    const coordinator = new UsageLoadCoordinator();
+
+    const oldRequest = coordinator.load(
+      () => oldList.promise,
+      () => oldStats.promise,
+      (list, stats) => commits.push([list, stats]),
+    );
+    const allRequest = coordinator.load(
+      async () => 'all-list',
+      async () => 'all-stats',
+      (list, stats) => commits.push([list, stats]),
+    );
+    await allRequest;
+    oldList.resolve('key-list');
+    oldStats.resolve('key-stats');
+    await oldRequest;
+
+    expect(commits).toEqual([['all-list', 'all-stats']]);
+  });
+
   it('commits list and server stats together for the newest query only', async () => {
     const oldList = deferred<string>();
     const oldStats = deferred<string>();
-    const commits: string[][] = [];
+    const commits: Array<Array<string | undefined>> = [];
     const coordinator = new UsageLoadCoordinator();
 
     const oldRequest = coordinator.load(
@@ -37,7 +61,7 @@ describe('UsageLoadCoordinator', () => {
   it('invalidates an in-flight request when the selected site changes', async () => {
     const list = deferred<string>();
     const stats = deferred<string>();
-    const commits: string[][] = [];
+    const commits: Array<Array<string | undefined>> = [];
     const coordinator = new UsageLoadCoordinator();
 
     const request = coordinator.load(
@@ -51,5 +75,18 @@ describe('UsageLoadCoordinator', () => {
     await request;
 
     expect(commits).toEqual([]);
+  });
+
+  it('keeps a successful all-key list visible when only aggregate stats fail', async () => {
+    const commits: Array<[string, string | undefined]> = [];
+    const coordinator = new UsageLoadCoordinator();
+
+    await coordinator.load(
+      async () => 'all-key-list',
+      async () => Promise.reject(new Error('stats unavailable')),
+      (list, stats) => commits.push([list, stats]),
+    );
+
+    expect(commits).toEqual([['all-key-list', undefined]]);
   });
 });

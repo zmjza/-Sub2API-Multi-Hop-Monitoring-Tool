@@ -216,6 +216,28 @@ input {
   font-size: 13px;
   font-weight: 700;
 }
+.hvoy-ai-toolbar-label {
+  -webkit-app-region: no-drag;
+  min-width: 0;
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #33415f;
+  font-size: 13px;
+  font-weight: 700;
+}
+.hvoy-ai-toolbar-label span {
+  white-space: nowrap;
+}
+.hvoy-ai-toolbar-label em {
+  overflow: hidden;
+  color: #059669;
+  font-size: 11px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .fav-embed-toolbar-label span {
   overflow: hidden;
   text-overflow: ellipsis;

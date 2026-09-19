@@ -25,6 +25,7 @@ import {
   channelAssociationRequestSchema,
   connectivityTestStartSchema,
   connectivityEventSchema,
+  hvoyAiOpenRequestSchema,
 } from './contracts.js';
 
 describe('IPC boundary schemas', () => {
@@ -397,5 +398,14 @@ describe('connectivity IPC schemas', () => {
       message: 'ok',
       maskedKey: 'Key · ••••',
     });
+  });
+});
+
+describe('禾维 AI IPC schema', () => {
+  it('accepts only a site id and rejects renderer-supplied credentials', () => {
+    expect(hvoyAiOpenRequestSchema.parse({ siteId: 'site-a' })).toEqual({ siteId: 'site-a' });
+    expect(() =>
+      hvoyAiOpenRequestSchema.parse({ siteId: 'site-a', apiKey: 'must-never-cross-ipc' }),
+    ).toThrow();
   });
 });

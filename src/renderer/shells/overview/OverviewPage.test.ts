@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import * as overviewPage from './OverviewPage';
-import { formatSiteBalance, quotaForSite, reduceInlineChannelRefreshState } from './OverviewPage';
+import {
+  buildHvoySiteChoices,
+  formatSiteBalance,
+  quotaForSite,
+  reduceInlineChannelRefreshState,
+} from './OverviewPage';
 import type { OverviewProps } from './types';
 
 const props = (
@@ -168,5 +173,51 @@ describe('overview purchase action', () => {
     expect(source).toContain('site-purchase-button');
     expect(source).toContain('onOpenPurchase');
     expect(source).toContain('aria-label="查看倍率"');
+  });
+});
+
+describe('禾维 AI 站点选择', () => {
+  it('lists every saved site with its current masked key and never chooses a default', () => {
+    const choices = buildHvoySiteChoices({
+      ...props(undefined),
+      dashboard: {
+        currentSiteId: 'site-a',
+        totals: { total: 2, counted: 2, todayTokens: 0, todayActualCost: 0, balance: 0 },
+        sites: [
+          {
+            id: 'site-a',
+            name: 'A',
+            baseUrl: 'https://a.example',
+            status: 'success',
+            source: 'live',
+            errors: [],
+            defaultKeyId: 'key-a',
+          },
+          {
+            id: 'site-b',
+            name: 'B',
+            baseUrl: 'https://b.example',
+            status: 'success',
+            source: 'live',
+            errors: [],
+          },
+        ],
+      },
+      keyContexts: {
+        'site-a': {
+          preference: { mode: 'manual', keyId: 'key-a' },
+          keys: [{ id: 'key-a', maskedLabel: 'A · ••••', status: 'active' }],
+        },
+        'site-b': { preference: { mode: 'auto' }, keys: [] },
+      },
+    } as unknown as OverviewProps);
+
+    expect(choices).toEqual([
+      expect.objectContaining({ siteId: 'site-a', maskedKey: 'A · ••••', available: true }),
+      expect.objectContaining({ siteId: 'site-b', available: false }),
+    ]);
+    expect(
+      readFileSync(fileURLToPath(new URL('./OverviewPage.tsx', import.meta.url)), 'utf8'),
+    ).toContain('智商检测中心');
   });
 });

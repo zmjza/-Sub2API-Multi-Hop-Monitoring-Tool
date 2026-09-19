@@ -124,6 +124,15 @@ const desktopBridge: DesktopBridge = {
     setNotificationSettings: (value) => ipcRenderer.invoke('notifications:set', value),
     openMainWindow: () => ipcRenderer.send('window:open-main'),
     openPurchase: (siteId) => ipcRenderer.invoke('sites:open-purchase', { siteId }),
+    openHvoyAi: (siteId) => ipcRenderer.invoke('hvoy-ai:open', { siteId }),
+    closeHvoyAi: () => ipcRenderer.send('hvoy-ai:close'),
+    reloadHvoyAi: () => ipcRenderer.send('hvoy-ai:reload'),
+    onHvoyAiState: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
+        listener(value);
+      ipcRenderer.on('hvoy-ai:state', handler);
+      return () => ipcRenderer.removeListener('hvoy-ai:state', handler);
+    },
     openUsagePage: (input) => ipcRenderer.send('window:open-usage', input),
     onOpenUsagePage: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, value: Parameters<typeof listener>[0]) =>
