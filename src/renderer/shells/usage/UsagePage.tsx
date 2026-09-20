@@ -113,7 +113,7 @@ export function Sub2ApiUsagePage(props: UsageProps) {
   useEffect(() => {
     if (invertedCustomRange) return;
     setPage(1);
-    queryControllerRef.current?.schedule({
+    queryControllerRef.current?.activate(props.selectedSite?.id, {
       period,
       page: 1,
       sort,
@@ -184,9 +184,9 @@ export function Sub2ApiUsagePage(props: UsageProps) {
             <Clock3 size={24} />
           </div>
           <div>
-            <span>平均耗时</span>
-            <b>{formatAverageDuration(stats)}</b>
-            <small>{formatAverageSample(stats?.averageDurationSampleCount)}</small>
+            <span>平均首字</span>
+            <b>{formatAverageFirstToken(stats)}</b>
+            <small>{formatAverageSample(stats?.averageFirstTokenSampleCount)}</small>
           </div>
         </article>
         <article className="usage-stat cache-rate">
@@ -579,7 +579,6 @@ export function readUsageStats(value: unknown) {
     'totalCacheCreationTokens',
     'totalActualCost',
     'totalCost',
-    'averageDurationMs',
   ] as const;
   if (keys.some((key) => typeof record[key] !== 'number' || !Number.isFinite(record[key])))
     return undefined;
@@ -590,19 +589,20 @@ export function readUsageStats(value: unknown) {
   return {
     ...required,
     averageCacheRate: optionalNumber(record.averageCacheRate),
-    averageDurationSampleCount: optionalNumber(record.averageDurationSampleCount),
+    averageFirstTokenMs: optionalNumber(record.averageFirstTokenMs),
+    averageFirstTokenSampleCount: optionalNumber(record.averageFirstTokenSampleCount),
     averageCacheRateSampleCount: optionalNumber(record.averageCacheRateSampleCount),
   };
 }
 
-export function formatAverageDuration(stats: ReturnType<typeof readUsageStats>): string {
-  if (!stats) return '—';
-  if ((stats.averageDurationSampleCount ?? 1) <= 0) return '—';
-  return (stats.averageDurationMs / 1000).toFixed(2) + 's';
+export function formatAverageFirstToken(stats: ReturnType<typeof readUsageStats>): string {
+  if (!stats || stats.averageFirstTokenMs === undefined) return '—';
+  if ((stats.averageFirstTokenSampleCount ?? 1) <= 0) return '—';
+  return (stats.averageFirstTokenMs / 1000).toFixed(2) + 's';
 }
 
 export function formatAverageSample(count: number | undefined): string {
-  return count === undefined ? '近 100 次' : '近 ' + String(count) + ' 次';
+  return count === undefined || count <= 0 ? '暂无有效样本' : '近 ' + String(count) + ' 次';
 }
 
 function optionalNumber(value: unknown): number | undefined {

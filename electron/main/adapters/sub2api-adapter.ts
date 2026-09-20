@@ -533,7 +533,6 @@ export class Sub2ApiAdapter {
         nonnegativeNumberOrUndefined(stats.total_cache_creation_tokens) ?? 0,
       totalActualCost: nonnegativeNumberOrUndefined(stats.total_actual_cost) ?? 0,
       totalCost: nonnegativeNumberOrUndefined(stats.total_cost) ?? 0,
-      averageDurationMs: nonnegativeNumberOrUndefined(stats.average_duration_ms) ?? 0,
     };
   }
 

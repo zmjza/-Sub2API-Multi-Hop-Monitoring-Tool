@@ -51,8 +51,9 @@ export function deriveV2Status(metrics: {
   ttftMs?: number;
 }): NormalizedChannelStatus {
   if (isV2NoTraffic(metrics)) return 'unknown';
-  const availability =
-    metrics.successRate ?? (metrics.errorRate === undefined ? undefined : 1 - metrics.errorRate);
+  const successRate = normalizeUnitRate(metrics.successRate);
+  const errorRate = normalizeUnitRate(metrics.errorRate);
+  const availability = successRate ?? (errorRate === undefined ? undefined : 1 - errorRate);
   const rank = Math.max(availabilityRank(availability), ttftRank(metrics.ttftMs));
   if (rank < 0) return 'unknown';
   if (rank >= 2) return 'failed';
@@ -172,11 +173,11 @@ export function normalizeV2SnapshotMeta(raw: unknown): V2SnapshotMeta {
     ...(numberOrUndefined(bootstrap.progress_percent) !== undefined
       ? { bootstrapProgressPercent: numberOrUndefined(bootstrap.progress_percent) }
       : {}),
-    ...(numberOrUndefined(metrics.success_rate) !== undefined
-      ? { successRate: numberOrUndefined(metrics.success_rate) }
+    ...(normalizeUnitRate(numberOrUndefined(metrics.success_rate)) !== undefined
+      ? { successRate: normalizeUnitRate(numberOrUndefined(metrics.success_rate)) }
       : {}),
-    ...(numberOrUndefined(metrics.cache_rate) !== undefined
-      ? { cacheRate: numberOrUndefined(metrics.cache_rate) }
+    ...(normalizeUnitRate(numberOrUndefined(metrics.cache_rate)) !== undefined
+      ? { cacheRate: normalizeUnitRate(numberOrUndefined(metrics.cache_rate)) }
       : {}),
   };
 }
@@ -241,9 +242,9 @@ function normalizeBuckets(
 function v2Fields(metrics: Record<string, unknown>) {
   const ttftMs = readTtftMs(asRecord(metrics.ttft));
   const requestCount = numberOrUndefined(metrics.request_count);
-  const successRate = numberOrUndefined(metrics.success_rate);
-  const cacheRate = numberOrUndefined(metrics.cache_rate);
-  const errorRate = numberOrUndefined(metrics.error_rate);
+  const successRate = normalizeUnitRate(numberOrUndefined(metrics.success_rate));
+  const cacheRate = normalizeUnitRate(numberOrUndefined(metrics.cache_rate));
+  const errorRate = normalizeUnitRate(numberOrUndefined(metrics.error_rate));
   return {
     ttftMs,
     requestCount,
@@ -303,6 +304,11 @@ function ttftRank(ms: number | undefined): number {
 
 function isPositive(value: number | undefined): boolean {
   return value !== undefined && value > 0;
+}
+
+function normalizeUnitRate(value: number | undefined): number | undefined {
+  if (value === undefined || value < 0 || value > 100) return undefined;
+  return value <= 1 ? value : value / 100;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

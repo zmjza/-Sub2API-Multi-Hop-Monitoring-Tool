@@ -1043,8 +1043,7 @@ describe('SiteService authentication recovery', () => {
       totalRequests: 2,
       totalTokens: 30,
       totalActualCost: 0.25,
-      averageDurationMs: 0,
-      averageDurationSampleCount: 0,
+      averageFirstTokenSampleCount: 0,
     });
 
     const [listUrl, statsUrl] = urls.map((url) => new URL(url, 'http://local.invalid'));

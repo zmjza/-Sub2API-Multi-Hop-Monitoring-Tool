@@ -79,6 +79,7 @@ import { FavoriteWebsitesManager } from './services/favorite-websites-manager.js
 import { buildHvoyAiFillScript, isAllowedHvoyAiNavigation } from './services/hvoy-ai-policy.js';
 import { RefreshScheduler } from './services/refresh-scheduler.js';
 import { NotificationService } from './services/notification-service.js';
+import { checkCacheRateAlerts } from './services/cache-rate-monitor.js';
 import { intervalInRange } from './domain/scheduler.js';
 import { createTrayMenuTemplate, trayIconDataUrl } from './tray-icon.js';
 import { floatingWindowPolicy, resolveFloatingBounds } from './domain/window-bounds.js';
@@ -491,6 +492,7 @@ function registerIpc() {
   });
   ipcMain.handle('sites:delete', (_event, input: unknown) => {
     const siteId = refreshRequestSchema.parse({ siteId: input }).siteId;
+    notificationService?.cancelSite(siteId);
     const result = siteService.deleteSite(siteId);
     scheduler.setSites(result.sites.map((site) => site.id));
     if (result.currentSiteId) scheduler.setCurrentSite(result.currentSiteId);
@@ -1075,6 +1077,15 @@ function scheduleRefreshLoops() {
     const timer = setTimeout(
       async () => {
         await scheduler.refreshAll();
+        await checkCacheRateAlerts({
+          sites: siteService.listSites().sites,
+          enabled: true,
+          groups: (siteId) => siteService.usageGroups(siteId),
+          stats: (query) => siteService.usageStats(query),
+          notify: (...args) => notificationService?.cacheRate(...args) ?? false,
+          retainGroups: (siteId, groupIdentities) =>
+            notificationService?.retainCacheRateGroups(siteId, groupIdentities),
+        });
         if (!isQuitting) scheduleBackground();
       },
       intervalInRange(30_000, 60_000),
@@ -1310,6 +1321,9 @@ app.whenReady().then(async () => {
       get: (siteId, fingerprint) => database.getNotificationLastSent(siteId, fingerprint),
       set: (siteId, fingerprint, timestamp) =>
         database.setNotificationLastSent(siteId, fingerprint, timestamp),
+      remove: (siteId, fingerprint) => database.removeNotificationState(siteId, fingerprint),
+      retain: (siteId, prefix, fingerprints) =>
+        database.retainNotificationStates(siteId, prefix, fingerprints),
     },
   );
   notificationService = notifications;
@@ -1365,6 +1379,7 @@ app.on('before-quit', (event) => {
   sub2apiServerManager.closeView(false);
   favoriteWebsitesManager.closeView(false);
   scheduler?.stop();
+  notificationService?.cancelAllCacheRate();
   for (const timer of scheduledTimers) clearTimeout(timer);
   for (const timer of boundsSaveTimers.values()) clearTimeout(timer);
   saveBoundsNow('window:main', mainWindow);

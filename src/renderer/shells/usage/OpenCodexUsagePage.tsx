@@ -225,15 +225,15 @@ export function OpenCodexUsagePage(props: { onToggleUsageMode?: () => void }) {
             <Clock3 size={24} />
           </div>
           <div>
-            <span>平均耗时</span>
+            <span>平均首字</span>
             <b>
-              {state.status === 'success' && stats.averageDurationSeconds !== undefined
-                ? stats.averageDurationSeconds.toFixed(2) + 's'
+              {state.status === 'success' && stats.averageFirstTokenSeconds !== undefined
+                ? stats.averageFirstTokenSeconds.toFixed(2) + 's'
                 : '—'}
             </b>
             <small>
               {state.status === 'success'
-                ? formatAverageSample(stats.averageDurationSampleCount)
+                ? formatAverageSample(stats.averageFirstTokenSampleCount)
                 : '筛选后'}
             </small>
           </div>

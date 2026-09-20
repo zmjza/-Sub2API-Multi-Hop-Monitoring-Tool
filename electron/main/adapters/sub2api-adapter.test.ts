@@ -952,7 +952,6 @@ describe('Sub2ApiAdapter', () => {
       totalCacheCreationTokens: 1,
       totalActualCost: 0.2,
       totalCost: 0.3,
-      averageDurationMs: 350,
     });
 
     const listParams = new URL(paths[0]!, 'https://local').searchParams;

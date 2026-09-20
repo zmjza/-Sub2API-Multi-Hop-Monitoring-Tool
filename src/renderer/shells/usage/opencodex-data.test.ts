@@ -200,22 +200,23 @@ describe('openCodexStatTotals', () => {
     expect(totals.totalOutputTokens).toBe(231);
     expect(totals.totalCacheReadTokens).toBe(165_632);
     expect(totals.totalCost).toBeCloseTo(0.0005607896);
-    expect(totals.averageDurationSeconds).toBeCloseTo(6.627);
+    expect(totals.averageFirstTokenSeconds).toBeCloseTo(1.23);
     expect(totals.averageCacheRate).toBeCloseTo(50);
   });
 
-  it('averages duration and cache rate from the newest 100 filtered rows', () => {
+  it('averages first output and cache rate from the newest 30 valid rows', () => {
     const rows = Array.from({ length: 120 }, (_, index) => ({
       ...normalizeOpenCodexLogs(payload)[0]!,
       timestamp: index,
-      durationMsValue: index < 20 ? 5000 : 1000,
+      firstTokenMs: index < 20 ? undefined : 1000,
       cacheRateValue: index < 20 ? 10 : 80,
     }));
     const totals = openCodexStatTotals(rows);
     expect(totals.totalRequests).toBe(120);
-    expect(totals.averageDurationSeconds).toBe(1);
+    expect(totals.averageFirstTokenSeconds).toBe(1);
     expect(totals.averageCacheRate).toBe(80);
-    expect(totals.averageDurationSampleCount).toBe(100);
+    expect(totals.averageFirstTokenSampleCount).toBe(30);
+    expect(totals.averageCacheRateSampleCount).toBe(30);
   });
 });
 

@@ -16,6 +16,8 @@ export interface UsageAutoQuery {
 
 export class UsageQueryController {
   private timer: ReturnType<typeof setTimeout> | undefined;
+  private activeScope?: string;
+  private hasActiveScope = false;
 
   constructor(
     private readonly run: (query: UsageAutoQuery) => void,
@@ -28,6 +30,16 @@ export class UsageQueryController {
       this.timer = undefined;
       this.run(query);
     }, this.delayMs);
+  }
+
+  activate(scope: string | undefined, query: UsageAutoQuery): void {
+    if (!this.hasActiveScope || this.activeScope !== scope) {
+      this.hasActiveScope = true;
+      this.activeScope = scope;
+      this.flush(query);
+      return;
+    }
+    this.schedule(query);
   }
 
   flush(query: UsageAutoQuery): void {

@@ -33,4 +33,22 @@ describe('UsageQueryController', () => {
 
     expect(calls).toEqual([query]);
   });
+
+  it('runs immediately on first entry and site changes, then debounces filters', () => {
+    vi.useFakeTimers();
+    const calls: UsageAutoQuery[] = [];
+    const controller = new UsageQueryController((query) => calls.push(query), 300);
+    const first = { period: 'today' as const, page: 1, sort: 'desc' as const };
+
+    controller.activate('site-a', first);
+    expect(calls).toEqual([first]);
+
+    controller.activate('site-a', { ...first, model: 'gpt-5' });
+    expect(calls).toHaveLength(1);
+    vi.advanceTimersByTime(300);
+    expect(calls.at(-1)).toMatchObject({ model: 'gpt-5' });
+
+    controller.activate('site-b', { ...first, model: 'gpt-5.6-sol' });
+    expect(calls.at(-1)).toMatchObject({ model: 'gpt-5.6-sol' });
+  });
 });

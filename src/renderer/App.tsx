@@ -1058,7 +1058,7 @@ export function App() {
   useEffect(() => {
     if (!selectedSite || initialLocation.surface === 'floating') return;
     const siteId = selectedSite.id;
-    usageLoadCoordinatorRef.current.invalidate();
+    if (shell !== 'usage') usageLoadCoordinatorRef.current.invalidate();
     void loadKeyContext(siteId);
     if (shell === 'api-keys') void loadApiKeys(siteId);
     if (shell === 'usage') {

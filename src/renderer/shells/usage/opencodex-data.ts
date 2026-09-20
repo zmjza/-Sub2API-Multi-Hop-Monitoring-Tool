@@ -278,7 +278,7 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
   }
   const recent = [...rows].sort((left, right) => right.timestamp - left.timestamp);
   const averages = averageRecentSamples(recent, {
-    durationMs: (row) => row.durationMsValue,
+    durationMs: (row) => row.firstTokenMs,
     cacheRate: (row) => row.cacheRateValue,
   });
   return {
@@ -288,10 +288,10 @@ export function openCodexStatTotals(rows: OpenCodexRow[]) {
     totalOutputTokens,
     totalCacheReadTokens,
     totalCost,
-    averageDurationSeconds:
+    averageFirstTokenSeconds:
       averages.averageDurationMs === undefined ? undefined : averages.averageDurationMs / 1000,
     averageCacheRate: averages.averageCacheRate,
-    averageDurationSampleCount: averages.durationSamples,
+    averageFirstTokenSampleCount: averages.durationSamples,
     averageCacheRateSampleCount: averages.cacheRateSamples,
   };
 }

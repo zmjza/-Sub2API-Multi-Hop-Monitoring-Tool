@@ -421,9 +421,9 @@ export const usageStatsSchema = z
     totalCacheCreationTokens: z.number().int().nonnegative(),
     totalActualCost: z.number().finite().nonnegative(),
     totalCost: z.number().finite().nonnegative(),
-    averageDurationMs: z.number().finite().nonnegative(),
+    averageFirstTokenMs: z.number().finite().nonnegative().optional(),
     averageCacheRate: z.number().finite().nonnegative().optional(),
-    averageDurationSampleCount: z.number().int().nonnegative().optional(),
+    averageFirstTokenSampleCount: z.number().int().nonnegative().optional(),
     averageCacheRateSampleCount: z.number().int().nonnegative().optional(),
   })
   .strict();

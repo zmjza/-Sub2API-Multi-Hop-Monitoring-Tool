@@ -461,6 +461,20 @@ export class AppDatabase {
       )
       .run(siteId, fingerprint, timestamp);
   }
+
+  removeNotificationState(siteId: string, fingerprint: string): void {
+    this.db
+      .prepare('DELETE FROM notification_states WHERE site_id = ? AND fingerprint = ?')
+      .run(siteId, fingerprint);
+  }
+
+  retainNotificationStates(siteId: string, prefix: string, fingerprints: readonly string[]): void {
+    const placeholders = fingerprints.map(() => '?').join(', ');
+    const suffix = placeholders ? ` AND fingerprint NOT IN (${placeholders})` : '';
+    this.db
+      .prepare(`DELETE FROM notification_states WHERE site_id = ? AND fingerprint LIKE ?${suffix}`)
+      .run(siteId, `${prefix}%`, ...fingerprints);
+  }
 }
 
 export function reconcileSiteOrder(stored: unknown, existingIds: string[]): string[] {

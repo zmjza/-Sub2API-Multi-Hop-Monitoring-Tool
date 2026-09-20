@@ -343,7 +343,8 @@ describe('IPC boundary schemas', () => {
         totalCacheCreationTokens: 1,
         totalActualCost: 0.2,
         totalCost: 0.3,
-        averageDurationMs: 350,
+        averageFirstTokenMs: 350,
+        averageFirstTokenSampleCount: 4,
       }),
     ).toEqual({
       totalRequests: 4,
@@ -354,14 +355,15 @@ describe('IPC boundary schemas', () => {
       totalCacheCreationTokens: 1,
       totalActualCost: 0.2,
       totalCost: 0.3,
-      averageDurationMs: 350,
+      averageFirstTokenMs: 350,
+      averageFirstTokenSampleCount: 4,
     });
     expect(() =>
       usageStatsSchema.parse({
         totalRequests: 4,
         totalTokens: 12,
         totalActualCost: 0.2,
-        averageDurationMs: 350,
+        averageFirstTokenMs: 350,
       }),
     ).toThrow();
   });

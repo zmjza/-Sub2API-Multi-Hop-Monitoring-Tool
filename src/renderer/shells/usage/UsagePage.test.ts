@@ -5,7 +5,8 @@ import {
   compactFilters,
   normalizeUsageKeyFilter,
   firstTokenClass,
-  formatAverageDuration,
+  formatAverageFirstToken,
+  formatAverageSample,
   readUsagePagination,
   readUsageRecords,
   readUsageStats,
@@ -135,29 +136,31 @@ describe('readUsageStats', () => {
     totalCacheCreationTokens: 1,
     totalActualCost: 0.2,
     totalCost: 0.3,
-    averageDurationMs: 1800,
+    averageFirstTokenMs: 1800,
   };
 
-  it('keeps required totals and optional last-100 averages', () => {
+  it('keeps required totals and optional last-30 averages', () => {
     const stats = readUsageStats({
       ...base,
       averageCacheRate: 42.5,
-      averageDurationSampleCount: 8,
+      averageFirstTokenSampleCount: 8,
       averageCacheRateSampleCount: 8,
     });
     expect(stats).toMatchObject({
       totalRequests: 10,
-      averageDurationMs: 1800,
+      averageFirstTokenMs: 1800,
       averageCacheRate: 42.5,
-      averageDurationSampleCount: 8,
+      averageFirstTokenSampleCount: 8,
     });
-    expect(formatAverageDuration(stats)).toBe('1.80s');
+    expect(formatAverageFirstToken(stats)).toBe('1.80s');
   });
 
-  it('shows a placeholder when duration samples are empty', () => {
-    expect(formatAverageDuration(readUsageStats({ ...base, averageDurationSampleCount: 0 }))).toBe(
-      '—',
-    );
+  it('shows a placeholder when first-token samples are empty', () => {
+    expect(
+      formatAverageFirstToken(readUsageStats({ ...base, averageFirstTokenSampleCount: 0 })),
+    ).toBe('—');
+    expect(formatAverageSample(0)).toBe('暂无有效样本');
+    expect(formatAverageSample(undefined)).toBe('暂无有效样本');
   });
 });
 

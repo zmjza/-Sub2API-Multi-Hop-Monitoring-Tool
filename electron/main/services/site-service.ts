@@ -975,7 +975,7 @@ export class SiteService {
       .catch(() => undefined);
     const averages = recent
       ? averageRecentSamples(recent.items, {
-          durationMs: (row) => row.durationMs,
+          durationMs: (row) => row.firstTokenMs,
           cacheRate: (row) =>
             cacheRateFromTokens(row.inputTokens, row.cacheReadTokens, row.cacheCreationTokens),
         })
@@ -983,13 +983,15 @@ export class SiteService {
     this.db.setCapabilities(site.id, { ...(site.capabilities ?? {}), usageStats: 'supported' });
     return {
       ...result,
-      averageDurationMs: averages ? (averages.averageDurationMs ?? 0) : result.averageDurationMs,
+      ...(averages?.averageDurationMs !== undefined
+        ? { averageFirstTokenMs: averages.averageDurationMs }
+        : {}),
       ...(averages?.averageCacheRate !== undefined
         ? { averageCacheRate: averages.averageCacheRate }
         : {}),
       ...(averages
         ? {
-            averageDurationSampleCount: averages.durationSamples,
+            averageFirstTokenSampleCount: averages.durationSamples,
             averageCacheRateSampleCount: averages.cacheRateSamples,
           }
         : {}),
@@ -1597,9 +1599,11 @@ async function readUsagePayload(
 function statsFromUsageItems(items: UsagePayload['items']) {
   const sum = (read: (item: UsagePayload['items'][number]) => number | undefined) =>
     items.reduce((total, item) => total + (read(item) ?? 0), 0);
-  const durations = items
-    .map((item) => item.durationMs)
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  const averages = averageRecentSamples(items, {
+    durationMs: (item) => item.firstTokenMs,
+    cacheRate: (item) =>
+      cacheRateFromTokens(item.inputTokens, item.cacheReadTokens, item.cacheCreationTokens),
+  });
   return {
     totalRequests: items.length,
     totalTokens: sum((item) => item.totalTokens),
@@ -1609,9 +1613,14 @@ function statsFromUsageItems(items: UsagePayload['items']) {
     totalCacheCreationTokens: sum((item) => item.cacheCreationTokens),
     totalActualCost: sum((item) => item.actualCost),
     totalCost: sum((item) => item.totalCost),
-    averageDurationMs: durations.length
-      ? durations.reduce((total, value) => total + value, 0) / durations.length
-      : 0,
+    ...(averages.averageDurationMs !== undefined
+      ? { averageFirstTokenMs: averages.averageDurationMs }
+      : {}),
+    ...(averages.averageCacheRate !== undefined
+      ? { averageCacheRate: averages.averageCacheRate }
+      : {}),
+    averageFirstTokenSampleCount: averages.durationSamples,
+    averageCacheRateSampleCount: averages.cacheRateSamples,
   };
 }
 

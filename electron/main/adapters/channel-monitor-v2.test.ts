@@ -221,4 +221,40 @@ describe('deriveV2Status', () => {
     });
     expect(result.ok && result.channels[0].v2?.buckets[0]?.status).toBe('normal');
   });
+
+  it('accepts percentage-form rates without multiplying or misclassifying them', () => {
+    expect(deriveV2Status({ hasRequests: true, successRate: 98.4, ttftMs: 1500 })).toBe('normal');
+    expect(deriveV2Status({ hasRequests: true, successRate: 40, ttftMs: 1500 })).toBe('degraded');
+    expect(deriveV2Status({ hasRequests: true, successRate: 20, ttftMs: 1500 })).toBe('failed');
+
+    const result = normalizeV2Matrix({
+      data: {
+        group_by: 'platform_group',
+        coverage,
+        items: [
+          item({
+            metrics: {
+              has_requests: true,
+              request_count: 10,
+              success_rate: 98.4,
+              error_rate: 1.6,
+              cache_rate: 87.5,
+              ttft: { avg_ms: 1500 },
+            },
+          }),
+        ],
+      },
+    });
+    expect(result.ok && result.channels[0]).toMatchObject({
+      status: 'normal',
+      availability7d: 98.4,
+      v2: { cacheRate: 0.875 },
+    });
+    expect(result.ok && result.channels[0].v2?.successRate).toBeCloseTo(0.984);
+  });
+
+  it('treats invalid percentage rates as unavailable', () => {
+    expect(deriveV2Status({ hasRequests: true, successRate: 101 })).toBe('unknown');
+    expect(deriveV2Status({ hasRequests: true, successRate: -1 })).toBe('unknown');
+  });
 });

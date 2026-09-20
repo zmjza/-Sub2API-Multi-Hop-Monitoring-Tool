@@ -1,4 +1,4 @@
-export const RECENT_USAGE_SAMPLE_LIMIT = 100;
+export const RECENT_USAGE_SAMPLE_LIMIT = 30;
 
 export interface RecentAverageResult {
   usedRows: number;
@@ -16,25 +16,28 @@ export function averageRecentSamples<T>(
   },
   limit = RECENT_USAGE_SAMPLE_LIMIT,
 ): RecentAverageResult {
-  const recent = rows.slice(0, Math.max(0, limit));
+  const sampleLimit = Math.max(0, limit);
+  let usedRows = 0;
   let durationSum = 0;
   let durationSamples = 0;
   let cacheSum = 0;
   let cacheRateSamples = 0;
-  for (const row of recent) {
+  for (const row of rows) {
+    if (durationSamples >= sampleLimit && cacheRateSamples >= sampleLimit) break;
+    usedRows += 1;
     const duration = finiteNonNegative(read.durationMs(row));
-    if (duration !== undefined) {
+    if (duration !== undefined && durationSamples < sampleLimit) {
       durationSum += duration;
       durationSamples += 1;
     }
     const cacheRate = finiteNonNegative(read.cacheRate(row));
-    if (cacheRate !== undefined) {
+    if (cacheRate !== undefined && cacheRateSamples < sampleLimit) {
       cacheSum += cacheRate;
       cacheRateSamples += 1;
     }
   }
   return {
-    usedRows: recent.length,
+    usedRows,
     durationSamples,
     cacheRateSamples,
     ...(durationSamples ? { averageDurationMs: durationSum / durationSamples } : {}),

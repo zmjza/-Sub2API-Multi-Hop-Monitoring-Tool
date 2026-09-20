@@ -39,6 +39,7 @@ describe('AppDatabase', () => {
     const raw = new DatabaseSync(':memory:');
     const db = new AppDatabase(raw);
     db.migrate();
+    db.saveSite({ id: 'site-a', name: 'A', baseUrl: 'https://a.invalid', apiPrefix: '/api/v1' });
     db.setKeyPreference('site-a', { mode: 'manual', keyId: 'key-1' });
     expect(db.getKeyPreference('site-a')).toEqual({ mode: 'manual', keyId: 'key-1' });
     db.setNotificationSettings({
@@ -66,6 +67,15 @@ describe('AppDatabase', () => {
     expect(JSON.stringify(raw.prepare('SELECT value_json FROM settings').all())).not.toMatch(
       /password|token/i,
     );
+    db.setNotificationLastSent('site-a', 'cache-rate:group-a', 123);
+    db.setNotificationLastSent('site-a', 'cache-rate:group-b', 456);
+    db.setNotificationLastSent('site-a', 'low-balance', 789);
+    expect(db.getNotificationLastSent('site-a', 'cache-rate:group-a')).toBe(123);
+    db.retainNotificationStates('site-a', 'cache-rate:', ['cache-rate:group-a']);
+    expect(db.getNotificationLastSent('site-a', 'cache-rate:group-b')).toBeUndefined();
+    expect(db.getNotificationLastSent('site-a', 'low-balance')).toBe(789);
+    db.removeNotificationState('site-a', 'cache-rate:group-a');
+    expect(db.getNotificationLastSent('site-a', 'cache-rate:group-a')).toBeUndefined();
     raw.close();
   });
 
